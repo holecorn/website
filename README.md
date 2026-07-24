@@ -80,6 +80,13 @@ npm run preview  # serve the production build
 npm run lint     # oxlint
 ```
 
+## Deployment
+
+Hosted on GitHub Pages at `holecorn.com`. Pushing to `main` triggers
+`.github/workflows/deploy.yml`, which builds and publishes `dist/`. The custom
+domain is pinned by `public/CNAME`; because the site is served from the domain
+root, Vite's `base` stays `/` (so the PWA `scope`/`start_url` need no change).
+
 ## Tech
 
 React 19 + Vite. Scoring rules live as pure functions in `src/scoring.js`
