@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="80 28 280 100" role="img" aria-label="Hole Corn">
+  <defs>
+    <style>@font-face{font-family:'Bebas Neue';src:url(/fonts/BebasNeue-Regular.ttf) format('truetype');}</style>
+    <filter id="chalk" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="7" result="warp"/>
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="4" xChannelSelector="R" yChannelSelector="G" result="wob"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" seed="3" result="grain"/>
+      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.0 1.1" result="grainA"/>
+      <feComposite in="wob" in2="grainA" operator="in"/>
+    </filter>
+  </defs>
+  <g filter="url(#chalk)" fill="none" stroke-linejoin="round" stroke-linecap="round"
+     font-family="'Bebas Neue',sans-serif" font-weight="400" font-size="44" letter-spacing="7" text-anchor="middle">
+    <g transform="translate(156 78) rotate(15)">
+      <rect x="-58" y="-24" width="116" height="48" rx="3" stroke="#69a4f2" stroke-width="4"/>
+      <text x="3" y="2" dominant-baseline="central" fill="#69a4f2" stroke="none">HOLE</text>
+    </g>
+    <g transform="translate(284 78) rotate(-15)">
+      <rect x="-58" y="-24" width="116" height="48" rx="3" stroke="#f18686" stroke-width="4"/>
+      <text x="3" y="2" dominant-baseline="central" fill="#f18686" stroke="none">CORN</text>
+    </g>
+  </g>
+</svg>
