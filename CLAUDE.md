@@ -94,7 +94,7 @@ project dependency. It starts and stops its own preview server.
   `v` stamp is what lets a display reboot, reconnect or join late and recover
   with no resync protocol. Keep it that way; it's why the display has no logic.
 - **`winner` is absent while the game is live, not null.** Both consumers
-  already read a missing key as "nobody has won", so the null was 15 bytes of a
+  already read a missing key as "nobody has won", so the null was 14 bytes of a
   budget the worst case spends 74% of. Don't add it back for symmetry — and
   don't assume absent is a bug, `test_board_logic.cpp` covers both the absent
   and the legacy explicit-null forms, because a retained message published
@@ -195,8 +195,9 @@ The parts worth knowing before touching either:
   It carries team names and colours for the HUB75 build; the SevSeg build simply
   ignores those fields, which is cheaper than two copies of the parser.
 - **The HUB75 panel is sized against 7m, not "as big as possible."** Spectators
-  are across the court or at the boards, so 100mm digits (11.4m) and 10-char
-  names (8.6m) clear it with margin. Panel *width* buys name length, *height*
+  are across the court or at the boards, so 100mm digits (11.4m) and 9-char
+  names clear it — the names marginally; see
+  `firmware/hub75/README.md`. Panel *width* buys name length, *height*
   buys digit height; four digits run out of width first, which is why two rows
   are left dark. Don't "use the spare height" — it buys nothing.
 - **`glyphs.h` is generated** from `src/segments.js` by `generate_glyphs.mjs`,

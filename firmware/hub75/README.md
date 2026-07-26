@@ -11,18 +11,29 @@ HUB75 part**, so the SevSeg build remains the only one that can be simulated.
 
 ## Why this size
 
-Measured against the real requirement (7 m worst case, 4 m typical — spectators
-across the court or standing at the boards):
+Sized against 7 m worst case, 4 m typical — spectators are across the court or
+standing at the boards.
 
 | | | reads to |
 | --- | --- | --- |
-| Digits | 20 px = 100 mm at P5 | 11.4 m |
-| Names | 9 chars, 5x7 at 35 mm cap | 8.6 m |
+| Digits | 20 px = 100 mm at P5 | **11.4 m** |
+| Names | 9 chars, 5x7, 35 mm cap | **4–9 m**, model-dependent |
 
-Both clear 7 m with margin, and this was the smallest standard geometry that
-did. Panel *width* is what buys name length; panel *height* buys digit height.
-Four digits side by side run out of width first, which is why rows 30-31 are
-left dark — the spare height would buy nothing.
+The digit figure uses the ratio this project already anchors on elsewhere —
+35 mm read at 4 m, so 1:114 — and clears 7 m comfortably.
+
+**The names do not have one honest number.** By that same 1:114 cap-height
+rule a 35 mm glyph reads at 4.0 m, which fails the requirement; by a
+pixel-pitch rule (about 2 arcmin per pixel, which is the fairer test for a
+bitmap) it reads at 8.6 m, which passes. The truth depends on contrast and on
+the fact that 5x7 strokes are 1 px against the digits' 2 px. Treat names as
+**marginal at 7 m and fine at 4 m**, and check them on the real panel before
+trusting them — this is the one figure here that is a rule of thumb rather
+than a measurement.
+
+Panel *width* buys name length; panel *height* buys digit height. Four digits
+side by side run out of width first, which is why rows 30-31 are left dark —
+the spare height would buy nothing.
 
 ## What it shows
 
@@ -42,8 +53,10 @@ left dark — the spare height would buy nothing.
 - **Names join with `/`, not `" & "`.** The app's separator costs three of the
   nine characters a team gets; a slash costs one, which is the difference
   between most pairs fitting whole and being cut. What still overflows shortens
-  *both* names to the longest prefix that fits — truncating the tail instead
-  would take all of the second player's name and none of the first's.
+  *both partners* to the longest prefix that fits — truncating the tail instead
+  would take all of the second player's name and none of the first's. Each
+  team's label is fitted on its own, so a long name opposite does not shorten a
+  short one.
 - **The score pairs sit at `SIDE_MARGIN`, not on the edges**, so they line up
   under the names centred above them. Perfectly centred would squeeze the
   middle column; see the constant's comment for the 4px trade.
@@ -56,6 +69,12 @@ left dark — the spare height would buy nothing.
   than a misleading provisional total, so the reasoning there does not forbid
   them, but they would cost the one-retained-message-per-round model that makes
   a dropout harmless.
+
+## Building the sketch
+
+Arduino IDE with the ESP32 board package; see `libraries.txt` for the libraries
+and the versions this was written against. Nothing here has been compiled for
+the board or run on hardware.
 
 ## Host renderer
 
@@ -151,15 +170,32 @@ or leave the Personal Hotspot settings screen open on the scoring phone.
 
 ## Power
 
-Measured from the host renderer's own framebuffer, so these are duty cycles for
-the real layout rather than estimates:
+Duty is measured by counting lit pixels in the host renderer's own framebuffer,
+so it tracks the real layout — re-run `test_render.cpp` after changing it, or
+these go stale (they did once already, when the versus mark and target line
+were added).
 
-| Scene | Duty | Average at 40 W peak |
+Watts are derived, not measured: `40 W peak x duty x 0.55`, where 0.55 is the
+share of a white pixel's three channels that a team colour actually lights
+(`#2f80ed` is 0.54, `#eb5757` 0.53). The 40 W is the vendor's 20 W per panel.
+
+| Scene | Duty | Derived average |
 | --- | --- | --- |
-| Normal play | 10.9% | ~2.0 W |
-| Start of game | 7.6% | ~1.5 W |
-| Winner flash | 9.3–11.7% | ~1.9 W |
-| Worst case (88–88, full names) | 19.0% | ~3.4 W |
+| Normal play | 12.2% | ~2.7 W |
+| Start of game | 9.3% | ~2.0 W |
+| Winner flash | 10.4-12.8% | ~2.3-2.8 W |
+| Worst case (88-88, full names) | 19.8% | ~4.4 W |
 
-At `PANEL_BRIGHTNESS = 40` those drop by roughly 85%, giving well under 1 W in
-play. Size the supply and fuse for the 40 W peak regardless.
+At `PANEL_BRIGHTNESS = 40` of 255 those fall further, assuming the library's
+brightness is linear — which is unverified. Size the supply and the fuse for the
+40 W peak regardless; none of this has been checked against hardware.
+
+## Names the panel cannot show
+
+The font is 5x7 ASCII. `fontIndex` maps anything outside it to a space, so a
+name in a non-Latin script renders as blank cells that still consume the
+nine-character budget — and the rule marking who throws would sit under nothing.
+`copyLabel` also truncates at 39 **bytes**, which can cut a multi-byte character
+in half. The app does not restrict input to ASCII, so this is reachable; it is
+accepted rather than fixed, because a Unicode font does not fit either the panel
+or the flash.

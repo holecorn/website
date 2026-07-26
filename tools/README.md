@@ -46,16 +46,19 @@ A 4m viewing distance needs roughly 35mm digits; a 10" tablet currently gives 75
 
 ## panel-preview
 
-**Exploratory, and about hardware that does not exist.** These evaluate HUB75 RGB
-LED matrix panels, which are a *different* device from the seven-segment build in
-`firmware/`. Neither has been built. Nothing in `src/` depends on these scripts.
+**Exploratory, and superseded for the build itself.** These sized HUB75 RGB LED
+matrix panels before one was chosen; the panel actually being built is
+`firmware/hub75/`, which has its own host renderer that compiles the firmware's
+own `render.h` rather than approximating it in JavaScript. Prefer that for
+anything about the real board. Nothing in `src/` depends on these scripts.
 
 They rasterise the **real** polygons from `src/segments.js` onto a panel-sized
 pixel grid, then draw each pixel as an LED — so they show genuine quantisation
 rather than an impression of it. Two conclusions came out of that and are worth
 keeping: a single 64x64 P4 module would be enough for a 4m viewing distance, and
 hollowing the digits for the winner flash fails below about 44px but works fine
-on a screen, which is why the browser display does it and `firmware/` does not.
+on a screen, which is why the browser display does it and neither firmware does
+— the built panel's digits are 20px.
 
 Note `states.mjs` renders a `WASH` callout that is **not implemented anywhere** —
 it was a design option, and is kept only to show what it would look like.

@@ -1,8 +1,4 @@
-// Holecorn external scoreboard — HUB75 build.
-//
-// Target: Adafruit MatrixPortal S3 driving 2 x Waveshare RGB-Matrix-P5-64x32
-// chained into one 128x32 canvas (640 x 160 mm). Layout and drawing live in
-// render.h, which host-compiles; see README.md.
+// Holecorn external scoreboard — HUB75 build. Hardware and layout in README.md.
 //
 // Unlike the SevSeg build in ../wokwi, the panel refreshes from DMA in
 // hardware, so loop() is free to block. The millis() timers below are kept only
@@ -53,8 +49,8 @@ const uint32_t WIFI_RETRY_INTERVAL = 10000;
 const uint32_t RENDER_INTERVAL = 100;
 const uint32_t WINNER_BLINK = 500;
 
-// Evening play, so this is deliberately low. Raise it for daylight; the panels
-// peak at 20W each and duty is ~11%, so headroom is in the supply, not here.
+// Evening play, so this is deliberately low. Raise it for daylight; measured
+// duty is ~12% (see README), so the headroom is in the supply, not here.
 const uint8_t PANEL_BRIGHTNESS = 40;
 
 // ----------------------------------------------------------------- state ----
@@ -86,9 +82,12 @@ struct PanelCanvas {
 };
 
 void render() {
-  const bool connected = client.connected() && scorerOnline;
-  if (connected) lastLive = millis();
-  const bool live = liveWithGrace(connected, millis(), lastLive);
+  // The grace period covers a dropped socket, not a phone that said goodbye:
+  // an explicit will or "0" is authoritative, so dim at once and match what
+  // Display.jsx does with the same message.
+  const bool linked = client.connected();
+  if (linked && scorerOnline) lastLive = millis();
+  const bool live = scorerOnline && liveWithGrace(linked, millis(), lastLive);
   const bool blinkOn = (millis() / WINNER_BLINK) % 2 == 1;
 
   panel->fillScreen(0);
@@ -117,10 +116,8 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
                 state.target);
 }
 
-// A phone hotspot switches itself off when nothing is connected to it, so the
-// board has to expect the network to vanish and come back, not just the broker.
-// Returns false while down, and the caller skips MQTT rather than retrying
-// against a dead network.
+// A phone hotspot switches itself off when nothing is connected, so the whole
+// network vanishes and returns, not just the broker.
 bool ensureWifi() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiWasUp) {
@@ -152,8 +149,15 @@ bool connectMqtt() {
     return false;
   }
 
-  client.subscribe(stateTopic, 1);
-  client.subscribe(onlineTopic, 1);
+  // A broker with per-topic permissions refuses the subscription rather than
+  // the connection. Without this the board stays connected, never receives
+  // anything, and never retries — it just dims. scoreboardLink.test.js covers
+  // the same failure on the browser side.
+  if (!client.subscribe(stateTopic, 1) || !client.subscribe(onlineTopic, 1)) {
+    Serial.println("mqtt subscribe refused — check topic permissions");
+    client.disconnect();
+    return false;
+  }
   Serial.printf("subscribed to %s\n", stateTopic);
   return true;
 }

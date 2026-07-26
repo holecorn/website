@@ -1,9 +1,5 @@
-// Layout and drawing for the 128x32 panel (2 x Waveshare P5 64x32 chained).
-//
-// Arduino-free on purpose, like board_logic.h: test_render.cpp compiles this on
-// the host and dumps PNGs, which is how the layout was checked before any
-// hardware existed. Keep it that way — the sketch supplies a Canvas and nothing
-// else.
+// Arduino-free on purpose, like board_logic.h, so test_render.cpp can compile
+// it on the host — there is no HUB75 simulator. Keep it that way.
 //
 // A Canvas is anything with:  void px(int x, int y, uint8_t r, uint8_t g, uint8_t b)
 #pragma once
@@ -14,42 +10,28 @@
 static const int PANEL_W = 128;
 static const int PANEL_H = 32;
 
-// Names on top, scores below. Rows 30-31 are left dark: the digits are
-// width-limited at this panel size, so the spare height buys nothing.
+// Rows 30-31 stay dark: the digits are width-limited here, so the spare height
+// buys nothing.
 static const int NAME_Y = 0;
 static const int DIGIT_Y = 10;
 static const int DIGIT_GAP = 2;
 static const int PAIR_W = GLYPH_DIGIT_W * 2 + DIGIT_GAP;
 
-// A "V" separates the two names, so each gets a little under half the panel
-// rather than exactly half. That costs one character — nine rather than ten —
-// and the abbreviation below absorbs it.
-//
-// Squeezing the mark into the 5px gap two ten-character names leave was tried
-// and abandoned: three columns is all that fits there, and at three columns it
-// reads as a colon rather than a letter. The character buys legibility.
-//
-// It draws uppercase because fontIndex folds case, so a name typed in mixed
-// case renders consistently; a lowercase glyph in the font would also appear
-// inside any name containing a v.
+// Reserving a column for the "V" is what costs a name its tenth character. A
+// narrower mark that would not was tried: three columns reads as a colon.
 static const int VERSUS_PAD = 3;
 static const int NAME_REGION_W = (PANEL_W - FONT_W - 2 * VERSUS_PAD) / 2;
 static const int NAME_CHARS = NAME_REGION_W / FONT_ADVANCE;
 
-// Digits sit just inside centred-in-their-half. Hard against the edges they
-// were a long way from the names centred above them, which reads as a mistake.
-// Perfectly centred would be x=20, but that leaves "TO 21" only 5px of
-// clearance; 16 buys 9px for 4px of misalignment — 20mm on a 640mm board.
+// Centred in their halves would be 20, but that leaves "TO 21" only 5px of
+// clearance. 16 buys 9px, for 4px of misalignment under the names — 20mm on a
+// 640mm board.
 static const int SIDE_MARGIN = 16;
 static const int LEFT_X = SIDE_MARGIN;
 static const int RIGHT_X = PANEL_W - SIDE_MARGIN - PAIR_W;
 
-// The middle column carries two lines, both inside the digits' rows.
 static const int ROUND_Y = DIGIT_Y + 2;
 static const int TARGET_Y = DIGIT_Y + 11;
-
-// A rule under the name of whoever throws first, in the gap the names and
-// digits leave between them.
 static const int UNDERLINE_Y = FONT_H + 1;
 
 // Stale scores dim rather than blank, the same choice the browser display
@@ -113,16 +95,9 @@ void drawDigit(Canvas& c, char ch, int x, int y, Rgb color) {
 
 // ------------------------------------------------------------ doubles names --
 //
-// The app joins a doubles pair with " & ", which costs three of the ten
-// characters a team gets here. The panel joins with a slash instead: with two
-// characters back, most pairs fit whole that otherwise would not.
-//
-// What still does not fit shortens *both* names to the longest prefix that
-// does, rather than truncating the tail — which would leave the first player
-// with their whole name and take the second player's. No name comparison is
-// needed to keep them apart: a longer prefix separates at least as well as a
-// shorter one, so the longest prefix that fits is also the most distinguishable
-// available.
+// The app's " & " would cost three of the nine characters a team gets here, so
+// the panel re-joins with a slash. Two characters back is the difference
+// between most pairs fitting whole and being cut.
 static const char PAIR_SEPARATOR[] = " & ";  // what arrives
 static const int PAIR_SEPARATOR_LEN = 3;
 static const char PAIR_JOIN = '/';  // what is drawn
@@ -134,8 +109,7 @@ inline int cStrLen(const char* s) {
   return n;
 }
 
-// Finds the first " & ". Returns false for a singles label, which has nothing
-// to abbreviate.
+// False for a singles label, which has nothing to abbreviate.
 inline bool splitPair(const char* label, int& firstLen, const char*& second) {
   for (int i = 0; label[i]; i++) {
     if (label[i] == ' ' && label[i + 1] == '&' && label[i + 2] == ' ') {
@@ -147,7 +121,7 @@ inline bool splitPair(const char* label, int& firstLen, const char*& second) {
   return false;
 }
 
-// Width of the label with each name cut to `k`, without building it.
+// Measures rather than builds, so fitLabels can search for k cheaply.
 inline int abbreviatedLen(const char* label, int k) {
   int firstLen;
   const char* second;
@@ -160,10 +134,14 @@ inline int abbreviatedLen(const char* label, int k) {
          (secondLen < k ? secondLen : k);
 }
 
-inline void writeAbbreviated(const char* label, int k, char* dst, int cap) {
+// Returns the index of the joining slash, or -1 for a singles label. Callers
+// need that index rather than searching for it: a player called "N/A" has a
+// slash of their own, and re-finding it would treat one name as two.
+inline int writeAbbreviated(const char* label, int k, char* dst, int cap) {
   int firstLen;
   const char* second;
   int n = 0;
+  int joinAt = -1;
   const auto put = [&](char c) {
     if (n < cap - 1) dst[n++] = c;
   };
@@ -171,67 +149,63 @@ inline void writeAbbreviated(const char* label, int k, char* dst, int cap) {
     for (int i = 0; label[i] && i < k; i++) put(label[i]);
   } else {
     for (int i = 0; i < firstLen && i < k; i++) put(label[i]);
+    joinAt = n;
     put(PAIR_JOIN);
     for (int i = 0; second[i] && i < k; i++) put(second[i]);
   }
   dst[n] = '\0';
+  return joinAt;
 }
 
-// Character span of one half of a fitted "X/Y" label. False for a singles
-// label, which has no halves to pick between.
-inline bool labelPart(const char* fitted, int which, int& start, int& len) {
-  int slash = -1;
-  for (int i = 0; fitted[i]; i++) {
-    if (fitted[i] == PAIR_JOIN) {
-      slash = i;
-      break;
-    }
+// Each label shortens on its own. One prefix length shared across both teams
+// was tried and was wrong: it cut "AlphaBet" — which fits — to "Alph" because
+// the opposing label was long. Partners within a label do still share one, so
+// a shortened pair still looks deliberate.
+inline int fitLabel(const char* label, char* out, int cap) {
+  for (int k = int(TEAM_LABEL_MAX); k >= 1; k--) {
+    if (abbreviatedLen(label, k) <= NAME_CHARS) return writeAbbreviated(label, k, out, cap);
   }
-  if (slash < 0) return false;
+  // Unreachable for a pair — "A/B" is three characters — but a single name
+  // longer than the slot still has to land somewhere.
+  return writeAbbreviated(label, 1, out, cap);
+}
+
+// Span of one half of a fitted label, given where the fit put the join.
+// False when that half came out empty, which a blank player name does.
+inline bool labelPart(const char* fitted, int joinAt, int which, int& start, int& len) {
+  if (joinAt < 0) return false;
   if (which == 0) {
     start = 0;
-    len = slash;
+    len = joinAt;
   } else {
-    start = slash + 1;
-    len = cStrLen(fitted) - slash - 1;
+    start = joinAt + 1;
+    len = cStrLen(fitted) - joinAt - 1;
   }
   return len > 0;
 }
 
-// Both sides share one prefix length so the abbreviation looks deliberate
-// rather than like two different failures.
-inline void fitLabels(const char* a, const char* b, char* outA, char* outB, int cap) {
-  for (int k = int(TEAM_LABEL_MAX); k >= 1; k--) {
-    if (abbreviatedLen(a, k) <= NAME_CHARS && abbreviatedLen(b, k) <= NAME_CHARS) {
-      writeAbbreviated(a, k, outA, cap);
-      writeAbbreviated(b, k, outB, cap);
-      return;
-    }
-  }
-  // Unreachable for two names — "A & B" is five characters — but a single name
-  // longer than the slot still has to land somewhere.
-  writeAbbreviated(a, 1, outA, cap);
-  writeAbbreviated(b, 1, outB, cap);
-}
-
-// One team: name centred in its half, score pair below.
 template <typename Canvas>
-void drawSide(Canvas& c, const char* name, const char* pair, int pairX, int regionX,
-              Rgb color, bool showScore, bool throwsFirst, int upPartner) {
+void drawSide(Canvas& c, const char* name, int joinAt, const char* pair, int pairX,
+              int regionX, Rgb color, bool showScore, bool throwsFirst, int upPartner) {
   const int w = textWidth(name, NAME_CHARS);
   int nx = regionX + (NAME_REGION_W - w) / 2;
   if (nx < 0) nx = 0;
   if (nx + w > PANEL_W) nx = PANEL_W - w;
   drawText(c, name, nx, NAME_Y, color, NAME_CHARS);
-  // Underlined rather than flagged with a glyph, which would cost a character
-  // the name cannot spare. In doubles only the partner who is up is ruled —
-  // underlining the whole label would say the wrong thing, since only one of
-  // the two is throwing.
+  // Ruled rather than flagged with a glyph, which would cost a character. In
+  // doubles only the partner who is up: ruling the whole label would say two
+  // people are throwing.
   if (throwsFirst) {
     int start = 0;
     int len = cStrLen(name);
     if (len > NAME_CHARS) len = NAME_CHARS;
-    labelPart(name, upPartner, start, len);
+    // Falls back to the whole label when the partner's half is empty, so a
+    // blank player name loses the name, not the rule.
+    int partStart, partLen;
+    if (labelPart(name, joinAt, upPartner, partStart, partLen)) {
+      start = partStart;
+      len = partLen;
+    }
     const int x0 = nx + start * FONT_ADVANCE;
     const int x1 = x0 + len * FONT_ADVANCE - 1;  // matches textWidth
     for (int x = x0; x < x1; x++) c.px(x, UNDERLINE_Y, color.r, color.g, color.b);
@@ -262,16 +236,17 @@ void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool
   formatDigits(s.a, s.b, digits);
 
   char nameA[NAME_CHARS + 1], nameB[NAME_CHARS + 1];
-  fitLabels(s.teamA, s.teamB, nameA, nameB, NAME_CHARS + 1);
+  const int joinA = fitLabel(s.teamA, nameA, NAME_CHARS + 1);
+  const int joinB = fitLabel(s.teamB, nameB, NAME_CHARS + 1);
 
   // Which partner is up, mirroring activeIdx in App.jsx. Derived from the round
   // rather than published, because the app derives it the same way.
   const int upPartner = s.round % 2;
 
   // Once the game is won nobody is throwing, so the rule comes off.
-  drawSide(c, nameA, digits, LEFT_X, 0, scaled(s.colorA, level),
+  drawSide(c, nameA, joinA, digits, LEFT_X, 0, scaled(s.colorA, level),
            !(s.winner == 'a' && !blinkOn), s.winner == 0 && s.first == 'a', upPartner);
-  drawSide(c, nameB, digits + 2, RIGHT_X, PANEL_W - NAME_REGION_W,
+  drawSide(c, nameB, joinB, digits + 2, RIGHT_X, PANEL_W - NAME_REGION_W,
            scaled(s.colorB, level), !(s.winner == 'b' && !blinkOn),
            s.winner == 0 && s.first == 'b', upPartner);
 
@@ -280,9 +255,14 @@ void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool
   // Belongs to neither team, so it takes the neutral colour.
   drawText(c, "V", (PANEL_W - FONT_W) / 2, NAME_Y, grey, 1);
 
-  if (s.round > 0) {
+  {
+    // `round` counts rounds *completed*, so the one being played is the next
+    // one — except once the game is won, when there is no next. Display.jsx
+    // does the same sum; the two must agree, because they render the same
+    // retained message side by side.
+    int r = s.round + (s.winner ? 0 : 1);
+    if (r > 99) r = 99;
     char marker[5] = {'R', 0, 0, 0, 0};
-    const int r = s.round > 99 ? 99 : s.round;
     if (r >= 10) {
       marker[1] = char('0' + r / 10);
       marker[2] = char('0' + r % 10);

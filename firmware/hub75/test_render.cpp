@@ -2,18 +2,26 @@
 // can be checked before any hardware exists — Wokwi has no HUB75 part, so this
 // is the only way to see the panel without owning one.
 //
-//   cd firmware/hub75
+//   cd firmware/hub75 && mkdir -p out
 //   clang++ -std=c++17 -Wall -Wextra -I. -I../wokwi -o /tmp/render_test test_render.cpp
 //   /tmp/render_test && node preview.mjs
 //
 // It asserts as well as renders: anything drawn outside the panel is a bug the
 // real board would show as wrapped pixels on the wrong module.
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
 
 #include "render.h"
+
+// Both labels at once, which is all the tests need; renderBoard keeps the join
+// indices that fitLabel returns.
+static void fitLabels(const char* a, const char* b, char* outA, char* outB, int cap) {
+  fitLabel(a, outA, cap);
+  fitLabel(b, outB, cap);
+}
 
 struct Framebuffer {
   uint8_t px_[PANEL_W * PANEL_H * 3] = {0};
@@ -59,6 +67,12 @@ struct Framebuffer {
 
   void write(const std::string& name) const {
     FILE* f = fopen(("out/" + name + ".ppm").c_str(), "wb");
+    if (!f) {
+      // out/ is gitignored, so a fresh clone has no such directory and an
+      // unchecked fopen segfaults with no clue why.
+      printf("  cannot write out/%s.ppm — run `mkdir -p out` first\n", name.c_str());
+      exit(1);
+    }
     fprintf(f, "P6\n%d %d\n255\n", PANEL_W, PANEL_H);
     fwrite(px_, 1, sizeof(px_), f);
     fclose(f);
@@ -169,8 +183,14 @@ int main() {
 
   // Two names sharing an initial must not collapse to "H/H".
   fitLabels("Gamma & Kappa", "Omicron & Phi", da, db, sizeof da);
-  check(!strcmp(da, "Gamm/Kapp") && !strcmp(db, "Rosa/Phi"),
+  check(!strcmp(da, "Gamm/Kapp") && !strcmp(db, "Omicr/Phi"),
         "shared initials stay distinguishable");
+
+  // Each label shortens on its own: a name that fits must not be cut because
+  // the opposing label is long.
+  fitLabels("AlphaBet", "Omicron & Upsilon", da, db, sizeof da);
+  check(!strcmp(da, "AlphaBet") && !strcmp(db, "Omic/Upsi"),
+        "one team's long label does not shorten the other");
 
   fitLabels("ABCDEFGHIJKLMNOP & QRSTUVWXYZABCDEF", "Nu & Tau", da, db, sizeof da);
   check(strlen(da) <= NAME_CHARS && strlen(db) <= NAME_CHARS,

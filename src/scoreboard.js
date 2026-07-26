@@ -43,7 +43,7 @@ export function scoreboardPayload(game) {
     colorB: game.colors.b,
     // Omitted while the game is live rather than sent as null. Absent already
     // means "nobody has won" to both consumers — board_logic.h reads a missing
-    // key as no winner, and Display.jsx coalesces — so the null was 15 bytes of
+    // key as no winner, and Display.jsx coalesces — so the null was 14 bytes of
     // a budget the worst case spends 74% of.
     ...(game.winner ? { winner: game.winner } : {}),
   };

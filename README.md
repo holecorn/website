@@ -117,11 +117,18 @@ whatever you paste it into. Use a broker user you can revoke.
 
 ### Hardware board
 
-`firmware/wokwi/` holds ESP32 firmware that subscribes to the same topic and
-drives two two-digit seven-segment displays. It runs unchanged in the
-[Wokwi](https://wokwi.com/) simulator, so the whole chain — phone, broker, board,
-digits — can be exercised in a browser tab before buying any parts. See
-[`firmware/wokwi/README.md`](firmware/wokwi/README.md).
+Two ESP32 firmware builds subscribe to the same topic, and neither holds any
+game rules — every message carries the whole state.
+
+[`firmware/hub75/`](firmware/hub75/README.md) drives a 640 x 160 mm RGB LED
+panel showing the score in each team's colour, both names, the round, the
+target, and a rule under whoever throws next. This is the one being built.
+
+[`firmware/wokwi/`](firmware/wokwi/README.md) drives two-digit seven-segment
+displays and shows the score only. It runs unchanged in the
+[Wokwi](https://wokwi.com/) simulator — there is no HUB75 part in Wokwi — so the
+whole chain of phone, broker, board and digits can still be exercised in a
+browser tab.
 
 ## Development
 

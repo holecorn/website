@@ -1,13 +1,14 @@
 # Holecorn scoreboard firmware (Wokwi)
 
-> **Status: reference, not a shipped build.** This targets a two-digit
-> seven-segment board. The project settled on a tablet running the browser
-> display instead, and if hardware ever happens the current recommendation is a
-> HUB75 RGB panel — which this sketch does **not** target (see `tools/panel-preview/`).
+> **Status: reference, not the build being made.** The hardware being built is
+> the HUB75 panel in [`../hub75/`](../hub75/README.md); this sketch does not
+> target it. What keeps this one around is the simulator — **Wokwi has no HUB75
+> part**, so this is the only build where the whole chain can be exercised in a
+> browser tab, and `board_logic.h` is shared between the two.
+>
 > **`sketch.ino` has never been compiled or run**, on hardware or in Wokwi; only
-> the pure logic in `board_logic.h` is tested. It is kept because that half — the
-> parsing, the stale-`v` guard and the buffer sizing — carries over to any
-> firmware. Treat the instructions below as untried.
+> the pure logic in `board_logic.h` is tested. Treat the instructions below as
+> untried.
 
 ESP32 firmware for the external scoreboard. It subscribes to a game's state
 topic and mirrors the **logged** score onto two two-digit seven-segment
@@ -22,7 +23,7 @@ phone → broker → board → digits — can be exercised before buying any har
 | File | |
 | --- | --- |
 | `sketch.ino` | WiFi, MQTT, reconnect and display refresh |
-| `board_logic.h` | Message parsing and digit formatting; pure, no Arduino deps |
+| `board_logic.h` | Message parsing and digit formatting; pure, no Arduino deps. **Shared** — `../hub75/board_logic.h` is a symlink to it, so a change here lands on both builds |
 | `diagram.json` | Wokwi wiring (generated — see below) |
 | `generate-diagram.mjs` | Regenerates `diagram.json` from the sketch's pin arrays |
 | `test_board_logic.cpp` | Host test for `board_logic.h` |

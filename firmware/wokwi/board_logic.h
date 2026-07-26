@@ -12,11 +12,16 @@ struct Rgb {
   uint8_t r = 255, g = 255, b = 255;
 };
 
-// Holds a full doubles label. The app caps each name at 16 UTF-16 units and
-// joins two with " & ", so 35 characters is the worst case and this has room
-// for it. Don't shrink it to "what the panel can display": render.h abbreviates
-// a label that won't fit by shortening *both* names, which needs the whole
-// thing. Truncating here would silently eat the second player's name first.
+// Holds a full ASCII doubles label: each name caps at 16 UTF-16 units, joined
+// with " & ", so 35 characters. Don't shrink it to "what the panel can
+// display" — render.h shortens an oversized label by cutting *both* names,
+// which needs the whole thing, and truncating here eats the second player's
+// name first.
+//
+// Non-ASCII names still overrun it: 16 UTF-16 units can be 48 bytes, so a
+// label reaches 99 and is cut mid-character. The panel cannot render those
+// scripts anyway (see firmware/hub75/README.md), so this is a known limit
+// rather than a size to keep chasing.
 static const size_t TEAM_LABEL_MAX = 40;
 
 struct BoardState {

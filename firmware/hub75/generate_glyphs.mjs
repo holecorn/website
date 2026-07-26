@@ -57,9 +57,13 @@ const masks = [...CHARS].map((ch) => {
 });
 if (!masks[CHARS.indexOf('-')]) throw new Error('dash glyph is empty');
 
-const FONT_CHARS = ' !&-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const FONT_CHARS = " &-./'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+// Falling back to FONT[' '] would emit an all-zero glyph, so a character the
+// font never had would silently render as a blank that still eats a slot —
+// which is exactly what '!' and '.' did before this check existed.
 const fontRows = [...FONT_CHARS].map((ch) => {
-  const g = FONT[ch] ?? FONT[' '];
+  const g = FONT[ch];
+  if (!g) throw new Error(`FONT_CHARS advertises ${JSON.stringify(ch)}, font5x7 has no glyph`);
   return g.map((row) => [...row].reduce((b, c, i) => (c === '#' ? b | (1 << i) : b), 0));
 });
 

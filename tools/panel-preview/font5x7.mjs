@@ -41,8 +41,12 @@ const G = {
   '&': '.##..,#..#.,#.#..,.#...,#.#.#,#..#.,.##.#',
   '-': '.....,.....,.....,#####,.....,.....,.....',
   // Joins a doubles pair on the LED panel, where " & " would cost three of the
-  // ten characters a team gets. See firmware/hub75/render.h.
+  // nine characters a team gets. See firmware/hub75/render.h.
   '/': '....#,....#,...#.,..#..,.#...,#....,#....',
+  // Names have apostrophes and full stops in them; without these, fontIndex
+  // falls back to a space and O'Neil renders as "O NEIL".
+  "'": '..#..,..#..,.....,.....,.....,.....,.....',
+  '.': '.....,.....,.....,.....,.....,.....,..#..',
   ' ': '.....,.....,.....,.....,.....,.....,.....',
 };
 export const FONT = Object.fromEntries(

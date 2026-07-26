@@ -1,0 +1,11 @@
+Arduino libraries for the HUB75 build, with the versions this was written
+against. Install through Library Manager, or pin these if something breaks.
+
+  ESP32 HUB75 LED MATRIX PANEL DMA Display   3.0.12   mrcodetastic
+  PubSubClient                               2.8      Nick O'Leary
+  ArduinoJson                                7.4.3    Benoit Blanchon
+
+Board: "Adafruit MatrixPortal S3" from the esp32 package by Espressif (3.x).
+
+None of this has been compiled for the board or run on hardware. The versions
+above are what the code was written against, not what it was verified with.
