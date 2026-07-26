@@ -46,8 +46,14 @@ describe('scoreboardPayload', () => {
       teamB: 'Iota & Zeta',
       colorA: '#2f80ed',
       colorB: '#eb5757',
-      winner: null,
     });
+  });
+
+  // Absent, not null: both consumers already read a missing key as "nobody has
+  // won", and the payload sits on a measured byte budget.
+  it('leaves the winner out while the game is live', () => {
+    const game = newGame(15);
+    expect('winner' in scoreboardPayload(game)).toBe(false);
   });
 
   it('reports the winner once the target is reached', () => {

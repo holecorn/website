@@ -20,16 +20,27 @@ static bool parse(const std::string& json, long long lastV, BoardState& out) {
   return parseBoardState(json.c_str(), json.size(), lastV, out);
 }
 
-// Exactly what scoreboardPayload() + the link's v stamp produce.
+// Exactly what scoreboardPayload() + the link's v stamp produce. Note the
+// absent winner: the app omits the key while the game is live rather than
+// sending null, so "missing means nobody has won" is a contract, not a
+// tolerance.
 static const char* REAL =
+    "{\"a\":17,\"b\":8,\"round\":6,\"target\":21,\"first\":\"b\","
+    "\"teamA\":\"Neil & Psi\",\"teamB\":\"Iota & Zeta\","
+    "\"colorA\":\"#2f80ed\",\"colorB\":\"#eb5757\",\"v\":1784926355272}";
+
+static const char* WON =
+    "{\"a\":21,\"b\":8,\"round\":7,\"target\":21,\"first\":\"a\","
+    "\"teamA\":\"Neil & Psi\",\"teamB\":\"Iota & Zeta\","
+    "\"colorA\":\"#2f80ed\",\"colorB\":\"#eb5757\","
+    "\"winner\":\"a\",\"v\":1784926355300}";
+
+// What a retained message published before the key was dropped looks like. A
+// board can still be handed one of these by the broker.
+static const char* LEGACY_NULL_WINNER =
     "{\"a\":17,\"b\":8,\"round\":6,\"target\":21,\"teamA\":\"Neil & Psi\","
     "\"teamB\":\"Iota & Zeta\",\"colorA\":\"#2f80ed\",\"colorB\":\"#eb5757\","
     "\"winner\":null,\"v\":1784926355272}";
-
-static const char* WON =
-    "{\"a\":21,\"b\":8,\"round\":7,\"target\":21,\"teamA\":\"Neil & Psi\","
-    "\"teamB\":\"Iota & Zeta\",\"colorA\":\"#2f80ed\",\"colorB\":\"#eb5757\","
-    "\"winner\":\"a\",\"v\":1784926355300}";
 
 int main() {
   printf("parseBoardState\n");
@@ -41,6 +52,9 @@ int main() {
     CHECK(s.round == 6);
     CHECK(s.target == 21);
     CHECK(s.winner == 0);
+    CHECK(s.first == 'b');
+    CHECK(strcmp(s.teamA, "Neil & Psi") == 0);
+    CHECK(s.colorA.r == 0x2f && s.colorA.g == 0x80 && s.colorA.b == 0xed);
     // The millisecond stamp must survive intact; 32 bits would have wrapped.
     CHECK(s.v == 1784926355272LL);
   }
@@ -48,7 +62,16 @@ int main() {
     BoardState s;
     CHECK(parse(WON, 0, s));
     CHECK(s.winner == 'a');
+    CHECK(s.first == 'a');
     CHECK(s.a == 21);
+  }
+  {
+    // An explicit null must read the same as the key being absent, or a
+    // retained message from an older publisher would look like a win.
+    BoardState s;
+    CHECK(parse(LEGACY_NULL_WINNER, 0, s));
+    CHECK(s.winner == 0);
+    CHECK(s.first == 0);
   }
   {
     // A stale redelivery must be refused so it can't undo a newer score.

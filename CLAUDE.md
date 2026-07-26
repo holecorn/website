@@ -93,6 +93,14 @@ project dependency. It starts and stops its own preview server.
 - **Messages are whole-state and retained, never deltas.** That plus a monotonic
   `v` stamp is what lets a display reboot, reconnect or join late and recover
   with no resync protocol. Keep it that way; it's why the display has no logic.
+- **`winner` is absent while the game is live, not null.** Both consumers
+  already read a missing key as "nobody has won", so the null was 15 bytes of a
+  budget the worst case spends 74% of. Don't add it back for symmetry — and
+  don't assume absent is a bug, `test_board_logic.cpp` covers both the absent
+  and the legacy explicit-null forms, because a retained message published
+  before the change can still be handed to a board. Shortening the other keys
+  was measured and rejected: names are 192 of the 339 worst-case bytes, so
+  packing everything else saves 19% and buys nothing you can spend.
 - **Presence is an MQTT will plus a re-assertion.** The publisher sets a will on
   `holecorn/<code>/online` and publishes `1` retained on connect, so the display
   can tell "0–0" from "the phone has gone away" and dim itself. It also
