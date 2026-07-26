@@ -8,6 +8,16 @@
 // Mirrors REORDER_WINDOW in src/useScoreboard.js.
 static const long long REORDER_WINDOW_MS = 60000;
 
+struct Rgb {
+  uint8_t r = 255, g = 255, b = 255;
+};
+
+// Long enough to hold a doubles label worth showing. The app caps each name at
+// 16 UTF-16 units and joins two with " & ", so a label can reach 35 characters;
+// anything past this is truncated at parse rather than carried and dropped at
+// render, because no panel we would build can show it.
+static const size_t TEAM_LABEL_MAX = 24;
+
 struct BoardState {
   int a = 0;
   int b = 0;
@@ -15,7 +25,37 @@ struct BoardState {
   int target = 0;
   long long v = 0;
   char winner = 0;  // 'a', 'b', or 0 while the game is still live
+  char teamA[TEAM_LABEL_MAX] = {0};
+  char teamB[TEAM_LABEL_MAX] = {0};
+  Rgb colorA;
+  Rgb colorB;
 };
+
+// "#2f80ed" into a triple. Anything unparseable leaves the default white, so a
+// missing or malformed colour shows a readable score rather than a black one.
+inline void parseColor(const char* hex, Rgb& out) {
+  if (!hex || hex[0] != '#') return;
+  uint32_t v = 0;
+  for (int i = 1; i <= 6; i++) {
+    const char c = hex[i];
+    int d;
+    if (c >= '0' && c <= '9') d = c - '0';
+    else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
+    else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
+    else return;
+    v = (v << 4) | uint32_t(d);
+  }
+  out.r = uint8_t(v >> 16);
+  out.g = uint8_t(v >> 8);
+  out.b = uint8_t(v);
+}
+
+inline void copyLabel(const char* src, char* dst) {
+  if (!src) { dst[0] = '\0'; return; }
+  size_t i = 0;
+  for (; src[i] && i < TEAM_LABEL_MAX - 1; i++) dst[i] = src[i];
+  dst[i] = '\0';
+}
 
 // Two scores into the four characters SevSeg expects. Blank-padded rather than
 // zero-padded, matching the browser display, and clamped because the board
@@ -57,5 +97,10 @@ inline bool parseBoardState(const char* json, size_t length, long long lastV,
 
   const char* winner = doc["winner"].as<const char*>();
   out.winner = (winner && (winner[0] == 'a' || winner[0] == 'b')) ? winner[0] : 0;
+
+  copyLabel(doc["teamA"].as<const char*>(), out.teamA);
+  copyLabel(doc["teamB"].as<const char*>(), out.teamB);
+  parseColor(doc["colorA"].as<const char*>(), out.colorA);
+  parseColor(doc["colorB"].as<const char*>(), out.colorB);
   return true;
 }
