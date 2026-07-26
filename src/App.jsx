@@ -1,6 +1,9 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
 import Logo from './Logo.jsx';
+import ScoreboardSettings from './ScoreboardSettings.jsx';
+import { loadScoreboardConfig, saveScoreboardConfig } from './scoreboard.js';
+import { useScoreboardPublisher } from './useScoreboard.js';
 import {
   newGame,
   setBag,
@@ -124,6 +127,7 @@ export default function App() {
   const [callout, setCallout] = useState(null);
   const [fourBagger, setFourBagger] = useState(null);
   const [targetStr, setTargetStr] = useState(String(game.target));
+  const [sbConfig, setSbConfig] = useState(loadScoreboardConfig);
   const confirmDialog = useRef(null);
   const editDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
@@ -131,6 +135,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
   }, [game]);
+
+  useEffect(() => {
+    saveScoreboardConfig(sbConfig);
+  }, [sbConfig]);
+
+  const scoreboard = useScoreboardPublisher(game, sbConfig);
 
   // Flash a cornhole callout when a round is committed: WASH on a tie, GAME on
   // the winning throw, SKUNK when the loser is left on zero.
@@ -279,6 +289,12 @@ export default function App() {
             }}
           />
         </label>
+        <ScoreboardSettings
+          config={sbConfig}
+          onChange={setSbConfig}
+          status={scoreboard.status}
+          error={scoreboard.error}
+        />
         <button className="end-round" onClick={() => setScreen('play')}>
           Start game
         </button>

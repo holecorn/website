@@ -113,6 +113,126 @@
   font: 700 18px system-ui, sans-serif;
 }
 
+/* External scoreboard settings (setup screen) */
+.scoreboard-settings {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.scoreboard-settings summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.link-status {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.link-status.is-connected {
+  color: #27ae60;
+}
+
+.link-status.is-error,
+.link-status.is-offline {
+  color: #eb5757;
+}
+
+.sb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--text);
+}
+
+.sb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sb-field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: 400 15px system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: normal;
+  min-width: 0;
+}
+
+.sb-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.sb-inline input {
+  flex: 1;
+}
+
+.sb-inline button,
+.sb-actions button,
+.sb-actions a {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.sb-actions button:disabled {
+  opacity: 0.5;
+}
+
+.sb-pair {
+  display: flex;
+  gap: 8px;
+}
+
+.sb-pair .sb-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sb-error {
+  margin: 10px 0 0;
+  color: #eb5757;
+  font-size: 13px;
+}
+
+.sb-hint {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Scoreboard */
 .scoreboard {
   display: grid;
