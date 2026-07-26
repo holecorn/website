@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Downloaded for the firmware host test (see firmware/wokwi/README.md)
+firmware/wokwi/ArduinoJson.h
+
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
