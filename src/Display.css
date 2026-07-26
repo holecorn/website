@@ -108,6 +108,12 @@
   text-transform: uppercase;
 }
 
+/* iPadOS keeps the status bar (clock/battery) overlaid on fullscreen content,
+   and env(safe-area-inset-top) can report 0 there — hence the 24px floor. */
+:fullscreen .display-status {
+  top: calc(max(env(safe-area-inset-top, 0px), 24px) + 1.5vmin);
+}
+
 /* Nothing is arriving, so dim the whole board rather than show a confident
    score that may be minutes old. */
 .display.is-stale .seg.on {
