@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MAX_TARGET,
+  clampTarget,
   emptyPositions,
   rawPoints,
   tierCounts,
@@ -164,5 +166,26 @@ describe('teamLabel', () => {
   it('joins both partners in doubles', () => {
     const g = { ...newGame(), mode: 'doubles', players: { a: ['Alice', 'Bob'], b: ['Carol', 'Dave'] } };
     expect(teamLabel(g, 'a')).toBe('Alice & Bob');
+  });
+});
+
+describe('clampTarget', () => {
+  it('caps at what two digits can show', () => {
+    expect(clampTarget(120)).toBe(MAX_TARGET);
+    expect(clampTarget(99)).toBe(99);
+    expect(clampTarget(21)).toBe(21);
+  });
+
+  it('falls back for values that are not a playable target', () => {
+    expect(clampTarget('', 15)).toBe(15);
+    expect(clampTarget('abc', 15)).toBe(15);
+    expect(clampTarget(0, 15)).toBe(15);
+    expect(clampTarget(-3, 15)).toBe(15);
+    expect(clampTarget(undefined, 15)).toBe(15);
+  });
+
+  it('accepts the digits typed so far while typing', () => {
+    expect(clampTarget('2', 21)).toBe(2);
+    expect(clampTarget('21', 21)).toBe(21);
   });
 });

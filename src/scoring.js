@@ -10,6 +10,16 @@
 export const TIER_POINTS = { unthrown: 0, floor: 0, board: 1, hole: 3 };
 export const BAGS_PER_SIDE = 4;
 export const DEFAULT_TARGET = 21;
+// The external scoreboard renders two digits. Capping the target here rather
+// than clamping in the display means the phone and the board can never disagree
+// about the score.
+export const MAX_TARGET = 99;
+
+export function clampTarget(value, fallback = DEFAULT_TARGET) {
+  const n = Math.trunc(Number(value));
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(n, MAX_TARGET);
+}
 
 export function emptyPositions() {
   return Array(BAGS_PER_SIDE).fill('unthrown');

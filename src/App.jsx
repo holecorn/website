@@ -5,6 +5,8 @@ import ScoreboardSettings from './ScoreboardSettings.jsx';
 import { loadScoreboardConfig, saveScoreboardConfig } from './scoreboard.js';
 import { useScoreboardPublisher } from './useScoreboard.js';
 import {
+  MAX_TARGET,
+  clampTarget,
   newGame,
   setBag,
   setFirst,
@@ -270,18 +272,17 @@ export default function App() {
             type="number"
             inputMode="numeric"
             min="1"
+            max={MAX_TARGET}
             value={targetStr}
             onChange={(e) => {
               const v = e.target.value;
               setTargetStr(v);
-              const n = parseInt(v, 10);
-              if (!Number.isNaN(n) && n > 0) {
-                dispatch({ type: 'setTarget', value: n });
+              if (v.trim() !== '') {
+                dispatch({ type: 'setTarget', value: clampTarget(v, game.target) });
               }
             }}
             onBlur={() => {
-              const n = parseInt(targetStr, 10);
-              const clamped = !Number.isNaN(n) && n > 0 ? n : game.target;
+              const clamped = clampTarget(targetStr, game.target);
               setTargetStr(String(clamped));
               if (clamped !== game.target) {
                 dispatch({ type: 'setTarget', value: clamped });
