@@ -28,3 +28,6 @@ tools/out/
 *.njsproj
 *.sln
 *.sw?
+
+# Renders from the HUB75 host renderer (see firmware/hub75/README.md)
+firmware/hub75/out/

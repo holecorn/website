@@ -166,14 +166,35 @@ project dependency. It starts and stops its own preview server.
   **Maximize Compatibility** has to be on. Expect this to be the first thing that
   goes wrong when the hardware board arrives.
 
-## Firmware (`firmware/wokwi/`)
+## Firmware
 
-ESP32 firmware for the physical board, runnable in the Wokwi simulator. Details
-in `firmware/wokwi/README.md`; the parts worth knowing before touching it:
+Two targets, both ESP32, sharing `board_logic.h` (`firmware/hub75/board_logic.h`
+is a symlink). They are not alternatives to pick between — the SevSeg one is the
+only one that simulates, and the HUB75 one is the one being built.
+
+- **`firmware/wokwi/`** — seven-segment modules via SevSeg, runnable in the
+  Wokwi simulator. Score only.
+- **`firmware/hub75/`** — 2x Waveshare P5 64x32 chained to 128x32 (640x160mm),
+  Adafruit MatrixPortal S3. Score *and* team names in team colours. **Wokwi has
+  no HUB75 part**, so this one is verified by a host renderer instead — see
+  `firmware/hub75/README.md`.
+
+The parts worth knowing before touching either:
 
 - **`board_logic.h` is deliberately Arduino-free** so it host-compiles against
   desktop ArduinoJson — `test_board_logic.cpp` is how `MQTT_BUFFER` was sized
   rather than guessed. Keep parsing and digit formatting in there, not the `.ino`.
+  It carries team names and colours for the HUB75 build; the SevSeg build simply
+  ignores those fields, which is cheaper than two copies of the parser.
+- **The HUB75 panel is sized against 7m, not "as big as possible."** Spectators
+  are across the court or at the boards, so 100mm digits (11.4m) and 10-char
+  names (8.6m) clear it with margin. Panel *width* buys name length, *height*
+  buys digit height; four digits run out of width first, which is why two rows
+  are left dark. Don't "use the spare height" — it buys nothing.
+- **`glyphs.h` is generated** from `src/segments.js` by `generate_glyphs.mjs`,
+  so the panel's digits are the browser's geometry rather than a redrawing.
+  The dash for the no-state screen is defined in the *generator*, not
+  `segments.js`, because nothing else needs one.
 - **`diagram.json` is generated** by `generate-diagram.mjs`, which reads the pin
   arrays out of `sketch.ino`. Don't hand-edit the JSON: the two displays share
   seven segment lines, and wiring that silently disagrees with the firmware is
