@@ -17,12 +17,45 @@ across the court or standing at the boards):
 | | | reads to |
 | --- | --- | --- |
 | Digits | 20 px = 100 mm at P5 | 11.4 m |
-| Names | 10 chars, 5x7 at 35 mm cap | 8.6 m |
+| Names | 9 chars, 5x7 at 35 mm cap | 8.6 m |
 
 Both clear 7 m with margin, and this was the smallest standard geometry that
 did. Panel *width* is what buys name length; panel *height* buys digit height.
 Four digits side by side run out of width first, which is why rows 30-31 are
 left dark — the spare height would buy nothing.
+
+## What it shows
+
+```
+   NU/TAU      V      ALPHA/PHI
+                              ---    <- rule: who throws, and which partner
+     17         R9          20
+               TO 21
+```
+
+- **A "V" separates the two names.** Reserving room for it is why a team gets
+  nine characters rather than ten. It draws uppercase because the font is
+  uppercase-only — `fontIndex` folds case so a name typed in mixed case renders
+  consistently, and adding a lowercase `v` glyph would put a small letter
+  inside anyone's name containing one.
+
+- **Names join with `/`, not `" & "`.** The app's separator costs three of the
+  nine characters a team gets; a slash costs one, which is the difference
+  between most pairs fitting whole and being cut. What still overflows shortens
+  *both* names to the longest prefix that fits — truncating the tail instead
+  would take all of the second player's name and none of the first's.
+- **The score pairs sit at `SIDE_MARGIN`, not on the edges**, so they line up
+  under the names centred above them. Perfectly centred would squeeze the
+  middle column; see the constant's comment for the 4px trade.
+- **A rule under the name marks who throws first**, and in doubles marks *which
+  partner* — `round % 2`, mirroring `activeIdx` in `App.jsx`. Derived rather
+  than published, because the app derives it the same way. It comes off once
+  the game is won.
+- **No in-round bag state.** `CLAUDE.md` explains why the display shows the
+  logged score only. Bag positions were considered: they are raw state rather
+  than a misleading provisional total, so the reasoning there does not forbid
+  them, but they would cost the one-retained-message-per-round model that makes
+  a dropout harmless.
 
 ## Host renderer
 

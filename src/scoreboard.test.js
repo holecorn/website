@@ -41,6 +41,7 @@ describe('scoreboardPayload', () => {
       b: 0,
       round: 0,
       target: 15,
+      first: 'b',
       teamA: 'Neil & Psi',
       teamB: 'Iota & Zeta',
       colorA: '#2f80ed',

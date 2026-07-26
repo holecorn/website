@@ -45,7 +45,7 @@ WiFiClient net;
 #endif
 
 // See ../wokwi/board_logic.h and test_board_logic.cpp: a doubles game with
-// non-ASCII names reaches ~367 bytes including topic and headers.
+// non-ASCII names reaches ~379 bytes including topic and headers.
 const uint16_t MQTT_BUFFER = 512;
 
 const uint32_t RECONNECT_INTERVAL = 5000;

@@ -50,10 +50,10 @@ WiFiClient net;
 
 // PubSubClient's 256-byte default applies to the whole packet and drops
 // oversized messages silently rather than erroring. A doubles game with 16-char
-// ASCII names measures ~239 bytes with the topic and headers — under the limit,
-// but with little enough headroom that one added field would not be. And the
-// app caps names at 16 UTF-16 code units, not 16 bytes, so non-ASCII names
-// reach ~367. 512 covers the worst case. See test_board_logic.cpp.
+// ASCII names measures ~251 bytes with the topic and headers, five under the
+// default. And the app caps names at 16 UTF-16 code units, not 16 bytes, so
+// non-ASCII names reach ~379. 512 covers the worst case, with room the default
+// has not had for a while. See test_board_logic.cpp.
 const uint16_t MQTT_BUFFER = 512;
 
 const uint32_t RECONNECT_INTERVAL = 3000;

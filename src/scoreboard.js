@@ -36,6 +36,7 @@ export function scoreboardPayload(game) {
     b: t.b,
     round: game.rounds.length,
     target: game.target,
+    first: game.nextFirst,
     teamA: teamLabel(game, 'a'),
     teamB: teamLabel(game, 'b'),
     colorA: game.colors.a,

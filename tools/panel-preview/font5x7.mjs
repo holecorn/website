@@ -40,6 +40,9 @@ const G = {
   9: '.###.,#...#,#...#,.####,....#,...#.,.##..',
   '&': '.##..,#..#.,#.#..,.#...,#.#.#,#..#.,.##.#',
   '-': '.....,.....,.....,#####,.....,.....,.....',
+  // Joins a doubles pair on the LED panel, where " & " would cost three of the
+  // ten characters a team gets. See firmware/hub75/render.h.
+  '/': '....#,....#,...#.,..#..,.#...,#....,#....',
   ' ': '.....,.....,.....,.....,.....,.....,.....',
 };
 export const FONT = Object.fromEntries(

@@ -12,11 +12,12 @@ struct Rgb {
   uint8_t r = 255, g = 255, b = 255;
 };
 
-// Long enough to hold a doubles label worth showing. The app caps each name at
-// 16 UTF-16 units and joins two with " & ", so a label can reach 35 characters;
-// anything past this is truncated at parse rather than carried and dropped at
-// render, because no panel we would build can show it.
-static const size_t TEAM_LABEL_MAX = 24;
+// Holds a full doubles label. The app caps each name at 16 UTF-16 units and
+// joins two with " & ", so 35 characters is the worst case and this has room
+// for it. Don't shrink it to "what the panel can display": render.h abbreviates
+// a label that won't fit by shortening *both* names, which needs the whole
+// thing. Truncating here would silently eat the second player's name first.
+static const size_t TEAM_LABEL_MAX = 40;
 
 struct BoardState {
   int a = 0;
@@ -25,6 +26,7 @@ struct BoardState {
   int target = 0;
   long long v = 0;
   char winner = 0;  // 'a', 'b', or 0 while the game is still live
+  char first = 0;   // team due to throw first this round, or 0 if not published
   char teamA[TEAM_LABEL_MAX] = {0};
   char teamB[TEAM_LABEL_MAX] = {0};
   Rgb colorA;
@@ -97,6 +99,9 @@ inline bool parseBoardState(const char* json, size_t length, long long lastV,
 
   const char* winner = doc["winner"].as<const char*>();
   out.winner = (winner && (winner[0] == 'a' || winner[0] == 'b')) ? winner[0] : 0;
+
+  const char* first = doc["first"].as<const char*>();
+  out.first = (first && (first[0] == 'a' || first[0] == 'b')) ? first[0] : 0;
 
   copyLabel(doc["teamA"].as<const char*>(), out.teamA);
   copyLabel(doc["teamB"].as<const char*>(), out.teamB);

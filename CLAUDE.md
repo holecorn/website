@@ -202,12 +202,14 @@ The parts worth knowing before touching either:
 - **Nothing in `loop()` may block.** The digits are software-multiplexed by
   SevSeg, so a blocking reconnect wait shows up as visible flicker — hence the
   `millis()` timers rather than `delay()`.
-- **PubSubClient's 256-byte default is too small.** ASCII names land ~239 bytes
-  including topic and headers — under the limit, but with little enough headroom
-  that one added payload field would not be — and non-ASCII names reach ~367,
-  because the app caps names at 16 UTF-16 code units rather than 16 bytes.
-  Oversized messages are dropped silently, with no error to notice.
-  `test_board_logic.cpp` is what measures this; re-run it if the payload changes.
+- **PubSubClient's 256-byte default is too small.** ASCII names land ~251 bytes
+  including topic and headers and non-ASCII names reach ~379, because the app
+  caps names at 16 UTF-16 code units rather than 16 bytes. Oversized messages
+  are dropped silently, with no error to notice. `test_board_logic.cpp` is what
+  measures this; **re-run it if the payload changes** — adding `first` moved the
+  ASCII case from ~239 to ~251, which is five bytes under the default. The
+  budget is why `src/scoreboard.test.js` asserts the payload with `toEqual`: a
+  field nothing renders should fail rather than quietly ship.
 - **Free Wokwi projects are public** — no real broker credentials in one.
 
 ## Testing

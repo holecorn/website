@@ -57,7 +57,7 @@ const masks = [...CHARS].map((ch) => {
 });
 if (!masks[CHARS.indexOf('-')]) throw new Error('dash glyph is empty');
 
-const FONT_CHARS = ' !&-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const FONT_CHARS = ' !&-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const fontRows = [...FONT_CHARS].map((ch) => {
   const g = FONT[ch] ?? FONT[' '];
   return g.map((row) => [...row].reduce((b, c, i) => (c === '#' ? b | (1 << i) : b), 0));

@@ -30,6 +30,24 @@ struct Framebuffer {
     p[2] = b;
   }
 
+  int litCount(int y, int x0, int x1) const {
+    int n = 0;
+    for (int x = x0; x < x1; x++) {
+      const uint8_t* p = px_ + (y * PANEL_W + x) * 3;
+      if (p[0] || p[1] || p[2]) n++;
+    }
+    return n;
+  }
+
+  // Is anything lit on this row, within this span?
+  bool litRow(int y, int x0, int x1) const {
+    for (int x = x0; x < x1; x++) {
+      const uint8_t* p = px_ + (y * PANEL_W + x) * 3;
+      if (p[0] || p[1] || p[2]) return true;
+    }
+    return false;
+  }
+
   int lit() const {
     int n = 0;
     for (int i = 0; i < PANEL_W * PANEL_H; i++) {
@@ -57,13 +75,14 @@ static void check(bool ok, const char* what) {
 }
 
 static BoardState makeState(int a, int b, int round, const char* ta, const char* tb,
-                            char winner = 0) {
+                            char winner = 0, char first = 0) {
   BoardState s;
   s.a = a;
   s.b = b;
   s.round = round;
   s.target = 21;
   s.winner = winner;
+  s.first = first;
   copyLabel(ta, s.teamA);
   copyLabel(tb, s.teamB);
   parseColor("#2f80ed", s.colorA);
@@ -125,8 +144,106 @@ int main() {
   check(white.r == 255 && white.g == 255 && white.b == 255, "bad colour falls back to white");
 
   char label[TEAM_LABEL_MAX];
-  copyLabel("OMICRON & UPSILON", label);
-  check(strlen(label) == TEAM_LABEL_MAX - 1, "long label truncated at parse");
+  copyLabel("ABCDEFGHIJKLMNOP & QRSTUVWXYZABCDEF", label);
+  check(strlen(label) == 35, "a worst-case doubles label survives parse intact");
+  copyLabel("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQ", label);
+  check(strlen(label) == TEAM_LABEL_MAX - 1, "anything longer still truncates");
+
+  char da[NAME_CHARS + 1], db[NAME_CHARS + 1];
+
+  fitLabels("Theta", "Nu", da, db, sizeof da);
+  check(!strcmp(da, "Theta") && !strcmp(db, "Nu"), "singles names pass through");
+
+  fitLabels("Nu & Tau", "Theta & Phi", da, db, sizeof da);
+  check(!strcmp(da, "Nu/Tau") && !strcmp(db, "Theta/Phi"), "the pair joins with a slash");
+
+  // Nine characters of name fit whole on a slash; " & " would have shortened
+  // both of these.
+  fitLabels("Alpha & Phi", "Gamma & Chi", da, db, sizeof da);
+  check(!strcmp(da, "Alpha/Phi") && !strcmp(db, "Gamma/Chi"),
+        "the slash buys back two characters");
+
+  // Both sides shorten by the same amount, so it reads as deliberate.
+  fitLabels("Gamma & Alpha", "Delta & Kappa", da, db, sizeof da);
+  check(!strcmp(da, "Gamm/Alph") && !strcmp(db, "Delt/Kapp"), "shortens both sides");
+
+  // Two names sharing an initial must not collapse to "H/H".
+  fitLabels("Gamma & Kappa", "Omicron & Phi", da, db, sizeof da);
+  check(!strcmp(da, "Gamm/Kapp") && !strcmp(db, "Rosa/Phi"),
+        "shared initials stay distinguishable");
+
+  fitLabels("ABCDEFGHIJKLMNOP & QRSTUVWXYZABCDEF", "Nu & Tau", da, db, sizeof da);
+  check(strlen(da) <= NAME_CHARS && strlen(db) <= NAME_CHARS,
+        "worst-case label still fits the slot");
+
+  // The rule sits on its own row between the names and the digits, on the side
+  // due to throw, and comes off once the game is won.
+  {
+    Framebuffer fa, fb2, fw, fnone;
+    const BoardState first_a = makeState(12, 7, 5, "Theta", "Nu", 0, 'a');
+    const BoardState first_b = makeState(12, 7, 5, "Theta", "Nu", 0, 'b');
+    const BoardState wonWhileUp = makeState(21, 7, 9, "Theta", "Nu", 'a', 'a');
+    const BoardState unset = makeState(12, 7, 5, "Theta", "Nu");
+    renderBoard(fa, first_a, true, true, true);
+    renderBoard(fb2, first_b, true, true, true);
+    renderBoard(fw, wonWhileUp, true, true, true);
+    renderBoard(fnone, unset, true, true, true);
+
+    check(fa.litRow(UNDERLINE_Y, 0, PANEL_W / 2), "team A underlined when A throws");
+    check(!fa.litRow(UNDERLINE_Y, PANEL_W / 2, PANEL_W), "only the throwing side is ruled");
+    check(fb2.litRow(UNDERLINE_Y, PANEL_W / 2, PANEL_W), "team B underlined when B throws");
+    check(!fw.litRow(UNDERLINE_Y, 0, PANEL_W), "no rule once the game is won");
+    check(!fnone.litRow(UNDERLINE_Y, 0, PANEL_W),
+          "no rule when an older publisher omits first");
+    // The rule must not eat into the name or the digits.
+    check(UNDERLINE_Y >= FONT_H && UNDERLINE_Y < DIGIT_Y, "rule sits in the gap");
+  }
+
+  // In doubles only the partner who is up is ruled, and which one alternates
+  // with the round exactly as activeIdx does in App.jsx.
+  {
+    const int RIGHT = PANEL_W / 2;
+    Framebuffer evenRound, oddRound;
+    // "Alpha & Phi" fits whole as "Alpha/Phi".
+    renderBoard(evenRound, makeState(9, 6, 4, "Nu & Tau", "Alpha & Phi", 0, 'b'), true,
+                true, true);
+    renderBoard(oddRound, makeState(9, 6, 5, "Nu & Tau", "Alpha & Phi", 0, 'b'), true,
+                true, true);
+
+    const int whole = textWidth("Alpha/Phi", NAME_CHARS);
+    const int firstPartner = textWidth("Alpha", NAME_CHARS);
+    const int secondPartner = textWidth("Phi", NAME_CHARS);
+
+    check(evenRound.litCount(UNDERLINE_Y, RIGHT, PANEL_W) == firstPartner,
+          "even round rules the first partner only");
+    check(oddRound.litCount(UNDERLINE_Y, RIGHT, PANEL_W) == secondPartner,
+          "odd round rules the second partner only");
+    check(firstPartner < whole && secondPartner < whole,
+          "a doubles rule is never the width of the whole label");
+    check(!evenRound.litRow(UNDERLINE_Y, 0, RIGHT), "the other team stays unruled");
+
+    // Singles has no partner to pick, so the whole name is ruled.
+    Framebuffer single;
+    renderBoard(single, makeState(9, 6, 5, "Nu", "Alpha", 0, 'b'), true, true, true);
+    check(single.litCount(UNDERLINE_Y, RIGHT, PANEL_W) == textWidth("Alpha", NAME_CHARS),
+          "singles rules the whole name");
+  }
+
+  // The "V" has its own column, so it must clear two full-length names.
+  {
+    const int widest = textWidth("ABCDEFGHI", NAME_CHARS);
+    const int nxA = (NAME_REGION_W - widest) / 2;
+    const int nxB = (PANEL_W - NAME_REGION_W) + nxA;
+    const int vx = (PANEL_W - FONT_W) / 2;
+    check(NAME_CHARS == 9, "the V costs exactly one name character");
+    check(nxA + widest <= vx, "the V clears the longest left-hand name");
+    check(vx + FONT_W <= nxB, "the V clears the longest right-hand name");
+  }
+
+  // "TO 21" is the widest the middle column gets, and it must not touch the
+  // digits either side.
+  check(textWidth("TO 99", 8) < RIGHT_X - (LEFT_X + PAIR_W),
+        "the target line clears both score pairs");
 
   check(liveWithGrace(true, 1000, 0), "connected is always live");
   check(!liveWithGrace(false, 1000, 0), "never-connected is not live");

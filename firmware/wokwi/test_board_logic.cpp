@@ -88,8 +88,8 @@ int main() {
     // so the worst case is far bigger than it first looks. PubSubClient's limit
     // covers the whole packet, so add the topic and headers on top.
     auto payloadFor = [](const std::string& nameA, const std::string& nameB) {
-      return "{\"a\":21,\"b\":19,\"round\":14,\"target\":21,\"teamA\":\"" + nameA +
-             " & " + nameA + "\",\"teamB\":\"" + nameB + " & " + nameB +
+      return "{\"a\":21,\"b\":19,\"round\":14,\"target\":21,\"first\":\"b\",\"teamA\":\"" +
+             nameA + " & " + nameA + "\",\"teamB\":\"" + nameB + " & " + nameB +
              "\",\"colorA\":\"#2f80ed\",\"colorB\":\"#eb5757\","
              "\"winner\":\"a\",\"v\":1784926355272}";
     };
