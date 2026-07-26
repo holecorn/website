@@ -17,8 +17,9 @@ Holecorn uses standard **cancellation scoring**:
 
 A new game starts on a **setup screen** where you pick **Singles** or **Doubles**,
 set each team's name(s) and colour (red, blue, green, yellow — so the on-screen
-colours can match your physical bag sets) and the target score to play to, then
-press **Start game**.
+colours can match your physical bag sets) and the target score to play to (up to
+99, which is what the external scoreboard can display), then press
+**Start game**.
 
 In **doubles**, each team has two players who share the team's colour. Since each
 end is scored as its own round, the throwing partner alternates every round; the
@@ -70,6 +71,57 @@ column instead.
 The in-progress game is saved to the browser's `localStorage`, so it survives a
 refresh. There is no backend and no account — everything runs client-side.
 
+## External scoreboard
+
+Holecorn can mirror the score onto a second screen — a spare tablet or laptop
+propped up where everyone can see it, standing in for a physical seven-segment
+board. The display shows the **logged** score (committed rounds only), so it
+moves once a round rather than flickering as bags are tapped.
+
+Because the app is served over HTTPS it can't talk directly to something on your
+local network, so the two ends meet at an MQTT broker instead. You'll need one
+that accepts WebSocket connections — [HiveMQ
+Cloud](https://www.hivemq.com/mqtt-cloud-broker/) and
+[EMQX](https://www.emqx.com/en/cloud) both have free tiers. For a quick try
+without signing up, the public test broker `wss://broker.emqx.io:8084/mqtt`
+works with no username or password (it's public, so pick an obscure game code).
+
+On the setup screen, open **External scoreboard** and fill in the broker URL,
+credentials and a **game code** (the **New** button generates one), then tick
+**Publish the score**. **Copy display link** gives you a URL that opens the
+display already configured — send it to the tablet and open it there. The
+display keeps its own screen awake where the browser allows it, and tapping
+anywhere on it toggles fullscreen (browser chrome otherwise eats the height the
+digits want; iOS Safari won't fullscreen a page, so it does nothing there).
+
+The digits are sized for reading across a pitch: roughly 75mm tall on a 10"
+tablet and 185mm on a 24" monitor, against the ~35mm that a 4m viewing distance
+needs. Brightness, not size, is the limit outdoors — a tablet is very readable in
+shade and washed out in direct sun, so site it accordingly rather than buying a
+brighter screen.
+
+When a game is won, the winner's digits flash — hollowing out to a bright rim
+rather than blanking, so the score stays readable throughout. That's skipped for
+anyone who has asked for reduced motion.
+
+The display dims itself whenever the score might be stale, so a phone that has
+wandered out of signal shows as dim rather than as a confident wrong score. Both
+ends need internet; a phone hotspot is enough, though note ESP32-class hardware
+is 2.4GHz-only, so a hotspot serving one needs **Maximize Compatibility** on.
+
+Anyone who knows your broker details and game code can post to your scoreboard,
+so treat the display link as a shared secret — note it carries your broker
+**password** in the query string, so it ends up in browser history and in
+whatever you paste it into. Use a broker user you can revoke.
+
+### Hardware board
+
+`firmware/wokwi/` holds ESP32 firmware that subscribes to the same topic and
+drives two two-digit seven-segment displays. It runs unchanged in the
+[Wokwi](https://wokwi.com/) simulator, so the whole chain — phone, broker, board,
+digits — can be exercised in a browser tab before buying any parts. See
+[`firmware/wokwi/README.md`](firmware/wokwi/README.md).
+
 ## Development
 
 ```bash
@@ -78,6 +130,8 @@ npm run dev      # start the dev server (http://localhost:5173/)
 npm run build    # production build to dist/
 npm run preview  # serve the production build
 npm run lint     # oxlint
+npm test         # unit tests
+npm run test:browser  # browser checks (needs: npm install --no-save playwright)
 ```
 
 ## Deployment
@@ -91,7 +145,8 @@ root, Vite's `base` stays `/` (so the PWA `scope`/`start_url` need no change).
 
 React 19 + Vite. Scoring rules live as pure functions in `src/scoring.js`
 (framework-independent and easy to test); the per-bag scoring lanes are in
-`src/Board.jsx`.
+`src/Board.jsx`. The external scoreboard uses [MQTT.js](https://github.com/mqttjs/MQTT.js),
+loaded on demand so installs that never use it don't pay for it.
 
 The brand is the two words "HOLE" and "CORN" in chalky, boxed outlines angled
 into a shallow V — a stylised version of a chalk-on-tarmac family joke. The
