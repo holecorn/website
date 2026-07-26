@@ -4,7 +4,9 @@ Verification and preview scripts. Some run in CI; the rest exist because several
 decisions in `CLAUDE.md` were made from measurements rather than judgement, and
 those measurements should be reproducible.
 
-They need Playwright, which is deliberately **not** a project dependency:
+`test-firmware.mjs` needs only a C++17 compiler. Everything else here drives a
+browser and needs Playwright, which is deliberately **not** a project
+dependency:
 
 ```bash
 npm install --no-save playwright
@@ -27,6 +29,7 @@ rendering aid with nothing to assert.
 
 | Script | |
 | --- | --- |
+| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, and fails if `glyphs.h` no longer matches `src/segments.js`. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
 | `measure-digits.mjs` | Reports seven-segment digit height in **millimetres** across real device sizes. Needs `npm run dev`. |
 | `verify-copy-link.mjs` | Checks **Copy display link** puts the link on the clipboard, falls back to a manual-copy dialog when the Clipboard API is missing or refuses (plain http, denied permission), and that the **QR code** rasterises and decodes back to the display link. Needs `npm run preview`. |
 | `verify-wakelock.mjs` | Drives a fake `navigator.wakeLock` to check the display re-acquires the lock after the system reclaims it, and degrades to a slow retry rather than spinning. Needs `npm run preview`. |

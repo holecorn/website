@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser": "node tools/with-preview.mjs"
+    "test:browser": "node tools/with-preview.mjs",
+    "test:firmware": "node tools/test-firmware.mjs"
   },
   "dependencies": {
     "mqtt": "^5.15.2",

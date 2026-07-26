@@ -37,8 +37,29 @@ jobs:
         with:
           path: dist
 
+  # Gates the deploy even though the firmware does not ship with the app,
+  # because they share a contract: glyphs.h is generated from src/segments.js,
+  # and the payload shape in src/scoreboard.js is what board_logic.h parses. A
+  # change to either can break a board in the field, and this is the only thing
+  # that notices. Runs alongside `build`, so it costs no wall-clock.
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # ArduinoJson is a vendored header rather than a dependency, so it is
+      # gitignored and fetched on demand. Cached to keep a third party off the
+      # critical path of a deploy.
+      - uses: actions/cache@v4
+        with:
+          path: firmware/wokwi/ArduinoJson.h
+          key: arduinojson-v7.4.3
+      - run: npm run test:firmware
+
   deploy:
-    needs: build
+    needs: [build, firmware]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

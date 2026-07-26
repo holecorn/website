@@ -83,10 +83,14 @@ host and dumping the framebuffer. This is the same code the panel runs, not a
 restatement of it.
 
 ```bash
-cd firmware/hub75
-curl -sLo ../wokwi/ArduinoJson.h \
-  https://github.com/bblanchon/ArduinoJson/releases/download/v7.4.3/ArduinoJson-v7.4.3.h
-mkdir -p out
+npm run test:firmware      # both host suites + the glyphs.h drift check; CI runs this
+```
+
+That fetches `ArduinoJson.h` if it is missing and compiles with `-Werror`. To
+see the panel rather than just assert on it:
+
+```bash
+cd firmware/hub75 && mkdir -p out
 clang++ -std=c++17 -Wall -Wextra -I. -I../wokwi -o /tmp/render_test test_render.cpp
 /tmp/render_test && node preview.mjs
 ```
@@ -111,7 +115,10 @@ node firmware/hub75/generate_glyphs.mjs
 ```
 
 Re-run it after changing either source, or after changing `DIGIT_W`/`DIGIT_H` —
-which is what you would do to move to a 128x64 panel later.
+which is what you would do to move to a 128x64 panel later. Forgetting is
+covered: `npm run test:firmware` regenerates and fails if the committed header
+differs, so a change to the browser's digit geometry cannot silently stop
+matching the panel.
 
 One divergence worth knowing: the dash shown before any state arrives is
 **defined in the generator, not in `segments.js`**. The browser display never

@@ -19,6 +19,7 @@ npm run lint     # oxlint
 npm test         # vitest run
 npm run test:watch
 npm run test:browser  # Playwright checks against a preview build (CI runs these)
+npm run test:firmware # host C++ suites + the glyphs.h drift check (CI runs these)
 ```
 
 `test:browser` needs `npm install --no-save playwright` first — it is not a
@@ -215,7 +216,7 @@ The parts worth knowing before touching either:
   including topic and headers and non-ASCII names reach ~379, because the app
   caps names at 16 UTF-16 code units rather than 16 bytes. Oversized messages
   are dropped silently, with no error to notice. `test_board_logic.cpp` is what
-  measures this; **re-run it if the payload changes** — adding `first` moved the
+  measures this, and `npm run test:firmware` runs it — adding `first` moved the
   ASCII case from ~239 to ~251, which is five bytes under the default. The
   budget is why `src/scoreboard.test.js` asserts the payload with `toEqual`: a
   field nothing renders should fail rather than quietly ship.
@@ -233,9 +234,20 @@ lost acknowledgement, a refused subscription, a half-open socket — are ones a
 real broker will not reproduce on demand. `openScoreboardLink` takes an
 injectable `connect` for exactly this; production never passes it.
 
-CI runs `npm test`, then the build, then `npm run test:browser`. All three gate
-the deploy. `verify-winner-flash` is deliberately **not** in that set: it needs a
-real broker, and a deploy should not fail because a third party is down.
+`npm run test:firmware` compiles and runs both host C++ suites and checks that
+`glyphs.h` still matches `src/segments.js`. That last check is why it is worth
+having: the generated header is the app's own digit geometry, so an app-side
+change silently stops matching the panel until someone regenerates. These were
+manual for a while and drifted twice — a fixture that claimed to be "exactly
+what `scoreboardPayload()` produces" but was missing a field, and two characters
+`FONT_CHARS` advertised with blank glyphs behind them.
+
+CI runs `npm test`, the build and `npm run test:browser` in one job, and
+`npm run test:firmware` in a parallel one. All of them gate the deploy —
+including the firmware, even though it doesn't ship with the app, because the
+two share a contract and nothing else notices when it breaks.
+`verify-winner-flash` is deliberately **not** in that set: it needs a real
+broker, and a deploy should not fail because a third party is down.
 
 ## Deployment
 
