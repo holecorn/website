@@ -158,6 +158,10 @@ project dependency. It starts and stops its own preview server.
   chosen against ~35mm for a 4m viewing distance; a 10" tablet gives 75mm and a
   24" monitor 185mm (the latter from the `vh` term). The portrait pair
   (`min(38vh, 45vw)`) has had no equivalent analysis.
+- **The display-link QR code is generated locally** (`uqr`, in
+  `ScoreboardSettings.jsx`) because the link embeds the broker password — don't
+  swap it for a QR web service, and don't move it off-device. The browser check
+  in `tools/verify-copy-link.mjs` decodes the rendered QR to prove it scans.
 - ESP32-class hardware is 2.4GHz-only; iPhone hotspots default to 5GHz, so
   **Maximize Compatibility** has to be on. Expect this to be the first thing that
   goes wrong when the hardware board arrives.

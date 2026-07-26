@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { renderSVG } from 'uqr';
 import { configComplete, displayUrl, newCode, normalizeCode } from './scoreboard.js';
 
 const STATUS_LABEL = {
@@ -11,6 +12,9 @@ const STATUS_LABEL = {
 
 export default function ScoreboardSettings({ config, onChange, status, error }) {
   const [copied, setCopied] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const dialogRef = useRef(null);
+  const linkInputRef = useRef(null);
   const ready = configComplete(config);
   const link = ready ? displayUrl(window.location.origin, config) : '';
 
@@ -20,14 +24,32 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
     return () => clearTimeout(id);
   }, [copied]);
 
+  // select() alone often no-ops on iOS Safari for readonly inputs;
+  // setSelectionRange is the reliable form there.
+  const selectLink = () => {
+    const el = linkInputRef.current;
+    if (!el) return;
+    el.select();
+    el.setSelectionRange(0, el.value.length);
+  };
+
+  useEffect(() => {
+    if (!showLink) return;
+    dialogRef.current?.showModal();
+    selectLink();
+  }, [showLink]);
+
   const set = (field) => (e) => onChange({ ...config, [field]: e.target.value });
 
   const copyLink = async () => {
     try {
+      // Throws when the write is refused, and also when the API is absent
+      // altogether — Safari and Chrome both drop navigator.clipboard entirely
+      // on plain http, e.g. a dev server reached by LAN IP.
       await navigator.clipboard.writeText(link);
       setCopied(true);
     } catch {
-      setCopied(false);
+      setShowLink(true);
     }
   };
 
@@ -98,12 +120,42 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
         <button type="button" disabled={!ready} onClick={copyLink}>
           {copied ? 'Copied' : 'Copy display link'}
         </button>
+        <button type="button" disabled={!ready} onClick={() => setShowLink(true)}>
+          QR code
+        </button>
         {ready && (
           <a href={link} target="_blank" rel="noreferrer">
             Open display
           </a>
         )}
       </div>
+
+      {showLink && (
+        <dialog
+          ref={dialogRef}
+          className="sb-link-dialog"
+          aria-label="Display link"
+          onClose={() => setShowLink(false)}
+        >
+          <p>Scan this on the display device, or copy the link.</p>
+          <div
+            className="sb-qr"
+            role="img"
+            aria-label="QR code for the display link"
+            dangerouslySetInnerHTML={{ __html: renderSVG(link, { border: 4 }) }}
+          />
+          <input
+            ref={linkInputRef}
+            readOnly
+            value={link}
+            aria-label="Display link"
+            onFocus={selectLink}
+          />
+          <button type="button" onClick={() => dialogRef.current?.close()}>
+            Close
+          </button>
+        </dialog>
+      )}
 
       {status === 'error' && error && <p className="sb-error">{error}</p>}
       <p className="sb-hint">

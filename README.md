@@ -89,7 +89,8 @@ works with no username or password (it's public, so pick an obscure game code).
 On the setup screen, open **External scoreboard** and fill in the broker URL,
 credentials and a **game code** (the **New** button generates one), then tick
 **Publish the score**. **Copy display link** gives you a URL that opens the
-display already configured — send it to the tablet and open it there. The
+display already configured — send it to the tablet and open it there, or press
+**QR code** and scan it with the tablet's camera instead. The
 display keeps its own screen awake where the browser allows it, and tapping
 anywhere on it toggles fullscreen (browser chrome otherwise eats the height the
 digits want; iOS Safari won't fullscreen a page, so it does nothing there).
