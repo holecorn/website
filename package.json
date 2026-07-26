@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "mqtt": "^5.15.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

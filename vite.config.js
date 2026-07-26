@@ -36,6 +36,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ttf,woff2}'],
+        // The MQTT client is only reachable with a network anyway, so keep it
+        // out of the offline precache rather than shipping it to every install.
+        globIgnores: ['**/mqtt*.js'],
       },
     }),
   ],
