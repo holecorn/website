@@ -26,6 +26,13 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # Browser checks run against the built app, so they come after the build.
+      # Playwright is not a project dependency — it is a heavy install for
+      # scripts that run occasionally, so CI adds it without touching the
+      # lockfile and uses the bundled Chromium rather than a system Chrome.
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
