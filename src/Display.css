@@ -1,0 +1,153 @@
+.display {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 3vw, 48px);
+  padding: 2vmin;
+  background: #05080b;
+  overflow: hidden;
+}
+
+.display-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5vmin;
+}
+
+.display-team {
+  margin: 0;
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  font-size: clamp(20px, 6vmin, 72px);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seg-number {
+  display: flex;
+  gap: 1.2vmin;
+}
+
+/* Four digits side by side means width, not height, sets the size on any normal
+   landscape screen — so the vw figure is the one that matters. Sized so a 10"
+   tablet clears the ~35mm a 4m viewing distance needs, with margin. */
+.seg-digit {
+  height: min(62vh, 35vw);
+  width: auto;
+  display: block;
+}
+
+/* Unlit segments stay faintly visible, like a real LED module. */
+.seg {
+  opacity: 0.08;
+}
+
+.seg.on {
+  opacity: 1;
+  filter: drop-shadow(0 0 0.5vmin currentColor);
+}
+
+/* The interior of a hollowed segment during the winner flash. */
+.seg-fill {
+  opacity: 0.26;
+}
+
+.display-middle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2vmin;
+  /* Outdoors, screen reflections raise the black level and swallow anything
+     this dim — the secondary text is brighter than it would be indoors. */
+  color: #8b9aa8;
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.display-round,
+.display-target {
+  font-size: clamp(14px, 3.4vmin, 40px);
+}
+
+.display-dash {
+  width: clamp(18px, 4vmin, 52px);
+  height: clamp(4px, 1.2vmin, 12px);
+  border-radius: 999px;
+  background: #485765;
+}
+
+.display-banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.4vmin;
+  text-align: center;
+  color: #0b1116;
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  font-size: clamp(18px, 4vmin, 44px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.display-status {
+  position: absolute;
+  top: 1.5vmin;
+  right: 2vmin;
+  margin: 0;
+  color: #6b7885;
+  font-size: clamp(11px, 1.8vmin, 20px);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Nothing is arriving, so dim the whole board rather than show a confident
+   score that may be minutes old. */
+.display.is-stale .seg.on {
+  opacity: 0.45;
+  filter: none;
+}
+
+.display-message {
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  padding: 24px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.display-message p {
+  margin: 0;
+  max-width: 34em;
+}
+
+.display-title {
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  font-size: 34px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+@media (orientation: portrait) {
+  .display {
+    flex-direction: column;
+  }
+  .seg-digit {
+    height: min(38vh, 45vw);
+  }
+  .display-team {
+    max-width: 80vw;
+  }
+  .display-middle {
+    flex-direction: row;
+    gap: 3vmin;
+  }
+}
