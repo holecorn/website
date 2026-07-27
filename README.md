@@ -184,11 +184,10 @@ target, and a rule under whoever throws next. This is the one being built. It
 runs off a USB power bank rather than mains — the layout draws a few watts, so a
 10,000 mAh bank covers a session several times over.
 
-[`firmware/wokwi/`](firmware/wokwi/README.md) drives two-digit seven-segment
-displays and shows the score only. It runs unchanged in the
-[Wokwi](https://wokwi.com/) simulator — there is no HUB75 part in Wokwi — so the
-whole chain of phone, broker, board and digits can still be exercised in a
-browser tab.
+It is the only firmware target. A seven-segment build that ran in the
+[Wokwi](https://wokwi.com/) simulator was removed in July 2026, once it had
+drifted far enough from this one that simulating it no longer said anything about
+the code that ships.
 
 ## Development
 

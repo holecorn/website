@@ -54,7 +54,7 @@ jobs:
       # critical path of a deploy.
       - uses: actions/cache@v4
         with:
-          path: firmware/wokwi/ArduinoJson.h
+          path: firmware/hub75/ArduinoJson.h
           key: arduinojson-v7.4.3
       - run: npm run test:firmware
 

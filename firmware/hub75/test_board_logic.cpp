@@ -1,4 +1,4 @@
-// Host test for firmware/wokwi/board_logic.h. Compiled with clang++ against the
+// Host test for board_logic.h. Compiled with clang++ against the
 // real ArduinoJson, using payloads captured from the app's publisher.
 #include "board_logic.h"
 

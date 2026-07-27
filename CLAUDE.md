@@ -269,8 +269,9 @@ project dependency. It starts and stops its own preview server.
   flashing to white and 1.64x for reverse video, against 0.77x for blanking.
   Hollowing was the only option that stays readable *and* under 1x. It also
   respects `prefers-reduced-motion` by not flashing at all.
-- **`sketch.ino` blanks instead**, because a seven-segment module can only switch
-  whole segments. That divergence is deliberate, not an oversight.
+- **The panel blanks the winning pair instead**, because at 20px a 1px rim around
+  a 2px stroke leaves nothing to read. That divergence is deliberate, not an
+  oversight.
 - **The display's wake lock is re-acquired, not requested once.** The browser
   drops it whenever the page is hidden, and the system can reclaim it (low
   battery). An outright refusal is not retried — it would only be refused again —
@@ -300,24 +301,23 @@ project dependency. It starts and stops its own preview server.
 
 ## Firmware
 
-Two targets, both ESP32, sharing `board_logic.h` (`firmware/hub75/board_logic.h`
-is a symlink). They are not alternatives to pick between — the SevSeg one is the
-only one that simulates, and the HUB75 one is the one being built.
+One target: **`firmware/hub75/`** — 2x Waveshare P5 64x32 chained to 128x32
+(640x160mm), Adafruit MatrixPortal S3, ESP32. Score *and* team names in team
+colours. **Wokwi has no HUB75 part**, so it is verified by a host renderer
+instead — see `firmware/hub75/README.md`.
 
-- **`firmware/wokwi/`** — seven-segment modules via SevSeg, runnable in the
-  Wokwi simulator. Score only.
-- **`firmware/hub75/`** — 2x Waveshare P5 64x32 chained to 128x32 (640x160mm),
-  Adafruit MatrixPortal S3. Score *and* team names in team colours. **Wokwi has
-  no HUB75 part**, so this one is verified by a host renderer instead — see
-  `firmware/hub75/README.md`.
+A second SevSeg target in `firmware/wokwi/` was removed on 2026-07-27, once the
+two `sketch.ino` files had diverged enough that simulating it proved nothing
+about what ships. **The cost is that nothing exercises WiFi or MQTT until the
+board is on the bench** — the host suites stop at parsing, layout and duty. Don't
+reintroduce a second target to get coverage back: a divergent copy reads as
+coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
 
-The parts worth knowing before touching either:
+The parts worth knowing before touching it:
 
 - **`board_logic.h` is deliberately Arduino-free** so it host-compiles against
   desktop ArduinoJson — `test_board_logic.cpp` is how `MQTT_BUFFER` was sized
   rather than guessed. Keep parsing and digit formatting in there, not the `.ino`.
-  It carries team names and colours for the HUB75 build; the SevSeg build simply
-  ignores those fields, which is cheaper than two copies of the parser.
 - **The HUB75 panel is sized against 7m, not "as big as possible."** Spectators
   are across the court or at the boards, so 100mm digits (11.4m) and 9-char
   names clear it — the names marginally; see
@@ -378,9 +378,10 @@ The parts worth knowing before touching either:
   `PANEL_BRIGHTNESS` applied. It is also the likelier reason a bank refuses to
   start the board — likelier than capacitor inrush — and the fix is a 10k pull-up
   on OE, not a bigger bank.
-- **Nothing in `loop()` may block.** The digits are software-multiplexed by
-  SevSeg, so a blocking reconnect wait shows up as visible flicker — hence the
-  `millis()` timers rather than `delay()`.
+- **Nothing in `loop()` may block, but not for the reason you'd guess.** The
+  panel refreshes from DMA in hardware, so blocking would *not* flicker the
+  digits — the `millis()` timers are there because a blocking reconnect stalls
+  MQTT, which is what makes the board miss a round.
 - **PubSubClient's 256-byte default is too small.** ASCII names land ~251 bytes
   including topic and headers and non-ASCII names reach ~379, because the app
   caps names at 16 UTF-16 code units rather than 16 bytes. Oversized messages

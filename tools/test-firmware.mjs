@@ -20,7 +20,7 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const CXX = process.env.CXX ?? 'c++';
 const ARDUINOJSON = 'v7.4.3';
-const JSON_HEADER = resolve(root, 'firmware/wokwi/ArduinoJson.h');
+const JSON_HEADER = resolve(root, 'firmware/hub75/ArduinoJson.h');
 
 let failed = false;
 
@@ -64,9 +64,9 @@ step('glyphs.h matches src/segments.js', () => {
 });
 
 const SUITES = [
-  { dir: 'firmware/wokwi', src: 'test_board_logic.cpp', inc: ['-I.'] },
+  { dir: 'firmware/hub75', src: 'test_board_logic.cpp', inc: ['-I.'] },
   // Writes PPMs into out/, so it needs the directory to exist.
-  { dir: 'firmware/hub75', src: 'test_render.cpp', inc: ['-I.', '-I../wokwi'], out: true },
+  { dir: 'firmware/hub75', src: 'test_render.cpp', inc: ['-I.'], out: true },
 ];
 
 for (const suite of SUITES) {

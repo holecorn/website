@@ -215,10 +215,9 @@ void drawSide(Canvas& c, const char* name, int joinAt, const char* pair, int pai
   drawDigit(c, pair[1], pairX + GLYPH_DIGIT_W + DIGIT_GAP, DIGIT_Y, color);
 }
 
-// `blinkOn` is the winner flash beat. A seven-segment module can only switch
-// whole segments, and at 20px the browser's hollowing is illegible, so the
-// winning pair blanks on alternate beats — the same compromise sketch.ino
-// already makes for the SevSeg build.
+// `blinkOn` is the winner flash beat. The browser hollows the digits instead,
+// which at 20px is illegible — a 1px rim around a 2px stroke leaves nothing —
+// so the winning pair blanks on alternate beats.
 template <typename Canvas>
 void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn) {
   const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;

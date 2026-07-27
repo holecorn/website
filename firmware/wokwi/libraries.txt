@@ -1,3 +1,0 @@
-PubSubClient
-ArduinoJson
-SevSeg

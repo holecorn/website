@@ -4,10 +4,20 @@ The HUB75 build of the external scoreboard: **2 x Waveshare RGB-Matrix-P5-64x32
 chained into one 128x32 canvas**, 640 x 160 mm, driven by an Adafruit
 MatrixPortal S3.
 
-Separate from `../wokwi` rather than replacing it, because the two targets
-genuinely differ: this one shows team names and colours, and **Wokwi has no
-HUB75 part**, so the SevSeg build remains the only one that can be simulated.
-`board_logic.h` is shared — the copy here is a symlink.
+**The only firmware target.** A SevSeg build lived alongside this one in
+`firmware/wokwi/` until 2026-07-27, kept because Wokwi has no HUB75 part so it
+was the only target that could be simulated. It was removed once the two
+`sketch.ino` files had diverged far enough that the simulation stopped being
+evidence: this one gained `ensureWifi()`, a non-blocking `setup()` and
+`liveWithGrace()`, and that one still blocked in `setup()` waiting for WiFi. A
+green simulator run said nothing about the code that ships, which is worse than
+having no simulator, because it reads as coverage. `board_logic.h` and
+`test_board_logic.cpp` moved here when it went.
+
+**Nothing now exercises WiFi, MQTT or PubSubClient before the board is on the
+bench.** The host suites cover parsing, buffer sizing, layout, bounds, duty and
+`liveWithGrace()`; the network stack is first tested at first power-up. That is a
+known gap, not an oversight.
 
 ## Why this size
 
@@ -184,12 +194,12 @@ see the panel rather than just assert on it:
 
 ```bash
 cd firmware/hub75 && mkdir -p out
-clang++ -std=c++17 -Wall -Wextra -I. -I../wokwi -o /tmp/render_test test_render.cpp
+clang++ -std=c++17 -Wall -Wextra -I. -o /tmp/render_test test_render.cpp
 /tmp/render_test && node preview.mjs
 ```
 
-`-I../wokwi` is for the desktop `ArduinoJson.h`, which is gitignored. Output
-lands in `out/`, also gitignored.
+The desktop `ArduinoJson.h` sits in this directory and is gitignored, so `-I.`
+covers it. Output lands in `out/`, also gitignored.
 
 `test_render.cpp` asserts as well as renders: nothing may be drawn outside the
 panel (on real hardware that wraps onto the wrong module), the winner flash must
@@ -215,9 +225,9 @@ matching the panel.
 
 One divergence worth knowing: the dash shown before any state arrives is
 **defined in the generator, not in `segments.js`**. The browser display never
-needs one and SevSeg synthesises its own, so this build is the only caller. A
-regression test covers it, because an empty dash glyph means a blank board
-before the first message, which reads as broken rather than waiting.
+needs one, so the panel is the only caller. A regression test covers it, because
+an empty dash glyph means a blank board before the first message, which reads as
+broken rather than waiting.
 
 ## How to destroy it
 

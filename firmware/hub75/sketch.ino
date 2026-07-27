@@ -1,9 +1,8 @@
 // Holecorn external scoreboard — HUB75 build. Hardware and layout in README.md.
 //
-// Unlike the SevSeg build in ../wokwi, the panel refreshes from DMA in
-// hardware, so loop() is free to block. The millis() timers below are kept only
-// because a blocking reconnect would still stall MQTT, not because the digits
-// would flicker.
+// The panel refreshes from DMA in hardware, so loop() is free to block. The
+// millis() timers below are kept only because a blocking reconnect would still
+// stall MQTT, not because the digits would flicker.
 #include <ArduinoJson.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <PubSubClient.h>
@@ -40,8 +39,8 @@ const char* MQTT_PASS = nullptr;
 WiFiClient net;
 #endif
 
-// See ../wokwi/board_logic.h and test_board_logic.cpp: a doubles game with
-// non-ASCII names reaches ~379 bytes including topic and headers.
+// See board_logic.h and test_board_logic.cpp: a doubles game with non-ASCII
+// names reaches ~379 bytes including topic and headers.
 const uint16_t MQTT_BUFFER = 512;
 
 const uint32_t RECONNECT_INTERVAL = 5000;

@@ -46,7 +46,7 @@ const lit = segRows.map((r) => r.reduce((n, b) => n + b.toString(2).split('1').l
 
 // Characters the board can show. The dash shown before any state arrives is
 // defined here rather than in segments.js: the browser display has no use for
-// one, and SevSeg synthesises its own, so this build is the only caller.
+// one, so the panel is the only caller.
 const EXTRA = { '-': 'g' };
 const CHARS = ' -0123456789';
 const masks = [...CHARS].map((ch) => {

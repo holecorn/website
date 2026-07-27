@@ -3,7 +3,7 @@
 // is the only way to see the panel without owning one.
 //
 //   cd firmware/hub75 && mkdir -p out
-//   clang++ -std=c++17 -Wall -Wextra -I. -I../wokwi -o /tmp/render_test test_render.cpp
+//   clang++ -std=c++17 -Wall -Wextra -I. -o /tmp/render_test test_render.cpp
 //   /tmp/render_test && node preview.mjs
 //
 // It asserts as well as renders: anything drawn outside the panel is a bug the

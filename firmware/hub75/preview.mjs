@@ -1,7 +1,7 @@
 // Turns the PPMs from test_render.cpp into LED-dot PNGs, so what you review is
 // the firmware's own framebuffer rather than a JavaScript restatement of it.
 //
-//   clang++ -std=c++17 -I. -I../wokwi -o /tmp/render_test test_render.cpp
+//   clang++ -std=c++17 -I. -o /tmp/render_test test_render.cpp
 //   /tmp/render_test && node preview.mjs
 //
 // No Playwright here — a PNG this simple is quicker to encode by hand than to
