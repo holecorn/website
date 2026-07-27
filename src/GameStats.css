@@ -1,0 +1,91 @@
+/* Its own file for the same reason Positions.css is: App.css's responsive tiers
+   have to stay last in source order. Deliberately not sharing Stats.css — that
+   table scrolls ten career columns behind a sticky name column, and this one is
+   six columns that have to fit a phone without scrolling. */
+
+.game-stats {
+  padding: 10px 12px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.game-stats-empty {
+  margin: 0;
+  padding: 6px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.game-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-stats-table th,
+.game-stats-table td {
+  padding: 6px 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.game-stats-table thead th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.game-stats-table tbody th,
+.game-stats-table thead th:first-child {
+  padding-left: 0;
+  text-align: left;
+  font-weight: 600;
+  /* The only column that can be long, so it takes the squeeze. */
+  max-width: 0;
+  width: 40%;
+  overflow: hidden;
+}
+
+/* The name gives up room, never the four-bagger badge: the badge is the only
+   place that count appears, and truncating the cell as a whole hid it entirely
+   for any name past about ten characters. */
+.game-stats-player {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.game-stats-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.game-stats-table tbody tr + tr th,
+.game-stats-table tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+
+.game-stats-fb {
+  flex: none;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.game-stats-foot {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, setBag, endRound } from './scoring.js';
+import { newGame, setBag, endRound, undoRound } from './scoring.js';
 import { matchRecord } from './archive.js';
 import {
   throwerFor,
+  gameStats,
   rosterFor,
   playerStats,
   headToHead,
@@ -367,5 +368,86 @@ describe('summary', () => {
     expect(summary([])).toMatchObject({ matches: 0, rounds: 0, avgRounds: 0 });
     expect(playerStats([])).toEqual([]);
     expect(headToHead([])).toEqual([]);
+  });
+});
+
+// A live game rather than a record: the same rounds, played but not archived.
+function livePlay(mode, players, rounds, target = 21) {
+  let game = { ...newGame(target), mode, players };
+  for (const [a, b] of rounds) game = playRound(game, a, b);
+  return game;
+}
+
+describe('gameStats', () => {
+  const players = { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] };
+
+  it('reports nothing but zeroes before the first round', () => {
+    const rows = gameStats(livePlay('singles', players, []));
+    expect(rows.map((r) => [r.team, r.name, r.rounds, r.bags])).toEqual([
+      ['a', 'Rho', 0, 0],
+      ['b', 'Phi', 0, 0],
+    ]);
+    // No division blow-ups on an empty game.
+    expect(rows.every((r) => r.ppr === 0 && r.holePct === 0)).toBe(true);
+  });
+
+  it('is one row per player in lane order, and only the players in play', () => {
+    const singlesRows = gameStats(livePlay('singles', players, [[[H, F, F, F], [B, F, F, F]]]));
+    expect(singlesRows.map((r) => `${r.team}${r.slot}:${r.name}`)).toEqual(['a0:Rho', 'b0:Phi']);
+
+    const doublesRows = gameStats(livePlay('doubles', players, [[[H, F, F, F], [B, F, F, F]]]));
+    expect(doublesRows.map((r) => `${r.team}${r.slot}:${r.name}`)).toEqual([
+      'a0:Rho',
+      'a1:Tau',
+      'b0:Phi',
+      'b1:Chi',
+    ]);
+  });
+
+  it('credits each doubles partner only the rounds they threw', () => {
+    // Rho throws rounds 0 and 2 (four in the hole each), Tau round 1 (nothing).
+    const game = livePlay('doubles', players, [
+      [[H, H, H, H], [F, F, F, F]],
+      [[F, F, F, F], [F, F, F, F]],
+      [[H, H, H, H], [F, F, F, F]],
+    ]);
+    const rows = gameStats(game);
+    const rho = rows.find((r) => r.name === 'Rho');
+    const tau = rows.find((r) => r.name === 'Tau');
+    expect([rho.rounds, rho.hole, rho.fourBaggers, rho.bestRound]).toEqual([2, 8, 2, 12]);
+    expect([tau.rounds, tau.hole, tau.fourBaggers, tau.bestRound]).toEqual([1, 0, 0, 0]);
+    expect(rho.rounds + tau.rounds).toBe(game.rounds.length);
+  });
+
+  it('keeps two teams on the same default name as two players', () => {
+    const shared = { a: ['Player 1', 'Player 2'], b: ['Player 1', 'Player 2'] };
+    const rows = gameStats(livePlay('singles', shared, [[[H, H, F, F], [F, F, F, F]]]));
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.hole)).toEqual([2, 0]);
+  });
+
+  it('rates count thrown bags, so they mean the same mid-game as over a career', () => {
+    const rounds = [[[H, B, F, F], [F, F, F, F]]];
+    const live = gameStats(livePlay('singles', players, rounds));
+    const career = playerStats([singles('Rho', 'Phi', rounds)]);
+    const from = (rows, name) => {
+      const r = rows.find((x) => x.name === name);
+      return [r.rounds, r.bags, r.hole, r.board, r.rawPoints, r.ppr, r.holePct, r.inPlayPct];
+    };
+    expect(from(live, 'Rho')).toEqual(from(career, 'Rho'));
+  });
+
+  it('reports no win, loss or streak for a game that is not over', () => {
+    const rows = gameStats(livePlay('singles', players, [[[H, F, F, F], [F, F, F, F]]]));
+    for (const key of ['wins', 'losses', 'matches', 'currentStreak', 'winPct']) {
+      expect(rows[0][key]).toBeUndefined();
+    }
+  });
+
+  it('follows an undone round back down', () => {
+    const rounds = [[[H, H, H, H], [F, F, F, F]], [[B, B, F, F], [F, F, F, F]]];
+    const game = livePlay('singles', players, rounds);
+    const after = gameStats(undoRound(game)).find((r) => r.name === 'Rho');
+    expect([after.rounds, after.hole, after.board, after.fourBaggers]).toEqual([1, 4, 0, 1]);
   });
 });

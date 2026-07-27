@@ -1,9 +1,12 @@
-// Career stats over archived matches. Pure like scoring.js — no storage, no
-// React — so the numbers are as testable as the rules that produce them.
+// Stats over archived matches, and over the game in progress. Pure like
+// scoring.js — no storage, no React — so the numbers are as testable as the
+// rules that produce them.
 //
 // Everything here is derived from `rounds`, which already holds every bag's
 // resting tier. Nothing extra had to be recorded to get these; the app was
-// simply throwing the data away at `New game`.
+// simply throwing the data away at `New game`. A live game and an archived
+// record hold `rounds` in the same shape, which is why `gameStats` can share the
+// per-round accumulation with `playerStats` rather than counting its own.
 
 import { BAGS_PER_SIDE, rawPoints, tierCounts, totals } from './scoring.js';
 
@@ -180,6 +183,26 @@ export function playerStats(matches) {
   return [...acc.values()]
     .map(derive)
     .sort((x, y) => y.wins - x.wins || y.ppr - x.ppr || x.name.localeCompare(y.name));
+}
+
+// Per-player stats for the game in progress, in lane order.
+//
+// Keyed by team and slot, not by name the way `playerStats` is: within one game
+// the slot *is* the identity, and two teams both on the default "Player 1" are
+// two people, not one row. Nothing here needs the game to be over, so there is
+// no win/loss or streak to report as a spurious zero.
+export function gameStats(game) {
+  const rows = [];
+  for (const team of TEAMS) {
+    rosterFor(game, team).forEach((name, slot) => {
+      const p = blankThrows(String(name ?? '').trim());
+      game.rounds.forEach((round, i) => {
+        if (throwerSlot(game, i) === slot) foldRound(p, round, team);
+      });
+      rows.push({ team, slot, ...p, ...deriveRates(p) });
+    });
+  }
+  return rows;
 }
 
 // Win counts between every pair who have faced each other. Doubles credits both

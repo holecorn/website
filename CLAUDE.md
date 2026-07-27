@@ -37,7 +37,9 @@ project dependency. It starts and stops its own preview server.
   the localStorage wrapper, split the same way as `scoreboard.js`.
 - `src/stats.js` — career stats over archived matches. Pure, like `scoring.js`;
   tested in `src/stats.test.js`.
-- `src/Stats.jsx` / `src/Stats.css` — the stats screen.
+- `src/Stats.jsx` / `src/Stats.css` — the career stats screen.
+- `src/GameStats.jsx` / `src/GameStats.css` — the in-game stats panel. Draws only;
+  `gameStats()` in `stats.js` derives it.
 - `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects.
 - `src/Positions.jsx` / `src/Positions.css` — the court diagram (who stands in
   which pitcher's box this round). Draws only; `courtPositions()` in `scoring.js`
@@ -140,10 +142,11 @@ project dependency. It starts and stops its own preview server.
   at `100vh - 32px` and the history shrinks and scrolls inside it, rather than the
   history carrying a `max-height` that would have to know the height of the panels
   above it. **The history is last in the rail because it's the panel whose height
-  varies with the game**, so it absorbs what the panels above leave instead of
-  being moved by them. That panel is `flex-direction: column` rather than the
-  default row: in a row its empty-state paragraph sizes to its text and reads as a
-  half-width card next to a full-width one.
+  varies with the game**, so it absorbs what the court and the stats leave instead
+  of being moved by them — measured down to a squeezed 900x440, the other two keep
+  their size and the rail never overflows. That panel is `flex-direction: column`
+  rather than the default row: in a row its empty-state paragraph sizes to its
+  text and reads as a half-width card next to two full-width ones.
 - **Custom domain served from root**, so Vite `base` stays `/` and the PWA
   `scope`/`start_url` are `/`. Don't add a base path.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone
@@ -216,9 +219,20 @@ project dependency. It starts and stops its own preview server.
 - **A record keeps `rounds` in exactly the game's shape**, so `totals()` and the
   other scoring helpers read a record unchanged and `stats.js` never
   reimplements them. Don't "tidy" the record into a different shape.
-- **Doubles attribution is `roundIndex % 2`** in `throwerFor`, mirroring
-  `activeIdx` in `App.jsx`. If those two ever disagree, every doubles stat is
-  silently mis-credited with nothing failing — `stats.test.js` pins it.
+- **Doubles attribution is `roundIndex % 2`**, defined once in `throwerSlot` and
+  read by `throwerFor` and `gameStats`, mirroring `activeIdx` in `App.jsx` (which
+  reads `throwingEnd` from `scoring.js`). If those ever disagree, every doubles
+  stat is silently mis-credited with nothing failing — `stats.test.js` pins it.
+- **In-game stats are the same accumulation as career stats, not a second one.** A
+  live game and a record hold `rounds` in the same shape, so `foldRound` folds a
+  round for both and `gameStats` adds no counting of its own. `playerStats` can't
+  simply be called with the live game: it would count `matches += 1` and push a
+  loss for a `winner: null` game, reporting an unfinished game as 0–1.
+- **`gameStats` keys by team and slot; `playerStats` keys by name.** Within one
+  game the slot *is* the identity — two teams both on the default "Player 1" are
+  two different people, and name-folding them would merge two rows on the screen
+  you're looking at while you play. Across a career, folding by name is the point.
+  Don't unify the two.
 - **`id` and `startedAt` live in `App.jsx`, not `scoring.js`**, which stays pure.
   `startedAt` is stamped when **Start game** is pressed rather than at
   `newGame()`, because the setup screen can sit open indefinitely and that time

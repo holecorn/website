@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
+import GameStats from './GameStats.jsx';
 import Logo from './Logo.jsx';
 import Positions from './Positions.jsx';
 import ScoreboardSettings from './ScoreboardSettings.jsx';
@@ -155,6 +156,7 @@ export default function App() {
   const [screen, setScreen] = useState(() => (gameStarted(game) ? 'play' : 'setup'));
   const [showHistory, setShowHistory] = useState(false);
   const [showPositions, setShowPositions] = useState(false);
+  const [showGameStats, setShowGameStats] = useState(false);
   const [editingTeams, setEditingTeams] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [callout, setCallout] = useState(null);
@@ -469,12 +471,17 @@ export default function App() {
             History ({game.rounds.length})
           </button>
         )}
+        {!wideLayout && (
+          <button onClick={() => setShowGameStats((s) => !s)}>Game stats</button>
+        )}
         <button onClick={startNewGame}>New game</button>
       </div>
       </div>
 
       <div className="side-rail">
       {(wideLayout || showPositions) && <Positions game={game} />}
+
+      {(wideLayout || showGameStats) && <GameStats game={game} colors={colors} />}
 
       {/* Last in the rail: its height varies with the game, so it absorbs what
           the panels above it leave rather than moving them. */}

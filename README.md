@@ -22,10 +22,9 @@ colours can match your physical bag sets) and the target score to play to (up to
 **Start game**.
 
 In **doubles**, each team has two players who share the team's colour, standing at
-opposite boards. Since each
-end is scored as its own round, the throwing partner alternates every round; the
-scoreboard highlights whoever's up and dims the benched partner. Scoring is
-otherwise identical to singles.
+opposite boards. Since each end is scored as its own round, the throwing partner
+alternates every round; the scoreboard highlights whoever's up and dims the
+benched partner. Scoring is otherwise identical to singles.
 
 Each team has one **lane per bag**. A lane is a vertical track with three stops:
 
@@ -70,6 +69,18 @@ The **round history** is a toggle on phones and portrait; on wide landscape
 screens (e.g. an iPad in landscape) it's shown permanently in a right-hand
 column instead, below the court diagram.
 
+**Game stats** sits above the history in that column, and is a toggle on phones.
+It reports this game only, per player: rounds thrown, PPR (raw bag
+points per round), the share of bags in the hole and in play, the best round, and
+a four-bagger count beside anyone who has thrown one. Under the table is the
+round, wash and four-bagger count for the game. In doubles each partner is
+credited only the rounds they actually threw, so their round counts are about
+half the game's. There's no win/loss or streak, because the game isn't over.
+
+The history comes last in that column because it's the panel that grows with the
+game: the court and the stats keep their size and the history takes whatever
+height is left, scrolling rather than running off the bottom.
+
 ## Where everyone stands
 
 **Positions** draws the court from above — both boards, each flanked by its two
@@ -77,7 +88,8 @@ pitcher's boxes — and shows who is standing where this round. Whoever is throw
 is outlined in their team colour, with a dot marking the box that throws first,
 an arrow pointing at the board they're aiming at, and anyone waiting their turn
 dimmed. It's a toggle on phones, opening just below the buttons; on wide landscape
-screens it's permanently on show at the top of the right-hand column.
+screens it's permanently on show at the top of the right-hand column, above the
+round history.
 
 In **singles** both players walk down to the other board after every round,
 keeping to their own side of the court, so only the end they throw from changes.
