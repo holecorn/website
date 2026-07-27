@@ -80,6 +80,14 @@ project dependency. It starts and stops its own preview server.
   `newGame()` defaults so games saved before a field existed still load (and
   migrates the old single-name shape to player slots). Prefer this
   merge-on-load approach over bumping the key.
+- **Nothing in the scoring lanes stretches, and three caps enforce it.** The bag
+  token is square (`aspect-ratio`, sized off the tier band's height, since that's
+  the tight dimension), a lane track caps at 72px, and `.main` caps at 408px —
+  which is exactly what the lanes need, so the header and buttons can't grow past
+  the cards they sit above. **The landscape tier has to lift the `.main` cap**:
+  there the two team cards sit side by side, and 408px between them collapses the
+  lanes to about 28px. The token is centred with auto margins rather than a
+  `translateX`, because the vibrate animation owns `transform`.
 - **CSS media-query ordering:** in `src/App.css`, the responsive tiers
   (`max-height` and the landscape/wide-history queries) live at the **end of the
   file, after the base rules**. They rely on source order to win at equal

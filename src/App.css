@@ -7,11 +7,17 @@
   gap: 16px;
 }
 
+/* 408px is the lanes' own width: tier labels, four 72px lanes, gaps and the
+   card's padding. Capped there because the lanes stop stretching at 72px, so
+   without it the header and buttons grow past the cards they sit above. The
+   landscape tier lifts it — there the two cards sit side by side. */
 .main {
   display: flex;
   flex-direction: column;
   gap: inherit;
   min-width: 0;
+  max-width: 408px;
+  margin-inline: auto;
 }
 
 .footer {
@@ -468,9 +474,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Capped rather than sharing the width out: the bag is a fixed 46px square, so a
+   lane that grows with the screen only adds empty track around it. The tracks
+   still shrink below the cap when there isn't room, which is what lets a narrow
+   phone fill its width. */
 .lanes-grid {
   display: grid;
-  grid-template-columns: auto repeat(4, 1fr);
+  grid-template-columns: auto repeat(4, minmax(0, 72px));
+  justify-content: start;
   gap: 8px;
 }
 
@@ -944,6 +955,9 @@
   .score {
     font-size: 32px;
   }
+  .main {
+    max-width: none;
+  }
   .scoring {
     flex-direction: row;
     gap: 8px;
@@ -1020,10 +1034,13 @@
 /* Wide landscape (e.g. iPad landscape): show history as a persistent right
    column instead of a toggle. */
 @media (min-width: 900px) and (orientation: landscape) {
+  /* Column 1 matches `.main`'s cap, so the right-hand column sits beside the
+     cards instead of across a gutter, and the pair is centred. */
   .app:not(.setup) {
     max-width: 1040px;
     display: grid;
-    grid-template-columns: 1fr minmax(260px, 340px);
+    grid-template-columns: minmax(0, 408px) minmax(260px, 340px);
+    justify-content: center;
     align-items: start;
     column-gap: 24px;
     row-gap: 16px;
