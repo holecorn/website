@@ -523,12 +523,20 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* A bag is square, so the token is too: the height of a tier band is the tight
+   dimension, and the width follows it rather than the lane's, which stretches
+   with the screen. Centred with auto margins, not a transform, because the
+   vibrate animation owns transform. */
 .bag-token {
   position: absolute;
-  left: 12%;
-  width: 76%;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   height: calc(100% / 3 - 10px);
-  border-radius: 8px;
+  aspect-ratio: 1;
+  /* Proportional, so the corners stay corners: a fixed radius reads as a circle
+     once the compact tier shrinks the token to 18px. */
+  border-radius: 18%;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   transition: top 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
   pointer-events: none;
@@ -551,7 +559,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 8px;
+  border-radius: inherit;
   border: 2px solid #fff;
   animation: hole-ripple 0.6s ease-out;
 }
