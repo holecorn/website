@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, setBag, endRound, undoRound } from './scoring.js';
+import {
+  newGame,
+  setBag,
+  endRound,
+  undoRound,
+  courtPositions,
+} from './scoring.js';
 import { matchRecord } from './archive.js';
 import {
   throwerFor,
+  throwerSlot,
   gameStats,
   rosterFor,
   playerStats,
@@ -449,5 +456,44 @@ describe('gameStats', () => {
     const game = livePlay('singles', players, rounds);
     const after = gameStats(undoRound(game)).find((r) => r.name === 'Rho');
     expect([after.rounds, after.hole, after.board, after.fourBaggers]).toEqual([1, 4, 0, 1]);
+  });
+});
+
+describe('the parity in scoring.js and stats.js', () => {
+  // `courtPositions` decides who is shown throwing and `throwerSlot` decides who
+  // is credited for it. They are the same rule in two modules, and if they drift
+  // the diagram names one player while the stats bank the round to the other,
+  // with nothing else failing.
+  it('agrees on who is throwing, round by round', () => {
+    const players = { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] };
+    let game = { ...newGame(), mode: 'doubles', players };
+    for (let r = 0; r < 8; r += 1) {
+      const { ends, throwingEnd } = courtPositions(game);
+      expect(throwingEnd).toBe(throwerSlot(game, r));
+      const boxes = ends[throwingEnd].boxes;
+      for (const team of ['a', 'b']) {
+        const occupant = ['left', 'right']
+          .map((side) => boxes[side])
+          .find((o) => o.team === team);
+        expect(occupant.name).toBe(throwerFor(game, r, team));
+      }
+      game = playRound(game, [F, F, F, F], [F, F, F, F]);
+    }
+  });
+
+  it('agrees in singles, where only one slot ever throws', () => {
+    const players = { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] };
+    let game = { ...newGame(), mode: 'singles', players };
+    for (let r = 0; r < 4; r += 1) {
+      const { ends, throwingEnd } = courtPositions(game);
+      expect(throwerSlot(game, r)).toBe(0);
+      for (const team of ['a', 'b']) {
+        const occupant = ['left', 'right']
+          .map((side) => ends[throwingEnd].boxes[side])
+          .find((o) => o?.team === team);
+        expect(occupant.name).toBe(throwerFor(game, r, team));
+      }
+      game = playRound(game, [F, F, F, F], [F, F, F, F]);
+    }
   });
 });
