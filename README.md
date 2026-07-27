@@ -59,8 +59,9 @@ until every bag has been placed (a bag on the floor counts); a hint shows how
 many are still to place. Press it to commit the round and update the totals.
 **Undo round** rolls back the last committed round and restores its bags to the
 lanes so you can correct and re-commit it. **New game** returns to the setup
-screen, keeping the same teams (names and colours); if a game is in progress it
-asks for confirmation first. During play, tapping a team's name reopens the name
+screen, keeping the same teams (names and colours); if a game is still in
+progress it asks for confirmation first, but once someone has won it just goes —
+the result is already saved to your stats. During play, tapping a team's name reopens the name
 and colour fields in a modal so you can adjust them without resetting the score.
 The two teams can't share a colour.
 
@@ -70,6 +71,63 @@ column instead.
 
 The in-progress game is saved to the browser's `localStorage`, so it survives a
 refresh. There is no backend and no account — everything runs client-side.
+
+## Stats
+
+Finishing a game files it away, and the **Stats** button on the setup screen
+reports what has built up. Only completed matches count — walking away from a
+game part-way leaves nothing behind, so a three-round fragment can't drag the
+averages around. Undoing a winning round takes the match back out again.
+
+Per player you get matches played, won and lost, **rounds thrown**, **PPR** (raw
+bag points per round, before cancellation — the number cornhole players quote),
+the share of bags that went in the hole and the share that stayed in play,
+four-baggers, best single round, and the current win streak. Rounds sits next to
+PPR because it's the number PPR is averaged over — and in doubles it's the more
+honest measure of how much someone actually played, since partners alternate and
+only throw half the rounds of a match. Alongside that there's a head-to-head
+record for everyone who has played each other, and totals for washes, skunks and
+average match length.
+
+Players are matched up by name, ignoring capitals and stray spaces, so "neil"
+and "Neil " are the same person — but renaming someone starts a new history for
+them. In doubles both partners share the match result, while bag stats go to
+whoever actually threw that round.
+
+**Tap a row under Recent matches** to open it up round by round: how each team's
+four bags landed, what the round netted after cancellation, and the score as it
+stood after it — so you can see where a game turned, which round the four-bagger
+came in, and which rounds washed. In doubles it also names whichever partner was
+throwing. Tap again to close it. Underneath, it says how many rounds it went and
+how long it took (older games saved before Holecorn started timing them just
+leave that out).
+
+Each row also has a **×** to delete that match — handy for a game that was
+mis-scored, or for clearing out test games. Deleting is immediate, with an
+**Undo** offered at the top of the screen until you leave it.
+
+### Keeping the history
+
+There's no account and no server, so the history lives in the browser on the
+device that did the scoring. That means a few things worth knowing:
+
+- It's **per browser**, not per device — Safari and Chrome on the same phone
+  keep separate histories.
+- On iOS, the **home-screen app and a Safari tab don't share storage either**,
+  so pick one and stick to it. The home screen is the one to pick.
+- In a plain Safari tab, iOS **deletes the history after about a week** of not
+  opening the site. Adding Holecorn to your home screen exempts it from that.
+
+The stats screen tells you which of those you're in: it asks the browser whether
+it will keep the data and shows the answer, so you're not guessing. If it says
+it won't, add Holecorn to your home screen.
+
+**Export as JSON** writes the whole history to a file, and the screen nudges you
+when there are matches you haven't exported since. **Import JSON** reads one
+back — that's how you move to a new phone, restore after clearing your browser,
+or fold in a history that was scored on someone else's device. Importing merges
+by match, so re-importing the same file, or one that overlaps what you already
+have, adds nothing and can't create duplicates.
 
 ## External scoreboard
 

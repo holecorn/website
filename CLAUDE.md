@@ -31,8 +31,13 @@ project dependency. It starts and stops its own preview server.
   functions. All game rules live here; keep them pure and well tested.
 - `src/scoring.test.js` — Vitest suite for the above. Add/extend tests for any
   rule change (see Testing).
-- `src/App.jsx` — app shell, reducer, screen (setup/play) and celebration state,
-  localStorage persistence.
+- `src/App.jsx` — app shell, reducer, screen (setup/play/stats) and celebration
+  state, localStorage persistence.
+- `src/archive.js` — finished matches. Pure record/upsert/remove helpers plus
+  the localStorage wrapper, split the same way as `scoreboard.js`.
+- `src/stats.js` — career stats over archived matches. Pure, like `scoring.js`;
+  tested in `src/stats.test.js`.
+- `src/Stats.jsx` / `src/Stats.css` — the stats screen.
 - `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects.
 - `src/Logo.jsx` — the chalk HOLE/CORN wordmark (tints to the two team colours).
 - `src/scoreboard.js` — pure payload/topic/settings helpers for the external
@@ -83,6 +88,116 @@ project dependency. It starts and stops its own preview server.
   `scope`/`start_url` are `/`. Don't add a base path.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone
   (installed or not). The visual jitter still works. Not a bug to "fix".
+- **A dev server reached by LAN IP is not a secure context**, and that is how
+  the app gets tested on a phone. `localhost` and `https://holecorn.com` both
+  count as secure; `http://192.168.x.x:5173` does not, so every
+  secure-context-only API is simply *undefined* there — measured on a real LAN
+  origin: `isSecureContext` false, `crypto.randomUUID` and `navigator.storage`
+  both gone. `crypto.getRandomValues` is **not** restricted, which is why
+  `newMatchId()` and `newCode()` use it and why there is no fallback branch.
+  Reach for `getRandomValues` over `randomUUID`; an unguarded `randomUUID` at
+  startup is a blank page on every phone test. `verify-copy-link.mjs` covers the
+  same origin for `navigator.clipboard`.
+
+## Match archive and stats
+
+- **Nothing new is recorded to make the stats work.** `rounds` already held
+  every bag's resting tier; the app was simply discarding it at `New game`. So
+  don't add fields to game state for a stat before checking whether it is
+  already derivable — most are.
+- **Only a won match is archived**, and undoing the winning round takes it back
+  out. Abandoning a game leaves nothing, because a three-round fragment would
+  drag every average around.
+- **The archive is keyed by match id and upserted, not appended.** Win → undo →
+  re-win is an ordinary sequence and must leave one record, and a reload of a
+  won game re-commits the same one rather than a duplicate. The first `endedAt`
+  survives an upsert, so reopening a finished game doesn't move when it
+  finished. The effect in `App.jsx` compares against the archived id rather than
+  holding a flag, which is what makes all of that idempotent.
+- **The stats screen can't be reached with a won game still loaded**, and the
+  archive depends on it. `stats` is only reachable from `setup`, and the only
+  route from `play` to `setup` is `startNewGame`, which clears the winner; a won
+  game restored from storage opens on `play`. So by the time a match can be
+  deleted, its game is no longer loaded, and the mount-time archive cannot
+  resurrect it. **If Stats ever becomes reachable from the play screen, that
+  breaks** — deleting the live match would then undo itself on the next reload,
+  and the effect would need to remember the deletion. Checked before adding a
+  guard for it, which turned out to protect nothing and to cost the backfill
+  below.
+- **A won game that was never archived is filed on the next load.** That's the
+  retry path when a write failed on a full localStorage, and it is why the
+  effect archives on mount rather than only on the transition into won.
+- **A match duration needs `matchDuration()`, never a bare subtraction.** A
+  record archived before `startedAt` existed — a game already in play when the
+  field shipped never passes through **Start game** — has no start stamp, and
+  `(endedAt ?? 0) - (startedAt ?? 0)` measured from the epoch and reported
+  **32 years**, silently wrecking the average length rather than failing. The
+  guard rejects a zero or negative start as well as a missing one, because these
+  are `Date.now()` stamps and an imported file can carry a `0`.
+- **The expanded match view uses the in-play history's shorthand** (`◎` hole,
+  `▬` board) so the two read alike — keep them in step. The one thing it adds is
+  the **running score after each round**, which the in-play panel structurally
+  can't show because there it is always just the current total. `matchRounds()`
+  derives it; the row's own final score is the last round's running score, and
+  `verify-stats.mjs` asserts exactly that so the two can't drift.
+- **`New game` only confirms while a game is unfinished.** It used to ask after
+  a win too, which made sense when `New game` destroyed the only trace of the
+  match — the archive changed that, so the prompt was guarding something no
+  longer at risk, at the moment you are most likely to want the next game. The
+  residual cost: a mis-scored winning round can no longer be corrected once you
+  have moved on, so `Undo round` has to be used before `New game`.
+- **Deleting is one tap plus an undo, not a confirmation.** The undo bar sits
+  outside the match list, because deleting the last match empties the list and
+  would otherwise take the way back with it. Undo is lost on leaving the screen;
+  export is the real backstop.
+- **Records carry a `format` stamp.** When the state model becomes an event log
+  (planned for when the board sensors land), round-level snapshots need to be
+  distinguishable from event streams without guessing at the shape.
+- **A record keeps `rounds` in exactly the game's shape**, so `totals()` and the
+  other scoring helpers read a record unchanged and `stats.js` never
+  reimplements them. Don't "tidy" the record into a different shape.
+- **Doubles attribution is `roundIndex % 2`** in `throwerFor`, mirroring
+  `activeIdx` in `App.jsx`. If those two ever disagree, every doubles stat is
+  silently mis-credited with nothing failing — `stats.test.js` pins it.
+- **`id` and `startedAt` live in `App.jsx`, not `scoring.js`**, which stays pure.
+  `startedAt` is stamped when **Start game** is pressed rather than at
+  `newGame()`, because the setup screen can sit open indefinitely and that time
+  isn't part of the match.
+- **The archive has its own localStorage key** so `New game` can't clear it, the
+  same reasoning as the scoreboard settings. A failed write drops the oldest
+  match and retries rather than giving up: a plain try/catch would silently lose
+  the game just played, and then every game after it.
+- **`Stats.css` is separate from `App.css`** because that file's responsive
+  tiers have to stay last in source order, so appending base rules there is a
+  trap.
+- **The archive is per-browser, and on iOS it is not safe by default.** Three
+  separate boundaries, all easy to miss:
+  - `localStorage` is per-origin per-browser, so two browsers on one phone are
+    two histories.
+  - On iOS a **home-screen web app does not share storage with Safari** — same
+    origin, different container. Scoring sometimes from the icon and sometimes
+    from a Safari tab silently builds two archives.
+  - **ITP deletes script-writable storage after seven days of Safari use with no
+    interaction on the site.** Home-screen apps are exempt (they keep their own
+    counter tied to actual use, and WebKit calls first-party deletion in an
+    installed app a bug), but a plain Safari tab is not. An occasional game is
+    exactly the pattern that trips it.
+
+  So `requestPersistence()` runs at launch and the answer is *shown* on the
+  stats screen rather than only requested: WebKit grants by heuristic — chiefly
+  whether this is a home-screen app — and never prompts, so without surfacing it
+  there is no way to tell a protected archive from one about to be deleted.
+  `null` means the browser wouldn't say; don't collapse it into `false`.
+- **Import merges by match id and is idempotent.** Re-importing the same file,
+  or one that overlaps another device's history, adds nothing. The local copy of
+  a match both devices hold wins, so an import can't rewrite local history.
+  `validRecord` gates every entry because the file came from a picker and could
+  be anything — it checks exactly the fields `stats.js` reads without checking.
+- **Export/import is the only route off a device** until there's a backend, so
+  `verify-stats.mjs` drives the whole round trip rather than just asserting a
+  file appears. The unexported count is measured against the newest exported
+  `endedAt`, not a match count, so pruning the oldest can't make it go
+  backwards.
 
 ## External scoreboard
 
@@ -119,6 +234,14 @@ project dependency. It starts and stops its own preview server.
   number because that's where the scoring decisions happen. **Don't "fix" this
   by adding a live total to the display.** Publishing is still debounced,
   because renames fire per keystroke.
+- **"Neil wins" but "Rho & Tau win", and the display works that out from the
+  label.** The payload carries `teamA`/`teamB` already joined and deliberately
+  carries no `mode`, so `winVerb()` in `scoring.js` keys off `TEAM_JOIN` being
+  present in the string. Both the app and the display call it, which is what
+  stops them disagreeing — **don't add a `mode` field to the payload for this**,
+  it costs bytes the worst case can't spare and changes a contract the firmware
+  tests pin. The known cost is that a singles player who puts " & " in their own
+  name gets the plural.
 - **The MQTT chunk is excluded from the PWA precache** (`globIgnores` in
   `vite.config.js`) — it's useless without a network, and precaching it cost
   every install ~100kB gzipped.
@@ -233,6 +356,23 @@ drives the transport with a fake MQTT client, because the cases that matter — 
 lost acknowledgement, a refused subscription, a half-open socket — are ones a
 real broker will not reproduce on demand. `openScoreboardLink` takes an
 injectable `connect` for exactly this; production never passes it.
+
+`src/stats.test.js` builds its fixtures by playing rounds through the real
+scoring functions and archiving the result, rather than hand-writing record
+blobs, so a rules change that breaks attribution surfaces there instead of
+quietly agreeing with a stale fixture. `tools/verify-stats.mjs` covers what the
+unit tests can't: that the effect in `App.jsx` fires on the right transitions.
+That is the part which would otherwise either lose every match or file each one
+twice, with the pure helpers passing throughout.
+
+It also ends by stripping the secure-context-only APIs and reloading, because
+**every other browser check runs on `localhost`, which is a secure context** —
+so none of them can catch a secure-context regression, and a blank page on a LAN
+IP would otherwise only turn up on a phone. The APIs are deleted rather than the
+build being served on a real IP, so it stays deterministic in CI. That block
+checks the page rendered *before* clicking anything: the failure is a blank page,
+and waiting on a button that will never appear times out the whole run instead
+of reporting.
 
 `npm run test:firmware` compiles and runs both host C++ suites and checks that
 `glyphs.h` still matches `src/segments.js`. That last check is why it is worth

@@ -862,6 +862,16 @@
   color: #fff;
 }
 
+.setup-stats {
+  align-self: center;
+  padding: 8px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 /* Responsive tiers last, so they override the base rules above. */
 
 /* Fit shorter screens (e.g. iPhone SE) by tightening vertical space. */

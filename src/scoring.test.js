@@ -8,6 +8,7 @@ import {
   roundNets,
   newGame,
   teamLabel,
+  winVerb,
   setFirst,
   totals,
   setBag,
@@ -166,6 +167,35 @@ describe('teamLabel', () => {
   it('joins both partners in doubles', () => {
     const g = { ...newGame(), mode: 'doubles', players: { a: ['Alice', 'Bob'], b: ['Carol', 'Dave'] } };
     expect(teamLabel(g, 'a')).toBe('Alice & Bob');
+  });
+});
+
+describe('winVerb', () => {
+  const singles = { ...newGame(), mode: 'singles', players: { a: ['Alice', 'Bob'], b: ['Carol', 'Dave'] } };
+  const doubles = { ...singles, mode: 'doubles' };
+
+  it('agrees with one name', () => {
+    expect(winVerb(teamLabel(singles, 'a'))).toBe('wins');
+    expect(`${teamLabel(singles, 'a')} ${winVerb(teamLabel(singles, 'a'))}`).toBe('Alice wins');
+  });
+
+  it('agrees with a pair', () => {
+    expect(winVerb(teamLabel(doubles, 'a'))).toBe('win');
+    expect(`${teamLabel(doubles, 'a')} ${winVerb(teamLabel(doubles, 'a'))}`).toBe(
+      'Alice & Bob win',
+    );
+  });
+
+  // The display gets the joined label out of the payload and never the mode, so
+  // it has to reach the same answer from the string alone.
+  it('works on a bare label, which is all the external display receives', () => {
+    expect(winVerb('Alice & Bob')).toBe('win');
+    expect(winVerb('Alice')).toBe('wins');
+  });
+
+  it('does not fall over on a missing label', () => {
+    expect(winVerb(undefined)).toBe('wins');
+    expect(winVerb(null)).toBe('wins');
   });
 });
 

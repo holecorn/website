@@ -2,6 +2,8 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
 import Logo from './Logo.jsx';
 import ScoreboardSettings from './ScoreboardSettings.jsx';
+import Stats from './Stats.jsx';
+import { archiveMatch, dropMatch, newMatchId, requestPersistence } from './archive.js';
 import { loadScoreboardConfig, saveScoreboardConfig } from './scoreboard.js';
 import { useScoreboardPublisher } from './useScoreboard.js';
 import {
@@ -18,6 +20,7 @@ import {
   unthrownCount,
   tierCounts,
   teamLabel,
+  winVerb,
 } from './scoring.js';
 import './App.css';
 
@@ -29,6 +32,14 @@ const PALETTE = [
   { name: 'green', value: '#27ae60' },
   { name: 'yellow', value: '#f2c94c' },
 ];
+
+// A match needs an identity before it can be archived. It lives here rather
+// than in scoring.js, which stays pure — an id is not a scoring concern — and
+// is added on load as well as on creation, so a game saved without one still
+// gets archived.
+function identified(game) {
+  return game.id ? game : { ...game, id: newMatchId() };
+}
 
 function loadGame() {
   try {
@@ -45,12 +56,12 @@ function loadGame() {
         };
       }
       delete merged.names;
-      return merged;
+      return identified(merged);
     }
   } catch {
     // ignore corrupt state and start fresh
   }
-  return newGame();
+  return identified(newGame());
 }
 
 function winBuzz() {
@@ -107,14 +118,19 @@ function reducer(game, action) {
       return { ...game, mode: action.mode };
     case 'setTarget':
       return { ...game, target: action.value };
+    case 'start':
+      // Timed from pressing Start game, not from `newGame`, which would count
+      // however long the setup screen sat open. Idempotent, so reopening a game
+      // already in progress doesn't move when it began.
+      return game.startedAt ? game : { ...game, startedAt: action.at };
     case 'newGame':
       // Keep the same teams (players, colours, mode, target); clear the score.
-      return {
+      return identified({
         ...newGame(game.target),
         players: game.players,
         colors: game.colors,
         mode: game.mode,
-      };
+      });
     default:
       return game;
   }
@@ -130,17 +146,48 @@ export default function App() {
   const [fourBagger, setFourBagger] = useState(null);
   const [targetStr, setTargetStr] = useState(String(game.target));
   const [sbConfig, setSbConfig] = useState(loadScoreboardConfig);
+  const [persisted, setPersisted] = useState(null);
   const confirmDialog = useRef(null);
   const editDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
+  const archivedId = useRef(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
   }, [game]);
 
+  // A match joins the archive the moment it is won, and leaves again if the
+  // winning round is undone. Comparing against the id rather than a flag keeps
+  // it to one write per outcome: a reload re-commits the same record instead of
+  // a second copy, and starting a new game is simply a different id.
+  useEffect(() => {
+    if (game.winner) {
+      if (archivedId.current !== game.id) {
+        archiveMatch(game, Date.now());
+        archivedId.current = game.id;
+      }
+    } else if (archivedId.current === game.id) {
+      dropMatch(game.id);
+      archivedId.current = null;
+    }
+  }, [game]);
+
   useEffect(() => {
     saveScoreboardConfig(sbConfig);
   }, [sbConfig]);
+
+  // Asked for at launch rather than when the stats screen is opened: the grant
+  // is what keeps the archive from being evicted, so it has to be in place
+  // before there is anything to lose.
+  useEffect(() => {
+    let live = true;
+    requestPersistence().then((ok) => {
+      if (live) setPersisted(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const scoreboard = useScoreboardPublisher(game, sbConfig);
 
@@ -217,6 +264,7 @@ export default function App() {
   const currentRoundStarted = [...game.current.a, ...game.current.b].some(
     (tier) => tier !== 'unthrown',
   );
+  const winnerLabel = game.winner ? teamLabel(game, game.winner) : '';
 
   const startNewGame = () => {
     const toSetup = () => {
@@ -225,7 +273,9 @@ export default function App() {
       setFourBagger(null);
       setScreen('setup');
     };
-    if (gameStarted(game)) {
+    // Only a game still in progress is worth guarding. A won game has nothing
+    // left to lose: it is over, and the archive already has it.
+    if (gameStarted(game) && !game.winner) {
       setConfirm({
         title: 'Start a new game?',
         body: 'This clears the current game.',
@@ -249,6 +299,10 @@ export default function App() {
       dispatch({ type: 'undoRound' });
     }
   };
+
+  if (screen === 'stats') {
+    return <Stats onBack={() => setScreen('setup')} persisted={persisted} />;
+  }
 
   if (screen === 'setup') {
     return (
@@ -296,8 +350,17 @@ export default function App() {
           status={scoreboard.status}
           error={scoreboard.error}
         />
-        <button className="end-round" onClick={() => setScreen('play')}>
+        <button
+          className="end-round"
+          onClick={() => {
+            dispatch({ type: 'start', at: Date.now() });
+            setScreen('play');
+          }}
+        >
           Start game
+        </button>
+        <button className="setup-stats" onClick={() => setScreen('stats')}>
+          Stats
         </button>
         <Footer />
       </div>
@@ -341,7 +404,7 @@ export default function App() {
 
       {game.winner && (
         <div className="winner-banner" style={{ background: colors[game.winner] }}>
-          {teamLabel(game, game.winner)} wins!
+          {winnerLabel} {winVerb(winnerLabel)}!
         </div>
       )}
 

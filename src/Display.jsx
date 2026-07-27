@@ -10,6 +10,7 @@ import {
   saveScoreboardConfig,
   segmentDigits,
 } from './scoreboard.js';
+import { winVerb } from './scoring.js';
 import { DIGIT_VIEWBOX, SEGMENTS, litSegments } from './segments.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import './Display.css';
@@ -191,6 +192,9 @@ export default function Display() {
   const colorA = payload?.colorA ?? '#2f80ed';
   const colorB = payload?.colorB ?? '#eb5757';
   const stale = status !== 'connected' || !senderOnline;
+  const winnerLabel = payload?.winner
+    ? (payload.winner === 'a' ? payload.teamA : payload.teamB)
+    : '';
 
   return (
     <div
@@ -239,7 +243,7 @@ export default function Display() {
           className="display-banner"
           style={{ background: payload.winner === 'a' ? colorA : colorB }}
         >
-          {(payload.winner === 'a' ? payload.teamA : payload.teamB)} wins!
+          {winnerLabel} {winVerb(winnerLabel)}!
         </div>
       )}
 

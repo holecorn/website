@@ -1,0 +1,440 @@
+/* Stats screen. Kept out of App.css because that file's responsive tiers have
+   to stay last in source order to win at equal specificity, so appending base
+   rules there would be a trap for the next person. */
+
+.stats-screen {
+  max-width: 720px;
+  gap: 20px;
+  padding-top: 24px;
+}
+
+.stats-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.stats-back {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.stats-empty {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.stat-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.stat-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.stat-chip-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-chip-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.stats-section h2 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Nine columns will not fit a phone, and dropping columns loses the
+   comparison the table exists for, so it scrolls sideways instead. */
+.stats-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 10px 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats-table thead th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The name column stays put while the rest scrolls, so a column read at the
+   far right still has a player attached to it. */
+.stats-table tbody th,
+.stats-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  box-shadow: 1px 0 0 var(--border);
+  text-align: left;
+  font-weight: 600;
+}
+
+.stats-table tbody tr + tr th,
+.stats-table tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+
+.h2h,
+.recent {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.h2h li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.recent-row {
+  display: flex;
+  align-items: center;
+}
+
+.recent-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 6px 11px 14px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.recent-chevron {
+  flex: none;
+  display: inline-block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 150ms ease;
+}
+
+/* Keyed off aria-expanded so the marker cannot disagree with the state it
+   reports. inline-block is load-bearing: transforms don't apply to inline. */
+.recent-open[aria-expanded='true'] .recent-chevron {
+  transform: rotate(180deg);
+}
+
+.h2h li + li,
+.recent li + li {
+  border-top: 1px solid var(--border);
+}
+
+.h2h-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.h2h-right {
+  text-align: right;
+}
+
+.h2h-score,
+.recent-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.recent-date {
+  width: 52px;
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recent-teams {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-v {
+  color: var(--muted);
+}
+
+.stats-undo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.stats-undo span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.stats-undo button {
+  flex: none;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recent-delete {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin-right: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.recent-delete:hover {
+  background: var(--bg);
+  color: #eb5757;
+}
+
+/* Round-by-round for one match, laid out to echo the in-play history. */
+.match-rounds {
+  padding: 0 14px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-rounds-head,
+.match-round {
+  display: grid;
+  grid-template-columns: 3.2em 1fr 1fr 4.6em;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.match-rounds-head {
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.match-rounds-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-rounds-head span:last-child,
+.mr-running {
+  text-align: right;
+}
+
+.match-round + .match-round {
+  border-top: 1px solid var(--border);
+}
+
+.mr-n {
+  display: flex;
+  flex-direction: column;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mr-n em {
+  font-style: normal;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+
+.mr-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.mr-thrower {
+  overflow: hidden;
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mr-counts {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mr-counts.is-four {
+  color: var(--text);
+}
+
+.mr-counts b {
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+.mr-running {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.match-round.is-wash .mr-running {
+  opacity: 0.5;
+}
+
+.match-rounds-foot {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.durability {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.durability p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.durability-ok {
+  color: var(--muted);
+}
+
+.durability-warn {
+  color: #f2c94c;
+}
+
+.durability-pending,
+.durability-notice {
+  color: var(--muted);
+}
+
+.durability-notice {
+  margin: 12px 0 0;
+}
+
+.durability-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.durability-actions button,
+.file-button {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  text-align: center;
+}
+
+.file-button {
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
+/* Responsive and preference tiers last, after the base rules above. */
+
+@media (prefers-reduced-motion: reduce) {
+  .recent-chevron {
+    transition: none;
+  }
+}

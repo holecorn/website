@@ -60,10 +60,21 @@ export function newGame(target = DEFAULT_TARGET) {
   };
 }
 
+export const TEAM_JOIN = ' & ';
+
 // Display name for a team: the single player, or both partners in doubles.
 export function teamLabel(game, team) {
   const p = game.players[team];
-  return game.mode === 'doubles' ? `${p[0]} & ${p[1]}` : p[0];
+  return game.mode === 'doubles' ? `${p[0]}${TEAM_JOIN}${p[1]}` : p[0];
+}
+
+// "Neil wins" but "Rho & Tau win". Read off the label rather than the mode,
+// because the external display only ever receives the label — the scoreboard
+// payload is byte-budgeted and carries no mode — and deriving both ends the
+// same way is what stops the phone and the board disagreeing. The cost is that
+// a singles player who puts " & " in their own name gets the plural.
+export function winVerb(label) {
+  return String(label ?? '').includes(TEAM_JOIN) ? 'win' : 'wins';
 }
 
 // Set the team due to throw first this round (initial coin toss / correction).
