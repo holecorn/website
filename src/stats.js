@@ -9,11 +9,16 @@ import { BAGS_PER_SIDE, rawPoints, tierCounts, totals } from './scoring.js';
 
 const TEAMS = ['a', 'b'];
 
-// Which player threw a team's bags in a given round. Singles always uses the
-// first slot; doubles alternates partners every round, mirroring `activeIdx` in
-// App.jsx. Get this wrong and every doubles stat is silently mis-credited.
+// Which player slot threw in a given round. Singles always uses the first slot;
+// doubles alternates partners every round, mirroring `activeIdx` in App.jsx and
+// `throwingEnd` in scoring.js. Get this wrong and every doubles stat is silently
+// mis-credited, so it is defined once and read by everything here.
+export function throwerSlot(match, roundIndex) {
+  return match.mode === 'doubles' ? roundIndex % 2 : 0;
+}
+
 export function throwerFor(match, roundIndex, team) {
-  return match.players[team][match.mode === 'doubles' ? roundIndex % 2 : 0];
+  return match.players[team][throwerSlot(match, roundIndex)];
 }
 
 export function rosterFor(match, team) {
@@ -64,12 +69,11 @@ function longestWins(results) {
   return best;
 }
 
-function blank(name) {
+// The counters a thrown bag moves. Separate from the match-level ones, because
+// an unfinished game has these and no result.
+function blankThrows(name) {
   return {
     name,
-    matches: 0,
-    wins: 0,
-    losses: 0,
     rounds: 0,
     bags: 0,
     hole: 0,
@@ -79,14 +83,36 @@ function blank(name) {
     netPoints: 0,
     fourBaggers: 0,
     bestRound: 0,
-    results: [],
   };
 }
 
-function derive({ results, ...p }) {
+function blank(name) {
+  return { ...blankThrows(name), matches: 0, wins: 0, losses: 0, results: [] };
+}
+
+// Fold one round of one team's bags into a player accumulator. Shared so a live
+// game and a finished match can't count the same throw differently.
+function foldRound(p, round, team) {
+  const counts = tierCounts(round[team]);
+  const raw = rawPoints(round[team]);
+  p.rounds += 1;
+  p.hole += counts.hole;
+  p.board += counts.board;
+  p.floor += counts.floor;
+  // Bags actually thrown. A round committed with bags still unthrown is
+  // unreachable through the UI, but counting them would quietly deflate every
+  // rate rather than failing.
+  p.bags += counts.hole + counts.board + counts.floor;
+  p.rawPoints += raw;
+  p.netPoints += round.nets[team];
+  if (counts.hole === BAGS_PER_SIDE) p.fourBaggers += 1;
+  if (raw > p.bestRound) p.bestRound = raw;
+}
+
+// The rates that need only thrown bags, so they mean the same thing mid-game as
+// they do over a career.
+function deriveRates(p) {
   return {
-    ...p,
-    winPct: ratio(p.wins, p.matches),
     holePct: ratio(p.hole, p.bags),
     boardPct: ratio(p.board, p.bags),
     floorPct: ratio(p.floor, p.bags),
@@ -97,6 +123,14 @@ function derive({ results, ...p }) {
     // between the two is a measure of who you have been playing.
     ppr: ratio(p.rawPoints, p.rounds),
     netPpr: ratio(p.netPoints, p.rounds),
+  };
+}
+
+function derive({ results, ...p }) {
+  return {
+    ...p,
+    ...deriveRates(p),
+    winPct: ratio(p.wins, p.matches),
     currentStreak: trailingWins(results),
     longestStreak: longestWins(results),
   };
@@ -138,21 +172,7 @@ export function playerStats(matches) {
 
       match.rounds.forEach((round, i) => {
         const p = at(throwerFor(match, i, team));
-        if (!p) return;
-        const counts = tierCounts(round[team]);
-        const raw = rawPoints(round[team]);
-        p.rounds += 1;
-        p.hole += counts.hole;
-        p.board += counts.board;
-        p.floor += counts.floor;
-        // Bags actually thrown. A round committed with bags still unthrown is
-        // unreachable through the UI, but counting them would quietly deflate
-        // every rate rather than failing.
-        p.bags += counts.hole + counts.board + counts.floor;
-        p.rawPoints += raw;
-        p.netPoints += round.nets[team];
-        if (counts.hole === BAGS_PER_SIDE) p.fourBaggers += 1;
-        if (raw > p.bestRound) p.bestRound = raw;
+        if (p) foldRound(p, round, team);
       });
     }
   }
