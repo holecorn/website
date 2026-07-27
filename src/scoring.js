@@ -46,7 +46,9 @@ export function roundNets(a, b) {
 
 export function newGame(target = DEFAULT_TARGET) {
   return {
-    // Two player slots per team; singles uses only the first.
+    // Two player slots per team; singles uses only the first. In doubles the
+    // slot index is also the end of the court that player stands at, which is
+    // why it is slot 0 that throws on even rounds.
     players: { a: ['Player 1', 'Player 2'], b: ['Player 1', 'Player 2'] },
     colors: { a: '#2f80ed', b: '#eb5757' },
     mode: 'singles',
@@ -56,6 +58,10 @@ export function newGame(target = DEFAULT_TARGET) {
     // Team due to throw first this round; the team that scored last round throws
     // first next, so this updates on endRound and reverts on undoRound.
     nextFirst: 'a',
+    // Which side of the court team A starts on — the one thing about where
+    // people stand that can't be derived, because it anchors the rest to the
+    // real court.
+    startSide: 'left',
     winner: null,
   };
 }
@@ -80,6 +86,58 @@ export function winVerb(label) {
 // Set the team due to throw first this round (initial coin toss / correction).
 export function setFirst(game, team) {
   return { ...game, nextFirst: team };
+}
+
+export function otherSide(side) {
+  return side === 'left' ? 'right' : 'left';
+}
+
+export function setStartSide(game, side) {
+  return { ...game, startSide: side === 'right' ? 'right' : 'left' };
+}
+
+// Which side of the court team A occupies in a given round. Takes a round index
+// rather than reading the live game, so a waiting end can be drawn as it will be
+// when its turn comes.
+function sideOfA(game, round) {
+  const start = game.startSide === 'right' ? 'right' : 'left';
+  // In doubles the two players at a board trade pitcher's boxes each time they
+  // throw, and they only throw on alternate rounds, so the sides flip every
+  // second round. In singles nobody changes box: both players walk down their
+  // own side of the court and only the end they throw from changes.
+  const swapped = game.mode === 'doubles' && Math.floor(round / 2) % 2 === 1;
+  return swapped ? otherSide(start) : start;
+}
+
+// Derived from rounds.length alone, so it reverts with undoRound the same way
+// the first thrower does. End 0 is the end play started from; in doubles it is
+// also the slot index of the partner who stands there all game.
+export function courtPositions(game) {
+  const r = game.rounds.length;
+  const throwingEnd = r % 2;
+  const doubles = game.mode === 'doubles';
+  const ends = [0, 1].map((end) => {
+    const throwing = end === throwingEnd;
+    // A waiting end shows where those players will stand when they next throw,
+    // which is next round. Drawing them in this round's boxes would flip a row
+    // that isn't going to move.
+    const aSide = sideOfA(game, throwing ? r : r + 1);
+    const slot = doubles ? end : 0;
+    // In singles both players are at the throwing end, so the other end stands
+    // empty until they walk down.
+    const occupied = doubles || throwing;
+    return {
+      end,
+      throwing,
+      boxes: {
+        [aSide]: occupied ? { team: 'a', name: game.players.a[slot] } : null,
+        [otherSide(aSide)]: occupied
+          ? { team: 'b', name: game.players.b[slot] }
+          : null,
+      },
+    };
+  });
+  return { throwingEnd, first: game.nextFirst, walks: !doubles, ends };
 }
 
 export function totals(game) {

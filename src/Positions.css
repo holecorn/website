@@ -1,0 +1,177 @@
+/* Court diagram. Kept out of App.css because that file's responsive tiers have
+   to stay last in source order, so its own compact tier lives at the end here
+   instead. */
+
+.positions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+/* Capped rather than filling the panel: a 27ft court with 4ft boxes stops
+   reading as a court once it is stretched wide and flat. */
+.court {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.court-end {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* A board is 2ft x 4ft lying along the throw, so from above it is portrait and
+   narrower than the 3ft boxes either side of it. The hole is 6in across, centred
+   9in from the top edge; these sizes hold both ratios. */
+.cornhole-board {
+  position: relative;
+  width: 26px;
+  height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.board-hole {
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+/* The hole sits at the raised end of the board, away from whoever is throwing
+   at it — so on both boards that is the outer edge of the diagram. */
+.court-end.at-far .board-hole {
+  top: 6px;
+}
+
+.court-end.at-near .board-hole {
+  bottom: 6px;
+}
+
+.pitch-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.box-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pitch-box.is-throwing {
+  color: var(--team);
+  border: 1px solid var(--team);
+}
+
+.pitch-box.is-throwing::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--team);
+  opacity: 0.12;
+}
+
+.pitch-box.is-waiting {
+  color: var(--team);
+  border: 1px dashed var(--border);
+  opacity: 0.55;
+}
+
+.pitch-box.is-empty {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  opacity: 0.4;
+}
+
+.pitch-box.is-first::before {
+  content: '●';
+  margin-right: 5px;
+  font-size: 9px;
+  vertical-align: 1px;
+}
+
+.throw-dir {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+
+.positions-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.positions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.positions-actions button {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Phone in landscape: height is the scarce axis, so flatten the court. */
+@media (orientation: landscape) and (max-height: 450px) {
+  .positions {
+    gap: 6px;
+    padding: 8px;
+  }
+  .cornhole-board {
+    width: 20px;
+    height: 40px;
+  }
+  .board-hole {
+    width: 5px;
+    height: 5px;
+    margin-left: -2.5px;
+  }
+  .court-end.at-far .board-hole {
+    top: 5px;
+  }
+  .court-end.at-near .board-hole {
+    bottom: 5px;
+  }
+  .pitch-box {
+    padding: 4px 8px;
+  }
+  .positions-hint {
+    display: none;
+  }
+}

@@ -21,7 +21,8 @@ colours can match your physical bag sets) and the target score to play to (up to
 99, which is what the external scoreboard can display), then press
 **Start game**.
 
-In **doubles**, each team has two players who share the team's colour. Since each
+In **doubles**, each team has two players who share the team's colour, standing at
+opposite boards. Since each
 end is scored as its own round, the throwing partner alternates every round; the
 scoreboard highlights whoever's up and dims the benched partner. Scoring is
 otherwise identical to singles.
@@ -66,8 +67,29 @@ and colour fields in a modal so you can adjust them without resetting the score.
 The two teams can't share a colour.
 
 The **round history** is a toggle on phones and portrait; on wide landscape
-screens (e.g. an iPad in landscape) it's shown permanently as a right-hand
-column instead.
+screens (e.g. an iPad in landscape) it's shown permanently in a right-hand
+column instead, below the court diagram.
+
+## Where everyone stands
+
+**Positions** draws the court from above — both boards, each flanked by its two
+pitcher's boxes — and shows who is standing where this round. Whoever is throwing
+is outlined in their team colour, with a dot marking the box that throws first,
+an arrow pointing at the board they're aiming at, and anyone waiting their turn
+dimmed. It's a toggle on phones, opening just below the buttons; on wide landscape
+screens it's permanently on show at the top of the right-hand column.
+
+In **singles** both players walk down to the other board after every round,
+keeping to their own side of the court, so only the end they throw from changes.
+In **doubles** nobody walks — partners keep their board for the whole game — but
+the two players at a board trade pitcher's boxes each time they throw, which
+comes round every second round. Waiting players are drawn in the box they'll
+throw from next, not the one being used this round.
+
+The starting arrangement is set on the setup screen, underneath the team names:
+**Swap sides** mirrors the whole court, and in doubles each team gets a button to
+swap which partner stands at which board. It's fixed once the game starts,
+because past rounds are credited to players by the board they were standing at.
 
 The in-progress game is saved to the browser's `localStorage`, so it survives a
 refresh. There is no backend and no account — everything runs client-side.

@@ -39,6 +39,9 @@ project dependency. It starts and stops its own preview server.
   tested in `src/stats.test.js`.
 - `src/Stats.jsx` / `src/Stats.css` — the stats screen.
 - `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects.
+- `src/Positions.jsx` / `src/Positions.css` — the court diagram (who stands in
+  which pitcher's box this round). Draws only; `courtPositions()` in `scoring.js`
+  works out the arrangement.
 - `src/Logo.jsx` — the chalk HOLE/CORN wordmark (tints to the two team colours).
 - `src/scoreboard.js` — pure payload/topic/settings helpers for the external
   scoreboard, plus its localStorage read/write. Tested in `src/scoreboard.test.js`.
@@ -67,6 +70,31 @@ project dependency. It starts and stops its own preview server.
   return to `unthrown` (`setBag` enforces this).
 - **First thrower:** the team that scored last round throws first next; unchanged
   on a wash (tie). Derived through `endRound`/`undoRound`, not free-floating.
+- **Where people stand is derived, not stored** — one field anchors it and the
+  rest falls out of `rounds.length`, so it reverts with `undoRound` for free, the
+  same as the first thrower. `courtPositions()` owns it:
+  - `rounds.length % 2` is **which end throws**, not merely which partner is up.
+    In doubles the player slot index *is* the end that partner stands at all
+    game, which is why slot 0 throws on even rounds. `activeIdx` in `App.jsx`
+    reads `throwingEnd` rather than re-deriving the parity, so the lanes and the
+    diagram cannot disagree about who is up.
+  - **Doubles swaps pitcher's boxes, singles swaps ends.** The two opponents at a
+    board trade boxes each time they throw, and they only throw on alternate
+    rounds, so the sides flip every *second* round — the arrangement is a 4-cycle
+    on `rounds.length`. In singles nobody changes box at all: both players walk
+    down their own side of the court, so only the end moves. Don't "unify" these;
+    they are different rules and `scoring.test.js` pins both.
+  - **A waiting end is drawn where it will throw from next round**, not where
+    this round's swap puts it. Using the current round for both ends makes the
+    far row flip on odd rounds without those players ever moving, which reads as
+    a bug. One test covers exactly this and nothing else does.
+  - **`startSide` is the only new state**, because which physical side of the
+    court team A takes can't be derived from anything — it's the anchor to the
+    real world. It survives `New game` like the colours do, and an old save
+    without it falls back to `left` through the `loadGame()` merge.
+  - **Positions are deliberately absent from the scoreboard payload.** A public
+    board shows the score; the byte budget is tight and the firmware pins the
+    contract. `scoreboard.test.js`'s `toEqual` is what keeps it out.
 - **Vibration/celebration** (in `Board.jsx`): in-hole bags jitter only while
   *every* thrown bag is in the hole (a four-bagger is alive), from two in the
   hole, ramping at three. The FOUR BAGGER reveal fires at round commit, not on
@@ -88,10 +116,34 @@ project dependency. It starts and stops its own preview server.
   there the two team cards sit side by side, and 408px between them collapses the
   lanes to about 28px. The token is centred with auto margins rather than a
   `translateX`, because the vibrate animation owns `transform`.
+- **The court arrangement is only adjustable from setup**, and structurally so:
+  `Positions` mutates nothing unless it is handed `onSwapSides`/`onSwapEnds`, and
+  only the setup screen passes them. That matters because `TeamsFields` is reused
+  in the play screen's team-edit dialog — a swap control living there would move
+  partners between ends mid-game, and `throwerFor` attributes committed rounds by
+  slot, so every doubles stat would be silently re-credited. Keep the mutation
+  path out of the shared component rather than adding a runtime guard to it.
 - **CSS media-query ordering:** in `src/App.css`, the responsive tiers
   (`max-height` and the landscape/wide-history queries) live at the **end of the
   file, after the base rules**. They rely on source order to win at equal
   specificity — don't move base rules below them (a bug we already hit once).
+  `Positions.css` is its own file for the same reason `Stats.css` is: appending
+  base rules to `App.css` is a trap, so a new surface brings its own file and its
+  own tier at the end of it.
+- **The court and the history are wrapped in one `.side-rail`, which is
+  `display: contents` until the wide tier.** They have to be a single grid item:
+  placed separately in column 2 they auto-place into *different rows*, and row 1
+  is as tall as `.main`, so the history lands level with the footer instead of
+  under the court. `contents` is what keeps the wrapper from changing anything on
+  a phone — both panels stay direct flex children of `.app`, so they keep its gap
+  and `.history-panel:empty` still collapses a hidden history. The rail is capped
+  at `100vh - 32px` and the history shrinks and scrolls inside it, rather than the
+  history carrying a `max-height` that would have to know the height of the panels
+  above it. **The history is last in the rail because it's the panel whose height
+  varies with the game**, so it absorbs what the panels above leave instead of
+  being moved by them. That panel is `flex-direction: column` rather than the
+  default row: in a row its empty-state paragraph sizes to its text and reads as a
+  half-width card next to a full-width one.
 - **Custom domain served from root**, so Vite `base` stays `/` and the PWA
   `scope`/`start_url` are `/`. Don't add a base path.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone

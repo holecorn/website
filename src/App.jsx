@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
 import Logo from './Logo.jsx';
+import Positions from './Positions.jsx';
 import ScoreboardSettings from './ScoreboardSettings.jsx';
 import Stats from './Stats.jsx';
 import { archiveMatch, dropMatch, newMatchId, requestPersistence } from './archive.js';
@@ -12,6 +13,8 @@ import {
   newGame,
   setBag,
   setFirst,
+  setStartSide,
+  courtPositions,
   endRound,
   undoRound,
   totals,
@@ -103,6 +106,15 @@ function reducer(game, action) {
       return setBag(game, action.team, action.index, action.tier);
     case 'setFirst':
       return setFirst(game, action.team);
+    case 'setStartSide':
+      return setStartSide(game, action.side);
+    case 'swapEnds': {
+      // Which partner stands at which end is the slot order. Setup-screen only:
+      // committed rounds are attributed by slot, so a swap mid-game would
+      // re-credit them.
+      const [near, far] = game.players[action.team];
+      return { ...game, players: { ...game.players, [action.team]: [far, near] } };
+    }
     case 'endRound':
       return endRound(game);
     case 'undoRound':
@@ -124,12 +136,14 @@ function reducer(game, action) {
       // already in progress doesn't move when it began.
       return game.startedAt ? game : { ...game, startedAt: action.at };
     case 'newGame':
-      // Keep the same teams (players, colours, mode, target); clear the score.
+      // Keep the same teams (players, colours, mode, target, where they stand);
+      // clear the score.
       return identified({
         ...newGame(game.target),
         players: game.players,
         colors: game.colors,
         mode: game.mode,
+        startSide: game.startSide,
       });
     default:
       return game;
@@ -140,6 +154,7 @@ export default function App() {
   const [game, dispatch] = useReducer(reducer, undefined, loadGame);
   const [screen, setScreen] = useState(() => (gameStarted(game) ? 'play' : 'setup'));
   const [showHistory, setShowHistory] = useState(false);
+  const [showPositions, setShowPositions] = useState(false);
   const [editingTeams, setEditingTeams] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [callout, setCallout] = useState(null);
@@ -249,10 +264,13 @@ export default function App() {
     if (!editingTeams && dialog.open) dialog.close();
   }, [editingTeams]);
 
-  const wideHistory = useMediaQuery('(min-width: 900px) and (orientation: landscape)');
+  const wideLayout = useMediaQuery('(min-width: 900px) and (orientation: landscape)');
   const colors = game.colors;
   const doubles = game.mode === 'doubles';
-  const activeIdx = doubles ? game.rounds.length % 2 : 0;
+  // Which partner is up is which end is throwing. Reading it from the same place
+  // the court does keeps one definition of the parity, so the lanes and the
+  // diagram can't disagree about who is throwing.
+  const activeIdx = doubles ? courtPositions(game).throwingEnd : 0;
   const teamPlayers = (team) =>
     doubles ? game.players[team] : [game.players[team][0]];
   const laneName = (team) => game.players[team][doubles ? activeIdx : 0];
@@ -320,6 +338,11 @@ export default function App() {
           ))}
         </div>
         <TeamsFields game={game} dispatch={dispatch} />
+        <Positions
+          game={game}
+          onSwapSides={(side) => dispatch({ type: 'setStartSide', side })}
+          onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
+        />
         <label className="target-field">
           Play to
           <input
@@ -435,7 +458,10 @@ export default function App() {
         <button onClick={undoLastRound} disabled={game.rounds.length === 0}>
           Undo round
         </button>
-        {!wideHistory && (
+        {!wideLayout && (
+          <button onClick={() => setShowPositions((s) => !s)}>Positions</button>
+        )}
+        {!wideLayout && (
           <button
             onClick={() => setShowHistory((s) => !s)}
             disabled={game.rounds.length === 0}
@@ -447,9 +473,14 @@ export default function App() {
       </div>
       </div>
 
+      <div className="side-rail">
+      {(wideLayout || showPositions) && <Positions game={game} />}
+
+      {/* Last in the rail: its height varies with the game, so it absorbs what
+          the panels above it leave rather than moving them. */}
       <aside className="history-panel">
         {game.rounds.length > 0
-          ? (wideHistory || showHistory) && (
+          ? (wideLayout || showHistory) && (
               <ol className="history">
                 {game.rounds
                   .map((r, i) => ({ r, n: i + 1 }))
@@ -471,10 +502,11 @@ export default function App() {
                   })}
               </ol>
             )
-          : wideHistory && (
+          : wideLayout && (
               <p className="history-empty">Rounds will appear here.</p>
             )}
       </aside>
+      </div>
 
       <Footer />
 
@@ -554,7 +586,11 @@ function TeamsFields({ game, dispatch }) {
                 onChange={(e) =>
                   dispatch({ type: 'rename', team, index: i, name: e.target.value })
                 }
-                aria-label={`Team ${team.toUpperCase()} player ${i + 1} name`}
+                aria-label={
+                  game.mode === 'doubles'
+                    ? `Team ${team.toUpperCase()} player at the ${i === 0 ? 'start' : 'far'} end`
+                    : `Team ${team.toUpperCase()} player name`
+                }
               />
             ))}
             <div className="swatches">

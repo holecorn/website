@@ -10,6 +10,8 @@ import {
   teamLabel,
   winVerb,
   setFirst,
+  setStartSide,
+  courtPositions,
   totals,
   setBag,
   endRound,
@@ -217,5 +219,139 @@ describe('clampTarget', () => {
   it('accepts the digits typed so far while typing', () => {
     expect(clampTarget('2', 21)).toBe(2);
     expect(clampTarget('21', 21)).toBe(21);
+  });
+});
+
+// Which team is in the left and right box at one end, as team letters.
+function order(end) {
+  return ['left', 'right'].map((s) => end.boxes[s]?.team ?? '-').join('');
+}
+
+function named(mode) {
+  return {
+    ...newGame(),
+    mode,
+    players: { a: ['A0', 'A1'], b: ['B0', 'B1'] },
+  };
+}
+
+// A wash leaves the first thrower alone, so these play out without disturbing
+// anything but the round count.
+function washRound(game) {
+  return playRound(game, ['floor', 'floor', 'floor', 'floor'], [
+    'floor',
+    'floor',
+    'floor',
+    'floor',
+  ]);
+}
+
+describe('courtPositions', () => {
+  it('alternates the throwing end every round', () => {
+    let game = named('singles');
+    for (const expected of [0, 1, 0, 1, 0]) {
+      expect(courtPositions(game).throwingEnd).toBe(expected);
+      game = washRound(game);
+    }
+  });
+
+  it('keeps a singles player on the same side all game, and only moves the end', () => {
+    let game = named('singles');
+    for (let r = 0; r < 4; r += 1) {
+      const { ends, throwingEnd } = courtPositions(game);
+      expect(order(ends[throwingEnd])).toBe('ab');
+      expect(ends[throwingEnd].boxes.left.name).toBe('A0');
+      expect(ends[throwingEnd].boxes.right.name).toBe('B0');
+      // Nobody is at the other end until they walk down.
+      expect(order(ends[1 - throwingEnd])).toBe('--');
+      game = washRound(game);
+    }
+  });
+
+  it('swaps the doubles boxes every second round, on a four-cycle', () => {
+    let game = named('doubles');
+    for (const expected of ['ab', 'ab', 'ba', 'ba', 'ab', 'ab', 'ba']) {
+      const { ends, throwingEnd } = courtPositions(game);
+      expect(order(ends[throwingEnd])).toBe(expected);
+      game = washRound(game);
+    }
+  });
+
+  it('draws a waiting doubles end where it will throw from next round', () => {
+    let game = named('doubles');
+    const waiting = [];
+    for (let r = 0; r < 6; r += 1) {
+      const { ends, throwingEnd } = courtPositions(game);
+      waiting.push({ end: 1 - throwingEnd, order: order(ends[1 - throwingEnd]) });
+      game = washRound(game);
+      const next = courtPositions(game);
+      // The row it showed while waiting is the row it throws from, so no end
+      // ever appears to move without its turn coming round.
+      expect(order(next.ends[next.throwingEnd])).toBe(waiting[r].order);
+    }
+  });
+
+  it('keeps each doubles partner at their own end all game', () => {
+    let game = named('doubles');
+    for (let r = 0; r < 5; r += 1) {
+      const { ends } = courtPositions(game);
+      for (const end of [0, 1]) {
+        const names = ['left', 'right'].map((s) => ends[end].boxes[s].name).sort();
+        expect(names).toEqual([`A${end}`, `B${end}`]);
+      }
+      game = washRound(game);
+    }
+  });
+
+  it('always puts the two teams in opposite boxes', () => {
+    for (const mode of ['singles', 'doubles']) {
+      let game = named(mode);
+      for (let r = 0; r < 5; r += 1) {
+        for (const end of courtPositions(game).ends) {
+          expect(order(end)).toMatch(/^(ab|ba|--)$/);
+        }
+        game = washRound(game);
+      }
+    }
+  });
+
+  it('agrees with the doubles thrower that the rest of the app derives', () => {
+    let game = named('doubles');
+    for (let r = 0; r < 5; r += 1) {
+      const { ends, throwingEnd } = courtPositions(game);
+      const up = ['left', 'right'].map((s) => ends[throwingEnd].boxes[s].name);
+      // Mirrors activeIdx in App.jsx and throwerFor in stats.js.
+      expect(up.sort()).toEqual([`A${r % 2}`, `B${r % 2}`]);
+      game = washRound(game);
+    }
+  });
+
+  it('mirrors the whole court when team A starts on the right', () => {
+    const game = setStartSide(named('doubles'), 'right');
+    const { ends } = courtPositions(game);
+    expect(order(ends[0])).toBe('ba');
+    expect(order(ends[1])).toBe('ba');
+  });
+
+  it('reverts with an undone round', () => {
+    let game = named('doubles');
+    const atStart = courtPositions(game);
+    game = washRound(washRound(game));
+    expect(order(courtPositions(game).ends[0])).not.toBe(order(atStart.ends[0]));
+    game = undoRound(undoRound(game));
+    expect(courtPositions(game)).toEqual(atStart);
+  });
+
+  it('falls back to the left for a game saved before the side existed', () => {
+    const game = { ...named('doubles'), startSide: undefined };
+    expect(order(courtPositions(game).ends[0])).toBe('ab');
+  });
+});
+
+describe('setStartSide', () => {
+  it('only accepts a side', () => {
+    expect(setStartSide(newGame(), 'right').startSide).toBe('right');
+    expect(setStartSide(newGame(), 'left').startSide).toBe('left');
+    expect(setStartSide(newGame(), 'sideways').startSide).toBe('left');
   });
 });
