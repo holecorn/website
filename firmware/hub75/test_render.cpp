@@ -104,14 +104,20 @@ static BoardState makeState(int a, int b, int round, const char* ta, const char*
   return s;
 }
 
+// Both panels are fed through the MatrixPortal's 5 V terminals, which only holds
+// while the layout stays far from white — see Power in README.md.
+static const double DUTY_CEILING = 30.0;
+static double worstDuty = 0;
+
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
                         bool live, bool blinkOn) {
   Framebuffer fb;
   renderBoard(fb, s, haveState, live, blinkOn);
   fb.write(name);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
-  printf("  %-14s %4d lit  (%4.1f%% duty)\n", name.c_str(), fb.lit(),
-         100.0 * fb.lit() / (PANEL_W * PANEL_H));
+  const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
+  if (duty > worstDuty) worstDuty = duty;
+  printf("  %-14s %4d lit  (%4.1f%% duty)\n", name.c_str(), fb.lit(), duty);
   return fb;
 }
 
@@ -144,6 +150,7 @@ int main() {
   // The loser's score and both names must survive the flash, or the board
   // stops being readable for half of every beat.
   check(winOff.lit() > 100, "winner blink blanked too much");
+  check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");
 
   Framebuffer bounds;
   BoardState overflow = makeState(999, -5, 250, "0123456789ABCDEFGHIJKLMNOPQ", "X");
