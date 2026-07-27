@@ -1047,7 +1047,7 @@
 
 /* Wide landscape (e.g. iPad landscape): the rail's panels become a persistent
    right column instead of toggles. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (orientation: landscape) and (min-height: 451px) {
   /* Column 1 matches `.main`'s cap, so the rail sits beside the cards instead of
      across a gutter, and the pair is centred rather than left-aligned. */
   .app:not(.setup) {

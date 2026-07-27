@@ -118,6 +118,17 @@ project dependency. It starts and stops its own preview server.
   there the two team cards sit side by side, and 408px between them collapses the
   lanes to about 28px. The token is centred with auto margins rather than a
   `translateX`, because the vibrate animation owns `transform`.
+- **The wide tier and the landscape tier must not both match**, which is what the
+  wide tier's `min-height: 451px` is for — the exact complement of the landscape
+  tier's `max-height: 450px`. A big phone on its side (932x430 on an iPhone Pro
+  Max) satisfies `min-width: 900px` *and* `max-height: 450px`, so before the guard
+  both applied: the landscape tier put the two cards in a row and the wide tier,
+  being later in source order, capped the column they shared. That is the lane
+  collapse the point above says the lift prevents — 26px lanes, measured, on a
+  phone. **The query is also duplicated in `App.jsx`** (`wideLayout`), because CSS
+  decides where the rail's panels go and JS decides whether they render at all;
+  they have to say the same thing or the panels appear with nothing laying them
+  out and no toggle to dismiss them.
 - **The court arrangement is only adjustable from setup**, and structurally so:
   `Positions` mutates nothing unless it is handed `onSwapSides`/`onSwapEnds`, and
   only the setup screen passes them. That matters because `TeamsFields` is reused

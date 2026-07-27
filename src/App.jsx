@@ -266,7 +266,13 @@ export default function App() {
     if (!editingTeams && dialog.open) dialog.close();
   }, [editingTeams]);
 
-  const wideLayout = useMediaQuery('(min-width: 900px) and (orientation: landscape)');
+  // Must stay identical to the wide tier's query in App.css: this decides whether
+  // the rail's panels render at all, and that file decides where they go. The
+  // min-height excludes it from short landscape phones, which the compact tier
+  // already lays out its own way.
+  const wideLayout = useMediaQuery(
+    '(min-width: 900px) and (orientation: landscape) and (min-height: 451px)',
+  );
   const colors = game.colors;
   const doubles = game.mode === 'doubles';
   // Which partner is up is which end is throwing. Reading it from the same place
