@@ -85,15 +85,24 @@ project dependency. It starts and stops its own preview server.
     rounds, so the sides flip every *second* round — the arrangement is a 4-cycle
     on `rounds.length`. In singles nobody changes box at all: both players walk
     down their own side of the court, so only the end moves. Don't "unify" these;
-    they are different rules and `scoring.test.js` pins both.
+    they are different rules and `scoring.test.js` pins both. **Both are how this
+    group plays**, not a rulebook citation — the singles one in particular was a
+    choice between two readings of "swap sides" (keep your side of the court, or
+    keep the side relative to your target) and this is the first.
   - **A waiting end is drawn where it will throw from next round**, not where
     this round's swap puts it. Using the current round for both ends makes the
     far row flip on odd rounds without those players ever moving, which reads as
     a bug. One test covers exactly this and nothing else does.
-  - **`startSide` is the only new state**, because which physical side of the
-    court team A takes can't be derived from anything — it's the anchor to the
-    real world. It survives `New game` like the colours do, and an old save
-    without it falls back to `left` through the `loadGame()` merge.
+  - **`startSide` is the only *new* state, not the only state that holds a
+    position.** Which side of the court team A takes can't be derived from
+    anything, so it is stored; it survives `New game` like the colours do, and an
+    old save without it falls back to `left` through the `loadGame()` merge. The
+    other half of the arrangement — which partner is at which end — is the
+    **order of the `players` array**, which already existed and now carries
+    positional meaning. That is why `swapEnds` reorders slots rather than setting
+    a field, and why **swapping ends also changes who throws first**: slot 0
+    throws even rounds, so the two are the same fact and cannot be set
+    independently.
   - **Positions are deliberately absent from the scoreboard payload.** A public
     board shows the score; the byte budget is tight and the firmware pins the
     contract. `scoreboard.test.js`'s `toEqual` is what keeps it out.

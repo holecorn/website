@@ -100,8 +100,13 @@ throw from next, not the one being used this round.
 
 The starting arrangement is set on the setup screen, underneath the team names:
 **Swap sides** mirrors the whole court, and in doubles each team gets a button to
-swap which partner stands at which board. It's fixed once the game starts,
+swap which partner stands at which board. Swapping a pair over also swaps **who
+throws first** for that team, because the partner at the starting board is the one
+who opens — the two aren't separate settings. It's all fixed once the game starts,
 because past rounds are credited to players by the board they were standing at.
+
+These are the conventions this group plays, not a rulebook: in particular, when
+singles players walk down they each keep their own side of the court.
 
 The in-progress game is saved to the browser's `localStorage`, so it survives a
 refresh. There is no backend and no account — everything runs client-side.
