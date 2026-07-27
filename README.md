@@ -180,7 +180,9 @@ game rules — every message carries the whole state.
 
 [`firmware/hub75/`](firmware/hub75/README.md) drives a 640 x 160 mm RGB LED
 panel showing the score in each team's colour, both names, the round, the
-target, and a rule under whoever throws next. This is the one being built.
+target, and a rule under whoever throws next. This is the one being built. It
+runs off a USB power bank rather than mains — the layout draws a few watts, so a
+10,000 mAh bank covers a session several times over.
 
 [`firmware/wokwi/`](firmware/wokwi/README.md) drives two-digit seven-segment
 displays and shows the score only. It runs unchanged in the

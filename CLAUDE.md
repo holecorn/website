@@ -332,6 +332,52 @@ The parts worth knowing before touching either:
   arrays out of `sketch.ino`. Don't hand-edit the JSON: the two displays share
   seven segment lines, and wiring that silently disagrees with the firmware is
   the likely failure mode.
+- **The HUB75 board runs off a USB power bank, so there is no fuse and no supply
+  to size.** A 15 W bank is itself the current limit and folds back, so a fuse
+  downstream of it protects nothing — the docs said to fuse for the 40 W peak
+  back when mains was assumed, and that advice is gone. Overrunning the budget
+  trips the bank off rather than being unsafe, and the layout draws a third of it
+  even at full brightness, so power does not constrain `PANEL_BRIGHTNESS` either.
+  The risks are the opposite of overcurrent: the bank refusing to start under
+  switch-on load, and the **1.4%-duty no-state screen** being too quiet to keep it
+  awake.
+- **One USB-C cable feeds everything, through the controller.** The MatrixPortal's
+  two M3 standoffs either side of the HUB75 socket are USB power brought straight
+  out, and Adafruit's instruction is to power from USB and hang the matrix off
+  them — so there is no 5 V bus, no chopped lead, no lever connectors, no second
+  port. **They are outputs only**: never feed 5 V *in*, because anything in the USB
+  port at the same time can damage the board, and flashing always puts something
+  there — and the casualty may be the laptop, since the standoffs *are* VBUS with
+  no diode between. **Back-feeding looks identical to the correct wiring** (same
+  screws, same wires, opposite direction) and works until the first flash, which
+  is why `firmware/hub75/README.md` has a `How to destroy it` section. They take
+  crimped spade terminals, not bare wire under the screw, and the lug end is the
+  one place in the build where polarity is unprotected.
+- **Two independent bounds are what make that safe, and one of them is fragile.**
+  Adafruit say multi-panel builds need their own supply, but that assumes ~4 A per
+  panel all-white; the vendor's "≤20 W per panel" is the same all-white figure.
+  This layout measures 19.8% duty worst case, so ~0.98 A for both at full
+  brightness. That is bound one, and **`test_render.cpp` asserts it** —
+  `DUTY_CEILING`, 30% against a 19.8% worst case — rather than leaving it to
+  observation, because nothing else would notice a layout change that filled the
+  panel. Bound two is that the bank folds back at 3 A, so no fault can pull the
+  8 A the panels are rated for. **Swapping the bank for mains removes bound two**,
+  and then the panels must be fed directly instead.
+- **A brighter panel-side effect is limited by duty x brightness, not duty.** At
+  `PANEL_BRIGHTNESS = 40` even an all-white flood is 1.25 A and fits; only high
+  duty *and* daylight brightness together exceed the bank. If it ever is needed,
+  the answer is not mains and not bulk capacitance (a 50 ms flood would want
+  0.5 F) — it is a PD bank with a buck converter, feeding the panels directly.
+  **But the retained whole-state message model blocks it first**: an animation is
+  an event, a retained `fourBagger` replays on every display reboot, and a four
+  bagger is not derivable from the published score under cancellation. Numbers and
+  the dead ends are in `firmware/hub75/README.md`.
+- **A HUB75 panel does not power up dark**, which is why bound two is load-bearing
+  rather than spare. OE is active low, so from power-on until `panel->begin()` the
+  outputs are enabled over random shift-register state at full drive with no
+  `PANEL_BRIGHTNESS` applied. It is also the likelier reason a bank refuses to
+  start the board — likelier than capacitor inrush — and the fix is a 10k pull-up
+  on OE, not a bigger bank.
 - **Nothing in `loop()` may block.** The digits are software-multiplexed by
   SevSeg, so a blocking reconnect wait shows up as visible flicker — hence the
   `millis()` timers rather than `delay()`.
@@ -375,7 +421,11 @@ and waiting on a button that will never appear times out the whole run instead
 of reporting.
 
 `npm run test:firmware` compiles and runs both host C++ suites and checks that
-`glyphs.h` still matches `src/segments.js`. That last check is why it is worth
+`glyphs.h` still matches `src/segments.js`. One assertion in `test_render.cpp`
+is not about rendering at all: `DUTY_CEILING` caps how much of the panel any
+scene may light, because the decision to run both panels through the
+controller's 5 V terminals depends on it and no electrical test exists to catch
+a layout that broke it. That last check is why it is worth
 having: the generated header is the app's own digit geometry, so an app-side
 change silently stops matching the panel until someone regenerates. These were
 manual for a while and drifted twice — a fixture that claimed to be "exactly
