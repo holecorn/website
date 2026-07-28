@@ -16,7 +16,10 @@ import './Stats.css';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const one = (v) => v.toFixed(1);
-const matchCount = (n) => `${n} match${n === 1 ? '' : 'es'}`;
+// Both forms spelled out rather than a suffix rule: "wash" and "match" take "es" while
+// "round" takes "s", so anything that guesses gets one of them wrong.
+const plural = (n, one, many) => (n === 1 ? one : many);
+const matchCount = (n) => `${n} ${plural(n, 'match', 'matches')}`;
 
 const shortDate = (ms) =>
   ms ? new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
@@ -133,13 +136,19 @@ export default function Stats({ onBack, persisted }) {
       ) : (
         <>
           <div className="stat-chips">
-            <Chip label="matches" value={totalsFor.matches} />
-            <Chip label="rounds" value={totalsFor.rounds} />
+            {/* Counts take a singular label at exactly one — zero is plural, as English
+                has it. The two averages stay plural whatever they read, because a decimal
+                does: "1.0 avg rounds", not "1.0 avg round". */}
+            <Chip label={plural(totalsFor.matches, 'match', 'matches')} value={totalsFor.matches} />
+            <Chip label={plural(totalsFor.rounds, 'round', 'rounds')} value={totalsFor.rounds} />
             <Chip label="avg rounds" value={one(totalsFor.avgRounds)} />
             <Chip label="avg length" value={minutes(totalsFor.avgDurationMs)} />
-            <Chip label="washes" value={totalsFor.washes} />
-            <Chip label="four baggers" value={totalsFor.fourBaggers} />
-            <Chip label="skunks" value={totalsFor.skunks} />
+            <Chip label={plural(totalsFor.washes, 'wash', 'washes')} value={totalsFor.washes} />
+            <Chip
+              label={plural(totalsFor.fourBaggers, 'four bagger', 'four baggers')}
+              value={totalsFor.fourBaggers}
+            />
+            <Chip label={plural(totalsFor.skunks, 'skunk', 'skunks')} value={totalsFor.skunks} />
           </div>
 
           <section className="stats-section">

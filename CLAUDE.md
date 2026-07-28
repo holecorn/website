@@ -316,6 +316,13 @@ project dependency. It starts and stops its own preview server.
   same reasoning as the scoreboard settings. A failed write drops the oldest
   match and retries rather than giving up: a plain try/catch would silently lose
   the game just played, and then every game after it.
+- **The summary chips take a singular label at exactly one**, and both word forms are
+  spelled out rather than derived: "wash" and "match" take `es` while "round" takes `s`,
+  so a suffix rule gets one of them wrong. Zero stays plural, as English has it. **The two
+  averages stay plural whatever they read** — a decimal is plural, so "1.0 avg rounds" is
+  correct and making it agree with the value would be the bug. `verify-stats.mjs` needs
+  *two* seeds to cover this: no single match yields both `1 round` and `1 wash`, because a
+  wash needs a second round to have anything to wash against.
 - **`Stats.css` is separate from `App.css`** because that file's responsive
   tiers have to stay last in source order, so appending base rules there is a
   trap.

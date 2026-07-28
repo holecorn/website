@@ -491,6 +491,60 @@ check(
   await wide.close();
 }
 
+// Chip labels at exactly one. Two seeds, because no single match yields both `1 round`
+// and `1 wash` — a wash needs a second round to have anything to wash against.
+{
+  const one = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const onePage = await one.newPage();
+  const bags = (h, b) => [
+    ...Array(h).fill('hole'), ...Array(b).fill('board'),
+    ...Array(4 - h - b).fill('floor'),
+  ];
+  const round = (a, b, na, nb) => ({ a, b, nets: { a: na, b: nb }, first: 'a' });
+  const seed = async (rounds, target) => {
+    await onePage.evaluate(({ rs, tg }) => {
+      localStorage.clear();
+      localStorage.setItem('holecorn.matches.v1', JSON.stringify([{
+        format: 1, id: 'p1', startedAt: 1.7e12, endedAt: 1.7e12 + 6e5, mode: 'singles',
+        players: { a: ['Neil', 'P2'], b: ['Sigma', 'P2'] },
+        colors: { a: '#2f80ed', b: '#eb5757' }, target: tg, winner: 'a', rounds: rs,
+      }]));
+    }, { rs: rounds, tg: target });
+    await onePage.reload();
+    await onePage.waitForSelector('.setup');
+    await onePage.getByRole('button', { name: 'Stats' }).click();
+    await onePage.waitForSelector('.stat-chips');
+    return Object.fromEntries(
+      await onePage.$$eval('.stat-chip', (chips) =>
+        chips.map((c) => [
+          c.querySelector('.stat-chip-label').textContent,
+          c.querySelector('.stat-chip-value').textContent,
+        ])),
+    );
+  };
+
+  await onePage.goto(URL);
+  // One match, two rounds: a wash, then four in the hole to win and leave a skunk.
+  const a = await seed([
+    round(bags(0, 1), bags(0, 1), 0, 0),
+    round(bags(4, 0), bags(0, 0), 12, 0),
+  ], 12);
+  check('one match reads "match"', a.match === '1', JSON.stringify(Object.keys(a)));
+  check('one wash reads "wash"', a.wash === '1');
+  check('one skunk reads "skunk"', a.skunk === '1');
+  check('one four bagger reads "four bagger"', a['four bagger'] === '1');
+  // Two of them, so the plural is not simply hard-coded singular.
+  check('two rounds still reads "rounds"', a.rounds === '2', JSON.stringify(a));
+  // An average keeps its plural whatever it reads: a decimal is plural in English.
+  check('the averages stay plural', 'avg rounds' in a && 'avg length' in a, JSON.stringify(Object.keys(a)));
+
+  // One round, no wash: the singular round and the zero plural in one shot.
+  const b = await seed([round(bags(4, 0), bags(0, 0), 12, 0)], 12);
+  check('one round reads "round"', b.round === '1', JSON.stringify(Object.keys(b)));
+  check('zero washes reads "washes"', b.washes === '0', JSON.stringify(Object.keys(b)));
+  await one.close();
+}
+
 const plain = await browser.newContext();
 await plain.addInitScript(() => {
   delete Crypto.prototype.randomUUID;
