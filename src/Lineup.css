@@ -1,0 +1,123 @@
+/* Its own file for the same reason Positions.css and GameStats.css are: App.css's
+   responsive tiers have to stay last in source order there. */
+
+.lineup {
+  padding: 10px 12px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.lineup-title {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lineup-record {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.lineup-record b {
+  font-variant-numeric: tabular-nums;
+}
+
+.lineup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lineup-table th,
+.lineup-table td {
+  padding: 6px 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lineup-table thead th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.lineup-table tbody th,
+.lineup-table thead th:first-child {
+  padding-left: 0;
+  text-align: left;
+  font-weight: 600;
+  /* The only column that can be long, so it takes the squeeze. */
+  max-width: 0;
+  width: 40%;
+  overflow: hidden;
+}
+
+.lineup-table tbody tr + tr th,
+.lineup-table tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+
+/* The name gives up room, never the streak badge — same reasoning as the
+   four-bagger badge in GameStats.css. */
+.lineup-player {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.lineup-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lineup-streak {
+  flex: none;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.lineup-first {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lineup-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Spoken, not shown: a row of dots says nothing aloud. */
+.lineup-form-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lineup-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}

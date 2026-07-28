@@ -1,11 +1,18 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
 import GameStats from './GameStats.jsx';
+import Lineup from './Lineup.jsx';
 import Logo from './Logo.jsx';
 import Positions from './Positions.jsx';
 import ScoreboardSettings from './ScoreboardSettings.jsx';
 import Stats from './Stats.jsx';
-import { archiveMatch, dropMatch, newMatchId, requestPersistence } from './archive.js';
+import {
+  archiveMatch,
+  dropMatch,
+  loadArchive,
+  newMatchId,
+  requestPersistence,
+} from './archive.js';
 import {
   LAYOUT_LABELS,
   loadScoreboardConfig,
@@ -23,6 +30,7 @@ import {
   setStartSide,
   courtPositions,
   endRound,
+  gameStarted,
   undoRound,
   totals,
   roundNets,
@@ -100,13 +108,6 @@ function useMediaQuery(query) {
   return matches;
 }
 
-function gameStarted(game) {
-  return (
-    game.rounds.length > 0 ||
-    [...game.current.a, ...game.current.b].some((tier) => tier !== 'unthrown')
-  );
-}
-
 function reducer(game, action) {
   switch (action.type) {
     case 'set':
@@ -170,6 +171,9 @@ export default function App() {
   const [targetStr, setTargetStr] = useState(String(game.target));
   const [sbConfig, setSbConfig] = useState(loadScoreboardConfig);
   const [persisted, setPersisted] = useState(null);
+  // Held here rather than only inside Stats, because the pre-game form panel and
+  // the scoreboard publisher both read it and both live above that screen.
+  const [matches, setMatches] = useState(loadArchive);
   const confirmDialog = useRef(null);
   const editDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
@@ -186,11 +190,13 @@ export default function App() {
   useEffect(() => {
     if (game.winner) {
       if (archivedId.current !== game.id) {
-        archiveMatch(game, Date.now());
+        // Set from what was just written rather than re-read, so the form panel
+        // and the board have the match the moment it is filed.
+        setMatches(archiveMatch(game, Date.now()));
         archivedId.current = game.id;
       }
     } else if (archivedId.current === game.id) {
-      dropMatch(game.id);
+      setMatches(dropMatch(game.id));
       archivedId.current = null;
     }
   }, [game]);
@@ -212,7 +218,7 @@ export default function App() {
     };
   }, []);
 
-  const scoreboard = useScoreboardPublisher(game, sbConfig);
+  const scoreboard = useScoreboardPublisher(game, sbConfig, matches);
 
   // Flash a cornhole callout when a round is committed: WASH on a tie, GAME on
   // the winning throw, SKUNK when the loser is left on zero.
@@ -333,7 +339,18 @@ export default function App() {
   };
 
   if (screen === 'stats') {
-    return <Stats onBack={() => setScreen('setup')} persisted={persisted} />;
+    // Stats owns its own copy while it is open, because it deletes, restores and
+    // imports; re-reading on the way out is what keeps the form panel and the
+    // board from reporting matches that have since been deleted.
+    return (
+      <Stats
+        onBack={() => {
+          setMatches(loadArchive());
+          setScreen('setup');
+        }}
+        persisted={persisted}
+      />
+    );
   }
 
   if (screen === 'setup') {
@@ -396,6 +413,10 @@ export default function App() {
         >
           Start game
         </button>
+        {/* Below Start game, not above it: that button already sits off the
+            bottom of a phone's first screen, and this is something to read while
+            waiting rather than something to get past. */}
+        <Lineup game={game} colors={game.colors} matches={matches} />
         <button className="setup-stats" onClick={() => setScreen('stats')}>
           Stats
         </button>
