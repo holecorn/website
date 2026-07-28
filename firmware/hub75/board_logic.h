@@ -63,6 +63,30 @@ inline bool parseLayout(const char* payload, size_t length, PanelLayout& out) {
   return false;
 }
 
+// ------------------------------------------------------------- pre-game form --
+//
+// The lineup arrives on holecorn/<code>/lineup, retained, and is *cleared* when
+// the first bag is thrown. Its presence is the whole trigger for the form screen
+// — there is no mode field and no third layout id, because a layout is a
+// preference the scorer sets and this is a phase of the game.
+static const int LINEUP_MAX = 4;
+// Same limit copyLabel documents: 16 UTF-16 code units can be 48 bytes of UTF-8.
+static const size_t LINEUP_NAME_MAX = 49;
+static const int LINEUP_FORM_MAX = 5;
+
+struct LineupRow {
+  char name[LINEUP_NAME_MAX] = {0};
+  int wins = 0;
+  int losses = 0;
+  int ppr = 0;                            // tenths, so 72 draws as "7.2"
+  char form[LINEUP_FORM_MAX + 1] = {0};   // 'W'/'L', oldest first
+};
+
+struct LineupState {
+  int count = 0;  // 0 means nothing to draw
+  LineupRow rows[LINEUP_MAX];
+};
+
 struct BoardState {
   int a = 0;
   int b = 0;
@@ -101,6 +125,60 @@ inline void copyLabel(const char* src, char* dst) {
   size_t i = 0;
   for (; src[i] && i < TEAM_LABEL_MAX - 1; i++) dst[i] = src[i];
   dst[i] = '\0';
+}
+
+inline int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+// An empty payload is the publisher clearing the topic, and is the *only* way
+// back to the score screen — so it succeeds with a count of 0 rather than being
+// treated as malformed. Anything else unusable returns false and leaves `out`
+// alone, so a stray message on a shared broker cannot wipe a good lineup.
+//
+// The row count must be exactly a singles or a doubles roster: render.h splits
+// rows into teams by halving it, and a length it cannot halve would draw players
+// in the wrong colours rather than failing.
+inline bool parseLineup(const char* json, size_t length, LineupState& out) {
+  if (!json) return false;
+  if (length == 0) {
+    out.count = 0;
+    return true;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, json, length)) return false;
+  JsonArrayConst rows = doc["rows"];
+  if (rows.isNull()) return false;
+  const int n = int(rows.size());
+  if (n != 2 && n != LINEUP_MAX) return false;
+
+  LineupState next;
+  next.count = n;
+  for (int i = 0; i < n; i++) {
+    JsonObjectConst row = rows[i];
+    LineupRow& r = next.rows[i];
+    const char* name = row["n"].as<const char*>();
+    if (name) {
+      size_t j = 0;
+      for (; name[j] && j < LINEUP_NAME_MAX - 1; j++) r.name[j] = name[j];
+      r.name[j] = '\0';
+    }
+    r.wins = clampInt(row["w"] | 0, 0, 999);
+    r.losses = clampInt(row["l"] | 0, 0, 999);
+    // 999 tenths, so the widest it can draw is "99.9" — the four characters the
+    // form layout reserves. A real PPR caps at 12.0 (four bags in the hole).
+    r.ppr = clampInt(row["p"] | 0, 0, 999);
+    const char* form = row["f"].as<const char*>();
+    if (form) {
+      int j = 0;
+      // Anything that isn't a W counts as a loss, the same way an unrecognised
+      // team letter reads as "nobody" elsewhere.
+      for (; form[j] && j < LINEUP_FORM_MAX; j++) {
+        r.form[j] = (form[j] == 'W' || form[j] == 'w') ? 'W' : 'L';
+      }
+      r.form[j] = '\0';
+    }
+  }
+  out = next;
+  return true;
 }
 
 // Blank-padded rather than zero-padded, matching the browser display, and

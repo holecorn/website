@@ -94,6 +94,43 @@ static const int SCORE_TARGET_Y = 17;
 // would make this a different comparison than names-versus-no-names.
 static const int SCORE_RULE_Y = PANEL_H - 1;
 
+// ------------------------------------------------------ form layout geometry --
+//
+// The pre-game screen, drawn while a lineup is retained on the lineup topic. Four
+// rows of 5x7 text is the whole panel — a doubles roster leaves no room for a
+// heading, which is why there isn't one. Numbers are right-aligned in their columns
+// so the four rows line up whatever the values are.
+//
+// Read at ~4 m rather than the 7 m the score is sized for: 5x7 at P5 is 35 mm
+// against the score's 100 mm. That is the trade this screen makes, and it is the
+// right one for something you look at while standing around before a game.
+static const int FORM_ROW_H = FONT_H + 1;
+static const int FORM_COL_GAP = 3;
+
+static const int FORM_PIPS = 5;
+static const int FORM_PIP = 3;
+static const int FORM_PIP_PITCH = 4;
+static const int FORM_PIPS_W = FORM_PIPS * FORM_PIP_PITCH - 1;
+static const int FORM_PIPS_X = PANEL_W - FORM_PIPS_W;
+
+// Buffer sizes, not column widths: "999-999" and "99.9" are the widest the clamps in
+// parseLineup permit. A real PPR caps at 12.0 — four bags in the hole every round.
+static const int FORM_WL_MAX = 7;
+static const int FORM_PPR_MAX = 4;
+
+// The number columns are sized to **this lineup**, not to the worst case any lineup
+// could hold, and the name takes whatever is left. Sizing for the worst case spent 5
+// characters on the record even when every row read "6-4"; measured, adapting gives an
+// ordinary roster 11 name characters where a fixed layout gave 8, and still fits a
+// three-digit record — which is reachable at about 100 matches — by spending them again.
+struct FormLayout {
+  int wlChars;
+  int pprChars;  // 0 when nobody in the lineup has played, so the column is skipped
+  int wlRight;
+  int pprRight;
+  int nameChars;
+};
+
 template <typename Canvas>
 void drawText(Canvas& c, const char* s, int x, int y, Rgb color, int maxChars) {
   for (int i = 0; s[i] && i < maxChars; i++) {
@@ -136,6 +173,47 @@ void drawPair(Canvas& c, const char* pair, int x, int y, Rgb color, const DigitF
 template <typename Canvas>
 void drawRule(Canvas& c, int x0, int x1, int y, Rgb color) {
   for (int x = x0; x < x1; x++) c.px(x, y, color.r, color.g, color.b);
+}
+
+template <typename Canvas>
+void drawBlock(Canvas& c, int x, int y, int w, int h, Rgb color) {
+  for (int dy = 0; dy < h; dy++)
+    for (int dx = 0; dx < w; dx++) c.px(x + dx, y + dy, color.r, color.g, color.b);
+}
+
+// `right` is the exclusive right edge of the column.
+template <typename Canvas>
+void drawTextRight(Canvas& c, const char* s, int right, int y, Rgb color, int maxChars) {
+  drawText(c, s, right - textWidth(s, maxChars), y, color, maxChars);
+}
+
+// Tenths into "7.2" / "12.0". The panel has no float formatter and would not want
+// one; the payload carries tenths for exactly this reason.
+inline void formatTenths(int tenths, char* out) {
+  const int t = clampInt(tenths, 0, 999);
+  const int whole = t / 10;
+  int n = 0;
+  if (whole >= 10) out[n++] = char('0' + whole / 10);
+  out[n++] = char('0' + whole % 10);
+  out[n++] = '.';
+  out[n++] = char('0' + t % 10);
+  out[n] = '\0';
+}
+
+// Up to "999-999". The clamp is repeated here rather than trusted from parseLineup,
+// because this writes into a fixed buffer and a scene can be built by hand.
+inline void formatRecord(int wins, int losses, char* out) {
+  int n = 0;
+  const auto put = [&](int v) {
+    const int c = clampInt(v, 0, 999);
+    if (c >= 100) out[n++] = char('0' + c / 100);
+    if (c >= 10) out[n++] = char('0' + (c / 10) % 10);
+    out[n++] = char('0' + c % 10);
+  };
+  put(wins);
+  out[n++] = '-';
+  put(losses);
+  out[n] = '\0';
 }
 
 // ------------------------------------------------------------ doubles names --
@@ -344,14 +422,106 @@ void drawScore(Canvas& c, const BoardState& s, uint8_t level, bool blinkOn) {
   drawMarkers(c, s, scaled(MARKER_COLOR, level), SCORE_ROUND_Y, SCORE_TARGET_Y);
 }
 
+// Widest record and widest rate actually present, then the name gets the remainder.
+// A record is never narrower than three characters ("0-0"), so a lineup of newcomers
+// does not give the name a column it would lose again on the first win.
+inline FormLayout formLayout(const LineupState& l) {
+  FormLayout f;
+  f.wlChars = 3;
+  f.pprChars = 0;
+  for (int i = 0; i < l.count && i < LINEUP_MAX; i++) {
+    char buf[FORM_WL_MAX + 1];
+    formatRecord(l.rows[i].wins, l.rows[i].losses, buf);
+    const int n = cStrLen(buf);
+    if (n > f.wlChars) f.wlChars = n;
+    // Only rows that have played contribute a rate, matching what drawForm draws.
+    if (l.rows[i].wins + l.rows[i].losses > 0) {
+      char rate[FORM_PPR_MAX + 1];
+      formatTenths(l.rows[i].ppr, rate);
+      const int p = cStrLen(rate);
+      if (p > f.pprChars) f.pprChars = p;
+    }
+  }
+  f.pprRight = FORM_PIPS_X - FORM_COL_GAP;
+  // No rate column at all costs no gap either, rather than leaving a hole.
+  const int pprW = f.pprChars > 0 ? f.pprChars * FONT_ADVANCE - 1 + FORM_COL_GAP : 0;
+  f.wlRight = f.pprRight - pprW;
+  f.nameChars = (f.wlRight - (f.wlChars * FONT_ADVANCE - 1) - FORM_COL_GAP) / FONT_ADVANCE;
+  return f;
+}
+
+// A win is a filled block, a loss a single centre pixel. Not a dim block: on a
+// real panel an unlit-but-not-off LED is indistinguishable from off, so a loss has
+// to be drawn as something rather than as a darker something.
+//
+// Right-aligned within the five slots, so the newest result is in the same column
+// on every row even when a player has fewer than five matches.
+template <typename Canvas>
+void drawPips(Canvas& c, const char* form, int y, Rgb win, Rgb loss) {
+  const int n = cStrLen(form) > FORM_PIPS ? FORM_PIPS : cStrLen(form);
+  for (int i = 0; i < n; i++) {
+    const int x = FORM_PIPS_X + (FORM_PIPS - n + i) * FORM_PIP_PITCH;
+    if (form[i] == 'W') drawBlock(c, x, y + 2, FORM_PIP, FORM_PIP, win);
+    else c.px(x + 1, y + 3, loss.r, loss.g, loss.b);
+  }
+}
+
+// Rows are the lineup in lane order — team A's slots then team B's — so the team
+// a row belongs to is which half of the list it is in. parseLineup refuses a count
+// it cannot halve, which is what makes that safe rather than a guess.
+template <typename Canvas>
+void drawForm(Canvas& c, const BoardState& s, const LineupState& l, uint8_t level) {
+  const Rgb colorA = scaled(s.colorA, level);
+  const Rgb colorB = scaled(s.colorB, level);
+  const Rgb grey = scaled(MARKER_COLOR, level);
+  // Centred, so a singles pair of rows sits in the middle of the panel rather
+  // than clinging to the top.
+  const int y0 = (PANEL_H - l.count * FORM_ROW_H) / 2;
+  const FormLayout f = formLayout(l);
+
+  for (int i = 0; i < l.count && i < LINEUP_MAX; i++) {
+    const LineupRow& r = l.rows[i];
+    const Rgb color = i < l.count / 2 ? colorA : colorB;
+    const int y = y0 + i * FORM_ROW_H;
+
+    drawText(c, r.name, 0, y, color, f.nameChars);
+
+    char record[FORM_WL_MAX + 1];
+    formatRecord(r.wins, r.losses, record);
+    drawTextRight(c, record, f.wlRight, y, grey, f.wlChars);
+
+    // Empty only for somebody with no history at all, never for a rate that
+    // happens to be zero: 0.0 PPR is a real average — every bag on the floor —
+    // and blanking it reads as missing data rather than a miserable Saturday. A
+    // newcomer is 0-0 by construction, which is what tells the two apart.
+    if (r.wins + r.losses > 0) {
+      char ppr[FORM_PPR_MAX + 1];
+      formatTenths(r.ppr, ppr);
+      drawTextRight(c, ppr, f.pprRight, y, grey, f.pprChars);
+    }
+
+    drawPips(c, r.form, y, color, grey);
+  }
+}
+
 // `blinkOn` is the winner flash beat. The browser hollows the digits instead,
 // which at 20px is illegible — a 1px rim around a 2px stroke leaves nothing —
 // so the winning pair blanks on alternate beats.
+//
+// A retained lineup wins over both score layouts, and over the no-state dashes:
+// it is only ever published before the first bag, so while it is there the score
+// is 0-0 and there is nothing to cover up. The scorer's chosen layout is
+// untouched underneath and comes back when the lineup is cleared.
 template <typename Canvas>
 void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn,
-                 PanelLayout layout = PANEL_FULL) {
+                 PanelLayout layout = PANEL_FULL, const LineupState* lineup = nullptr) {
   const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;
   const bool score = layout == PANEL_SCORE;
+
+  if (lineup && lineup->count > 0) {
+    drawForm(c, s, *lineup, level);
+    return;
+  }
 
   if (!haveState) {
     const Rgb grey = scaled(MARKER_COLOR, level);

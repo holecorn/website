@@ -127,6 +127,12 @@ if (!ran['test_render.cpp']) {
     if (missing.length > 0) {
       throw new Error(`no scenes for layout ${missing.join(', ')} — add a shot() for it`);
     }
+    // The pre-game form screen has no layout id — a retained lineup selects it —
+    // so the check above cannot see it, and without this it would be a whole
+    // screen of unpinned second implementation.
+    if (!scenes.some((s) => s.lineup)) {
+      throw new Error('no scenes carry a lineup — the form screen is unpinned');
+    }
 
     for (const scene of scenes) {
       const buf = readFileSync(resolve(dir, `${scene.name}.ppm`));
@@ -142,6 +148,9 @@ if (!ran['test_render.cpp']) {
         scene.live,
         scene.blinkOn,
         scene.layout,
+        // Through lineupState() rather than handed over raw, so the JS coercions
+        // are compared against parseLineup's and not bypassed.
+        scene.lineup ? panel.lineupState(scene.lineup) : null,
       );
 
       if (fb.outOfBounds > 0) {

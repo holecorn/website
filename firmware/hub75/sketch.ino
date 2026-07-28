@@ -60,8 +60,12 @@ PubSubClient client(net);
 char stateTopic[64];
 char onlineTopic[64];
 char layoutTopic[64];
+char lineupTopic[64];
 
 BoardState state;
+// Retained, and cleared by the phone when the first bag is thrown. A non-zero
+// count is what puts the board on the pre-game form screen.
+LineupState lineup;
 PanelLayout layout = PANEL_FULL;
 long long lastV = 0;
 bool haveState = false;
@@ -93,7 +97,7 @@ void render() {
 
   panel->fillScreen(0);
   PanelCanvas canvas;
-  renderBoard(canvas, state, haveState, live, blinkOn, layout);
+  renderBoard(canvas, state, haveState, live, blinkOn, layout, &lineup);
 }
 
 // ------------------------------------------------------------------- mqtt ----
@@ -116,6 +120,17 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
       Serial.printf("layout %s\n", PANEL_LAYOUT_IDS[layout]);
     } else {
       Serial.println("unknown layout id, keeping the current one");
+    }
+    return;
+  }
+
+  if (strcmp(topic, lineupTopic) == 0) {
+    // An empty payload is the phone clearing the topic at the first bag, which
+    // parseLineup reports as a count of 0 — that is the route back to the score.
+    if (parseLineup((const char*)payload, length, lineup)) {
+      Serial.printf("lineup %d rows\n", lineup.count);
+    } else {
+      Serial.println("unusable lineup, keeping the current one");
     }
     return;
   }
@@ -169,7 +184,7 @@ bool connectMqtt() {
   // anything, and never retries — it just dims. scoreboardLink.test.js covers
   // the same failure on the browser side.
   if (!client.subscribe(stateTopic, 1) || !client.subscribe(onlineTopic, 1) ||
-      !client.subscribe(layoutTopic, 1)) {
+      !client.subscribe(layoutTopic, 1) || !client.subscribe(lineupTopic, 1)) {
     Serial.println("mqtt subscribe refused — check topic permissions");
     client.disconnect();
     return false;
@@ -207,6 +222,7 @@ void setup() {
   snprintf(stateTopic, sizeof stateTopic, "holecorn/%s/state", GAME_CODE);
   snprintf(onlineTopic, sizeof onlineTopic, "holecorn/%s/online", GAME_CODE);
   snprintf(layoutTopic, sizeof layoutTopic, "holecorn/%s/layout", GAME_CODE);
+  snprintf(lineupTopic, sizeof lineupTopic, "holecorn/%s/lineup", GAME_CODE);
 
   // Deliberately not waiting for a connection here. loop() owns reconnection,
   // so blocking would only mean the board hangs on dashes if the hotspot is not

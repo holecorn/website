@@ -117,6 +117,17 @@ static BoardState makeState(int a, int b, int round, const char* ta, const char*
   return s;
 }
 
+// Set rather than parsed, so a rendering scene is not also a parse test —
+// parseLineup's own clamps and coercions are covered in test_board_logic.cpp.
+static void setRow(LineupRow& r, const char* name, int wins, int losses, int ppr,
+                   const char* form) {
+  snprintf(r.name, sizeof r.name, "%s", name);
+  snprintf(r.form, sizeof r.form, "%s", form);
+  r.wins = wins;
+  r.losses = losses;
+  r.ppr = ppr;
+}
+
 // Both panels are fed through the MatrixPortal's 5 V terminals, which only holds
 // while the layout stays far from white — see Power in README.md.
 static const double DUTY_CEILING = 30.0;
@@ -166,12 +177,30 @@ static std::string colorJson(Rgb c) {
   return buf;
 }
 
+// The lineup as it arrived, so the Node side coerces it through lineupState()
+// exactly as the firmware coerced it through parseLineup — the pip and column
+// geometry is the part most likely to drift by a pixel.
+static std::string lineupJson(const LineupState* l) {
+  if (!l || l->count == 0) return "null";
+  std::string out = "{\"rows\":[";
+  for (int i = 0; i < l->count; i++) {
+    if (i) out += ",";
+    out += "{\"n\":" + quoted(l->rows[i].name) +
+           ",\"w\":" + std::to_string(l->rows[i].wins) +
+           ",\"l\":" + std::to_string(l->rows[i].losses) +
+           ",\"p\":" + std::to_string(l->rows[i].ppr) +
+           ",\"f\":" + quoted(l->rows[i].form) + "}";
+  }
+  return out + "]}";
+}
+
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
-                   bool blinkOn, PanelLayout layout) {
+                   bool blinkOn, PanelLayout layout, const LineupState* lineup) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
       "{\"name\":" + quoted(name.c_str()) +
-      ",\"layout\":" + quoted(PANEL_LAYOUT_IDS[layout]) + ",\"a\":" + std::to_string(s.a) +
+      ",\"layout\":" + quoted(PANEL_LAYOUT_IDS[layout]) +
+      ",\"lineup\":" + lineupJson(lineup) + ",\"a\":" + std::to_string(s.a) +
       ",\"b\":" + std::to_string(s.b) + ",\"round\":" + std::to_string(s.round) +
       ",\"target\":" + std::to_string(s.target) + ",\"winner\":" + teamJson(s.winner) +
       ",\"first\":" + teamJson(s.first) + ",\"teamA\":" + quoted(s.teamA) +
@@ -195,11 +224,12 @@ static void writeScenes() {
 }
 
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
-                        bool live, bool blinkOn, PanelLayout layout = PANEL_FULL) {
+                        bool live, bool blinkOn, PanelLayout layout = PANEL_FULL,
+                        const LineupState* lineup = nullptr) {
   Framebuffer fb;
-  renderBoard(fb, s, haveState, live, blinkOn, layout);
+  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup);
   fb.write(name);
-  record(name, s, haveState, live, blinkOn, layout);
+  record(name, s, haveState, live, blinkOn, layout, lineup);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -217,7 +247,7 @@ int main() {
   const BoardState play = makeState(17, 8, 7, "NEIL & PSI", "IOTA & ZETA");
   const BoardState early = makeState(0, 0, 1, "NEIL", "IOTA");
   const BoardState longNames =
-      makeState(17, 8, 7, "OMICRON & UPSILON", "EPSILON & MU");
+      makeState(17, 8, 7, "OMICRONZETA & UPSILONXI", "EPSILONBETA & MU");
   const BoardState won = makeState(21, 8, 9, "NEIL & PSI", "IOTA & ZETA", 'a');
   const BoardState big = makeState(88, 88, 99, "WWWWWWWWWW", "WWWWWWWWWW");
   // None of the scenes above sets `first`, so without these the underline — and
@@ -265,6 +295,69 @@ int main() {
   const BoardState blank = makeState(88, 88, 9, "", "");
   const Framebuffer fullBlank = shot("blank-names", blank, true, true, true);
   const Framebuffer scoreBlank = shot("score-blank-names", blank, true, true, true, PANEL_SCORE);
+
+  // The pre-game form screen. It has no layout id — a retained lineup is what
+  // selects it — so the layout-coverage check in tools/test-firmware.mjs cannot
+  // see it, and these scenes are the only thing pinning it.
+  LineupState singles;
+  singles.count = 2;
+  setRow(singles.rows[0], "Neil", 6, 4, 72, "LWLWW");
+  setRow(singles.rows[1], "Sigma", 4, 6, 60, "WLWLL");
+
+  LineupState doubles;
+  doubles.count = 4;
+  setRow(doubles.rows[0], "Neil", 6, 4, 72, "LWLWW");
+  setRow(doubles.rows[1], "Rho", 2, 2, 73, "WLLW");
+  setRow(doubles.rows[2], "Sigma", 4, 6, 60, "WLWLL");
+  setRow(doubles.rows[3], "Tau", 2, 2, 73, "LWWL");
+
+  // Everything at its widest at once: eight-character names, two-digit records
+  // both sides, a PPR that needs the fourth character, and five results each.
+  // This is the scene the column geometry is sized for.
+  LineupState formWorst;
+  formWorst.count = 4;
+  for (int i = 0; i < 4; i++) {
+    setRow(formWorst.rows[i], "MWMWMWMWMW", 99, 99, 999, "WWWWW");
+  }
+
+  // A player with no history at all — 0-0, no rate, no pips — beside players who
+  // have one. The app publishes nothing when *nobody* has played, but one
+  // newcomer in a known lineup is an ordinary Saturday.
+  LineupState formNew;
+  formNew.count = 2;
+  setRow(formNew.rows[0], "Neil", 6, 4, 72, "LWLWW");
+  setRow(formNew.rows[1], "Psi", 0, 0, 0, "");
+
+  // A player who has played and averages 0.0 — every bag on the floor. Their rate
+  // must be *drawn*, not blanked as a newcomer's is: it is a real average, and an
+  // empty column reads as missing data.
+  LineupState formZero;
+  formZero.count = 2;
+  setRow(formZero.rows[0], "Neil", 6, 4, 72, "LWLWW");
+  setRow(formZero.rows[1], "Eta", 0, 5, 0, "LLLLL");
+
+  const Framebuffer formS = shot("form-singles", play, true, true, true, PANEL_FULL, &singles);
+  const Framebuffer formD = shot("form-doubles", play, true, true, true, PANEL_FULL, &doubles);
+  shot("form-stale", play, true, false, true, PANEL_FULL, &doubles);
+  // Under PANEL_SCORE, to show the lineup overrides the layout rather than
+  // combining with it.
+  shot("form-over-score", play, true, true, true, PANEL_SCORE, &doubles);
+  // No state at all: the lineup still wins over the no-state dashes, because it
+  // is only ever published before the first bag.
+  shot("form-no-state", play, false, true, true, PANEL_FULL, &singles);
+  const Framebuffer formW = shot("form-worst", big, true, true, true, PANEL_FULL, &formWorst);
+  const Framebuffer formN = shot("form-newcomer", play, true, true, true, PANEL_FULL, &formNew);
+  // Past 99 in either column, which arrives at about 100 matches. The record column
+  // widens and the name gives up the characters — the trade the adaptive layout makes.
+  LineupState formBig;
+  formBig.count = 4;
+  setRow(formBig.rows[0], "AlphaBet", 120, 87, 120, "WWWWW");
+  setRow(formBig.rows[1], "BetaGamm", 999, 999, 999, "WWWWW");
+  setRow(formBig.rows[2], "GammaDel", 4, 316, 60, "WLWLL");
+  setRow(formBig.rows[3], "DeltaEps", 2, 2, 73, "LWWL");
+
+  const Framebuffer formZ = shot("form-zero-rate", play, true, true, true, PANEL_FULL, &formZero);
+  const Framebuffer formB = shot("form-big-record", play, true, true, true, PANEL_FULL, &formBig);
   writeScenes();
 
   printf("\nchecks\n");
@@ -306,6 +399,74 @@ int main() {
   check(textWidth("TO 99", 8) < SCORE_RIGHT_X - (SCORE_LEFT_X + SCORE_PAIR_W),
         "the score layout's target line clears both pairs");
 
+  // The form screen's number columns are sized to the lineup in front of them, so the
+  // assertions are about that adapting rather than about a constant: an ordinary roster
+  // must get more name than a punishing one, and the widest case must still not collide.
+  const FormLayout lyD = formLayout(doubles);
+  const FormLayout lyW = formLayout(formWorst);
+  const FormLayout lyB = formLayout(formBig);
+  printf("\n  form: %d rows of %d, pips at x=%d\n", PANEL_H / FORM_ROW_H, FORM_ROW_H,
+         FORM_PIPS_X);
+  printf("  name chars: %d for \"6-4\", %d for \"99-99\", %d for \"120-87\"\n",
+         lyD.nameChars, lyW.nameChars, lyB.nameChars);
+  check(PANEL_H / FORM_ROW_H >= LINEUP_MAX, "a doubles roster must fit the panel");
+  // The point of adapting. A fixed worst-case column gave 8 everywhere.
+  check(lyD.nameChars >= 11, "an ordinary record must leave room for a real name");
+  check(lyD.nameChars > lyW.nameChars, "a narrower record must buy name characters");
+  check(lyW.nameChars > lyB.nameChars, "and a three-digit record must cost them");
+  // Six is the floor: the widest record and rate the clamps allow, together.
+  check(lyB.nameChars >= 6, "even a three-digit record must leave a readable name");
+
+  // Lit pixels in a column band across one row of the form screen.
+  const auto band = [](const Framebuffer& fb, int rowY, int x0, int x1) {
+    int n = 0;
+    for (int y = rowY; y < rowY + FORM_ROW_H; y++) n += fb.litCount(y, x0, x1);
+    return n;
+  };
+
+  // Nothing may be drawn in the gap between the name column and the record, on any
+  // row, for either the widest two-digit case or the three-digit one. This is what
+  // makes adapting safe rather than merely tighter.
+  const auto clears = [&](const Framebuffer& fb, const FormLayout& f) {
+    int gap = 0;
+    for (int i = 0; i < LINEUP_MAX; i++) {
+      gap += band(fb, i * FORM_ROW_H, f.nameChars * FONT_ADVANCE,
+                  f.wlRight - (f.wlChars * FONT_ADVANCE - 1));
+    }
+    return gap;
+  };
+  check(clears(formW, lyW) == 0, "\"99-99\" clears the name column on every row");
+  check(clears(formB, lyB) == 0, "\"120-87\" clears it too");
+  // Four rows of text must not creep past the last row of the panel.
+  check(!formW.litRow(PANEL_H - 1, 0, PANEL_W), "the fourth form row stays on the panel");
+  check(!formB.litRow(PANEL_H - 1, 0, PANEL_W), "nor with a three-digit record");
+  // Singles centres two rows rather than pinning them to the top.
+  check(!formS.litRow(0, 0, PANEL_W), "a singles form screen is centred, not top-aligned");
+  check(formD.litRow(0, 0, PANEL_W), "a doubles form screen fills the panel");
+  check(formD.lit() > formS.lit(), "four rows light more than two");
+
+  // A newcomer's row is their name and 0-0 and nothing else: no pips, and no rate
+  // column claiming 0.0. Two rows, so both are centred and the newcomer is second.
+  const FormLayout lyN = formLayout(formNew);
+  const int formNY = (PANEL_H - 2 * FORM_ROW_H) / 2;
+  const int pprLeft = lyN.pprRight - (lyN.pprChars * FONT_ADVANCE - 1);
+  check(band(formN, formNY + FORM_ROW_H, FORM_PIPS_X, PANEL_W) == 0,
+        "a player with no matches gets no form pips");
+  check(band(formN, formNY + FORM_ROW_H, pprLeft, lyN.pprRight) == 0,
+        "a player with no matches gets no PPR");
+  check(band(formN, formNY, FORM_PIPS_X, PANEL_W) > 0, "and the row above still has its pips");
+  check(band(formN, formNY + FORM_ROW_H, 0, lyN.nameChars * FONT_ADVANCE) > 0,
+        "their name is still drawn");
+
+  // The distinction the blank column is *for*. A 0.0 average is a real one, so it
+  // is drawn; only a 0-0 record suppresses the rate. Gating on the rate itself
+  // blanked this row, which reads as missing data rather than a bad run.
+  const FormLayout lyZ = formLayout(formZero);
+  const int zeroRateY = formNY + FORM_ROW_H;
+  check(band(formZ, zeroRateY, lyZ.pprRight - (lyZ.pprChars * FONT_ADVANCE - 1), lyZ.pprRight) > 0,
+        "a played player averaging 0.0 still shows a rate");
+  check(band(formZ, zeroRateY, FORM_PIPS_X, PANEL_W) > 0, "and their losing run of pips");
+
 
   Rgb c;
   parseColor("#2f80ed", c);
@@ -322,11 +483,11 @@ int main() {
 
   char da[NAME_CHARS + 1], db[NAME_CHARS + 1];
 
-  fitLabels("Theta", "Nu", da, db, sizeof da);
-  check(!strcmp(da, "Theta") && !strcmp(db, "Nu"), "singles names pass through");
+  fitLabels("Zeta", "Rho", da, db, sizeof da);
+  check(!strcmp(da, "Zeta") && !strcmp(db, "Rho"), "singles names pass through");
 
-  fitLabels("Nu & Tau", "Theta & Phi", da, db, sizeof da);
-  check(!strcmp(da, "Nu/Tau") && !strcmp(db, "Theta/Phi"), "the pair joins with a slash");
+  fitLabels("Rho & Tau", "Zeta & Phi", da, db, sizeof da);
+  check(!strcmp(da, "Rho/Tau") && !strcmp(db, "Zeta/Phi"), "the pair joins with a slash");
 
   // Nine characters of name fit whole on a slash; " & " would have shortened
   // both of these.
@@ -338,15 +499,17 @@ int main() {
   fitLabels("Gamma & Alpha", "Delta & Kappa", da, db, sizeof da);
   check(!strcmp(da, "Gamm/Alph") && !strcmp(db, "Delt/Kapp"), "shortens both sides");
 
-  // Two names sharing an initial must not collapse to "H/H".
-  fitLabels("Gamma & Kappa", "Omicron & Phi", da, db, sizeof da);
-  check(!strcmp(da, "Gamm/Kapp") && !strcmp(db, "Omicr/Phi"),
+  // Two names sharing an initial must not collapse to "O/O". Omega and Omicron are
+  // the only pair here that share one, which is why this fixture is not interchangeable
+  // with the others.
+  fitLabels("Omega & Omicron", "Upsilon & Rho", da, db, sizeof da);
+  check(!strcmp(da, "Omeg/Omic") && !strcmp(db, "Upsil/Rho"),
         "shared initials stay distinguishable");
 
   // Each label shortens on its own: a name that fits must not be cut because
   // the opposing label is long.
-  fitLabels("AlphaBet", "Omicron & Upsilon", da, db, sizeof da);
-  check(!strcmp(da, "AlphaBet") && !strcmp(db, "Omic/Upsi"),
+  fitLabels("Lambda", "Omicron & Upsilon", da, db, sizeof da);
+  check(!strcmp(da, "Lambda") && !strcmp(db, "Omic/Upsi"),
         "one team's long label does not shorten the other");
 
   fitLabels("ABCDEFGHIJKLMNOP & QRSTUVWXYZABCDEF", "Nu & Tau", da, db, sizeof da);

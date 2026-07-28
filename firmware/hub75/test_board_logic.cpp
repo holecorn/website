@@ -193,6 +193,110 @@ int main() {
     }
   }
 
+  printf("parseLineup\n");
+  {
+    // Exactly what lineupPayload() produces for a doubles roster.
+    const char* REAL_LINEUP =
+        "{\"rows\":["
+        "{\"n\":\"Neil\",\"w\":6,\"l\":4,\"p\":72,\"f\":\"LWLWW\"},"
+        "{\"n\":\"Rho\",\"w\":2,\"l\":2,\"p\":73,\"f\":\"WLLW\"},"
+        "{\"n\":\"Sigma\",\"w\":4,\"l\":6,\"p\":60,\"f\":\"WLWLL\"},"
+        "{\"n\":\"Tau\",\"w\":2,\"l\":2,\"p\":73,\"f\":\"LWWL\"}]}";
+
+    LineupState l;
+    CHECK(parseLineup(REAL_LINEUP, strlen(REAL_LINEUP), l));
+    CHECK(l.count == 4);
+    CHECK(strcmp(l.rows[0].name, "Neil") == 0);
+    CHECK(l.rows[0].wins == 6 && l.rows[0].losses == 4 && l.rows[0].ppr == 72);
+    CHECK(strcmp(l.rows[0].form, "LWLWW") == 0);
+    CHECK(strcmp(l.rows[3].name, "Tau") == 0);
+
+    // An empty payload is the publisher clearing the topic when the first bag is
+    // thrown, and it is the only route back to the score screen — so it has to
+    // succeed rather than be refused as malformed.
+    CHECK(parseLineup("", 0, l));
+    CHECK(l.count == 0);
+
+    // Anything unusable leaves the lineup alone, so a stray message on a shared
+    // broker cannot wipe a good one.
+    CHECK(parseLineup(REAL_LINEUP, strlen(REAL_LINEUP), l) && l.count == 4);
+    CHECK(!parseLineup("{", 1, l) && l.count == 4);
+    CHECK(!parseLineup("{\"rows\":\"nope\"}", 15, l) && l.count == 4);
+    CHECK(!parseLineup(nullptr, 4, l) && l.count == 4);
+    // A count render.h cannot halve into two teams is refused rather than drawn
+    // with somebody in the wrong colour.
+    const char* THREE = "{\"rows\":[{\"n\":\"A\"},{\"n\":\"B\"},{\"n\":\"C\"}]}";
+    CHECK(!parseLineup(THREE, strlen(THREE), l) && l.count == 4);
+    const char* NONE = "{\"rows\":[]}";
+    CHECK(!parseLineup(NONE, strlen(NONE), l) && l.count == 4);
+
+    // Missing fields are zeroes, not garbage: a newcomer publishes 0-0 with no
+    // rate and no results, and render.h reads the 0-0 *record* — not the zero
+    // rate — as "never played", because 0.0 PPR is a real average.
+    const char* SPARSE = "{\"rows\":[{\"n\":\"Psi\"},{\"n\":\"Eta\"}]}";
+    CHECK(parseLineup(SPARSE, strlen(SPARSE), l));
+    CHECK(l.count == 2 && l.rows[0].wins == 0 && l.rows[0].ppr == 0);
+    CHECK(l.rows[0].form[0] == '\0');
+
+    // Clamped to what formatRecord and formatTenths can write into their buffers.
+    // Three digits a side, not two: at 99 the board silently drew "99" while the phone
+    // showed the real figure, and about 100 matches in either column gets there.
+    const char* OVERSIZED =
+        "{\"rows\":[{\"n\":\"A\",\"w\":5000,\"l\":-3,\"p\":99999,\"f\":\"WWWWWWWWWW\"},"
+        "{\"n\":\"B\",\"w\":0,\"l\":0,\"p\":0,\"f\":\"\"}]}";
+    CHECK(parseLineup(OVERSIZED, strlen(OVERSIZED), l));
+    CHECK(l.rows[0].wins == 999 && l.rows[0].losses == 0 && l.rows[0].ppr == 999);
+    CHECK(strlen(l.rows[0].form) == LINEUP_FORM_MAX);
+
+    // A three-digit record has to survive the trip intact, since that is the whole
+    // reason the clamp moved.
+    const char* BIG = "{\"rows\":[{\"n\":\"A\",\"w\":120,\"l\":87,\"p\":120,\"f\":\"W\"},{\"n\":\"B\"}]}";
+    CHECK(parseLineup(BIG, strlen(BIG), l));
+    CHECK(l.rows[0].wins == 120 && l.rows[0].losses == 87);
+
+    // Anything that isn't a W is a loss, the same way an unrecognised team letter
+    // reads as nobody elsewhere.
+    const char* ODD = "{\"rows\":[{\"n\":\"A\",\"f\":\"WwXL?\"},{\"n\":\"B\"}]}";
+    CHECK(parseLineup(ODD, strlen(ODD), l));
+    CHECK(strcmp(l.rows[0].form, "WWLLL") == 0);
+
+    // A name too long for its buffer truncates rather than overrunning, the same
+    // as copyLabel — and 16 UTF-16 units of 3-byte characters is 48 bytes, which
+    // is what the buffer is sized for.
+    std::string euro;
+    for (int i = 0; i < 16; i++) euro += "€";
+    const std::string wideName =
+        "{\"rows\":[{\"n\":\"" + euro + "\",\"w\":1,\"l\":1,\"p\":50,\"f\":\"W\"},"
+        "{\"n\":\"B\"}]}";
+    CHECK(parseLineup(wideName.c_str(), wideName.size(), l));
+    CHECK(strlen(l.rows[0].name) == 48);
+
+    // Sizing MQTT_BUFFER for the second topic. The buffer is shared across
+    // subscriptions, so the largest single packet is what has to fit — and four
+    // non-ASCII names is a bigger message than the score has ever been.
+    const size_t overhead = 9 + 16 + 7 + 2 + 2 + 5;  // holecorn/<code>/lineup + headers
+    const auto lineupFor = [](const std::string& name) {
+      std::string rows;
+      for (int i = 0; i < 4; i++) {
+        if (i) rows += ",";
+        rows += "{\"n\":\"" + name + "\",\"w\":999,\"l\":999,\"p\":999,\"f\":\"WWWWW\"}";
+      }
+      return "{\"rows\":[" + rows + "]}";
+    };
+    const std::string asciiL = lineupFor("Aaaaaaaaaaaaaaaa");
+    const std::string wideL = lineupFor(euro);
+    printf("  worst ASCII lineup: %zu bytes, packet ~%zu\n", asciiL.size(),
+           asciiL.size() + overhead);
+    printf("  worst UTF-8 lineup: %zu bytes, packet ~%zu\n", wideL.size(),
+           wideL.size() + overhead);
+    CHECK(parseLineup(asciiL.c_str(), asciiL.size(), l) && l.count == 4);
+    CHECK(parseLineup(wideL.c_str(), wideL.size(), l) && l.count == 4);
+    // Fits the buffer the sketch already sets, so adding this topic needs no
+    // change there — but it is the largest message the board receives, so it is
+    // this one and not the score that now bounds MQTT_BUFFER.
+    CHECK(wideL.size() + overhead < 512);
+  }
+
   printf(failures ? "\n%d CHECK(s) FAILED\n" : "\nall checks passed\n", failures);
   return failures ? 1 : 0;
 }

@@ -13,11 +13,13 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  LINEUP_FORM_MAX,
   LIVE_GRACE_MS,
   TEAM_LABEL_MAX,
   boardLiveness,
   boardState,
   labelBytes,
+  lineupState,
   liveWithGrace,
   parseColor,
 } from './panelRender.js';
@@ -99,6 +101,86 @@ describe('boardState', () => {
 
   it('survives a null payload', () => {
     expect(boardState(null)).toMatchObject({ a: 0, b: 0, winner: null, first: null });
+  });
+});
+
+// The pixel check drives these coercions (test-firmware.mjs feeds every form
+// scene through lineupState), but only for rows the C++ already accepted. What it
+// cannot reach is what happens to a *rejected* or oversized message, which is the
+// half that decides whether a bad publish blanks a good board.
+describe('lineupState', () => {
+  const row = (over = {}) => ({ n: 'Neil', w: 6, l: 4, p: 72, f: 'LWLWW', ...over });
+  const pair = (...rows) => ({ rows });
+
+  it('reads a roster into rows the renderer can draw', () => {
+    const l = lineupState(pair(row(), row({ n: 'Sigma', w: 4, l: 6, p: 60, f: 'WLWLL' })));
+    expect(l.count).toBe(2);
+    expect(text(l.rows[0].name)).toBe('Neil');
+    expect(l.rows[0].wins).toBe(6);
+    expect(l.rows[0].losses).toBe(4);
+    expect(l.rows[0].ppr).toBe(72);
+    expect(text(l.rows[0].form)).toBe('LWLWW');
+  });
+
+  // parseLineup refuses a count render.h cannot halve into two teams, rather than
+  // drawing somebody in the other side's colour.
+  it('is null for a count that cannot be split into two sides', () => {
+    expect(lineupState(pair(row()))).toBeNull();
+    expect(lineupState(pair(row(), row(), row()))).toBeNull();
+    expect(lineupState({ rows: [] })).toBeNull();
+    expect(lineupState(pair(row(), row(), row(), row(), row()))).toBeNull();
+  });
+
+  it('is null for anything that is not a roster', () => {
+    for (const bad of [null, undefined, {}, { rows: 'two' }, 5, 'rows']) {
+      expect(lineupState(bad)).toBeNull();
+    }
+  });
+
+  // Clamped to what formatRecord and formatTenths can write, which is three digits a
+  // side. Two was the original bound and silently drew "99" for anyone past 99 wins.
+  it('clamps the record and the rate to what their columns hold', () => {
+    const l = lineupState(pair(row({ w: 5000, l: -3, p: 99999 }), row()));
+    expect(l.rows[0].wins).toBe(999);
+    expect(l.rows[0].losses).toBe(0);
+    expect(l.rows[0].ppr).toBe(999);
+  });
+
+  it('carries a three-digit record through intact', () => {
+    const l = lineupState(pair(row({ w: 120, l: 87 }), row()));
+    expect([l.rows[0].wins, l.rows[0].losses]).toEqual([120, 87]);
+  });
+
+  it('cuts the form string to the pips there are', () => {
+    const l = lineupState(pair(row({ f: 'WWWWWWWWWW' }), row()));
+    expect(l.rows[0].form).toHaveLength(LINEUP_FORM_MAX);
+  });
+
+  it('treats anything that is not a W as a loss', () => {
+    const l = lineupState(pair(row({ f: 'WwXL?' }), row()));
+    expect(text(l.rows[0].form)).toBe('WWLLL');
+  });
+
+  it('fills a missing field with zero rather than NaN', () => {
+    const l = lineupState({ rows: [{ n: 'Psi' }, { n: 'Eta' }] });
+    expect(l.rows[0]).toMatchObject({ wins: 0, losses: 0, ppr: 0 });
+    expect(l.rows[0].form).toHaveLength(0);
+  });
+
+  // A name is UTF-8 bytes because that is what reaches the board, and it is cut
+  // to what LineupRow holds — 16 UTF-16 units of 3-byte characters is 48 bytes,
+  // so the cut lands exactly at the buffer and can land mid-character.
+  it('carries a name as bytes, cut to the row buffer', () => {
+    const wide = '€'.repeat(16);
+    const l = lineupState(pair(row({ n: wide }), row()));
+    expect(l.rows[0].name).toHaveLength(48);
+    const longer = lineupState(pair(row({ n: 'A'.repeat(80) }), row()));
+    expect(longer.rows[0].name).toHaveLength(48);
+  });
+
+  it('takes a missing name as empty rather than failing the row', () => {
+    const l = lineupState({ rows: [{ w: 1, l: 1 }, { n: 'Eta' }] });
+    expect(l.rows[0].name).toHaveLength(0);
   });
 });
 

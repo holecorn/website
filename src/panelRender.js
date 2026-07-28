@@ -54,8 +54,26 @@ const SCORE_ROUND_Y = 6;
 const SCORE_TARGET_Y = 17;
 const SCORE_RULE_Y = PANEL_H - 1;
 
+const FORM_ROW_H = FONT_H + 1;
+const FORM_COL_GAP = 3;
+const FORM_PIPS = 5;
+const FORM_PIP = 3;
+const FORM_PIP_PITCH = 4;
+const FORM_PIPS_W = FORM_PIPS * FORM_PIP_PITCH - 1;
+const FORM_PIPS_X = PANEL_W - FORM_PIPS_W;
+// Buffer widths in render.h; here only the cut lengths matter. The number columns are
+// sized per lineup by formLayout, not fixed — see render.h for why.
+const FORM_WL_MAX = 7;
+const FORM_PPR_MAX = 4;
+
+export const LINEUP_MAX = 4;
+const LINEUP_NAME_MAX = 49;
+export const LINEUP_FORM_MAX = 5;
+
 // Ids as published on holecorn/<code>/layout. Mirrors PANEL_LAYOUT_IDS in
-// board_logic.h; the order is the enum, so don't reorder it.
+// board_logic.h; the order is the enum, so don't reorder it. The form screen has
+// no id and is deliberately not here: it is chosen by a lineup being retained,
+// not by the scorer, so it must not appear in the layout button's cycle.
 export const PANEL_LAYOUTS = ['full', 'score'];
 
 const LEVEL_LIVE = 255;
@@ -159,6 +177,39 @@ function drawRule(fb, x0, x1, y, color) {
   for (let x = x0; x < x1; x += 1) px(fb, x, y, color);
 }
 
+function drawBlock(fb, x, y, w, h, color) {
+  for (let dy = 0; dy < h; dy += 1) for (let dx = 0; dx < w; dx += 1) px(fb, x + dx, y + dy, color);
+}
+
+function drawTextRight(fb, bytes, right, y, color, maxChars) {
+  drawText(fb, bytes, right - textWidth(bytes, maxChars), y, color, maxChars);
+}
+
+const clampInt = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+function formatTenths(tenths) {
+  const t = clampInt(tenths, 0, 999);
+  const whole = idiv(t, 10);
+  const out = [];
+  if (whole >= 10) out.push(0x30 + idiv(whole, 10));
+  out.push(0x30 + (whole % 10), 0x2e, 0x30 + (t % 10));
+  return out;
+}
+
+function formatRecord(wins, losses) {
+  const out = [];
+  const put = (v) => {
+    const c = clampInt(v, 0, 999);
+    if (c >= 100) out.push(0x30 + idiv(c, 100));
+    if (c >= 10) out.push(0x30 + (idiv(c, 10) % 10));
+    out.push(0x30 + (c % 10));
+  };
+  put(wins);
+  out.push(DASH);
+  put(losses);
+  return out;
+}
+
 // ------------------------------------------------------------------ state --
 //
 // The coercions here are parseBoardState's, not JavaScript's: ArduinoJson hands
@@ -237,6 +288,31 @@ function formatDigits(a, b) {
   pair(a, 0);
   pair(b, 2);
   return out;
+}
+
+// The coercions are parseLineup's, not JavaScript's — the clamps, the truncation
+// to what a LineupRow holds, and 'W'-or-loss. Null for anything the firmware
+// would refuse, so a bad message leaves the score on screen here too.
+export function lineupState(payload) {
+  const rows = payload?.rows;
+  if (!Array.isArray(rows) || (rows.length !== 2 && rows.length !== LINEUP_MAX)) return null;
+  return {
+    count: rows.length,
+    rows: rows.map((row) => {
+      const bytes = encoder.encode(typeof row?.n === 'string' ? row.n : '');
+      const form = typeof row?.f === 'string' ? row.f : '';
+      return {
+        name: bytes.subarray(0, Math.min(bytes.length, LINEUP_NAME_MAX - 1)),
+        wins: clampInt(intOf(row?.w), 0, 999),
+        losses: clampInt(intOf(row?.l), 0, 999),
+        ppr: clampInt(intOf(row?.p), 0, 999),
+        form: Uint8Array.from(
+          Array.from(form).slice(0, LINEUP_FORM_MAX),
+          (c) => (c === 'W' || c === 'w' ? 0x57 : 0x4c),
+        ),
+      };
+    }),
+  };
 }
 
 // `lastLive` is when the link was last actually up, or 0 if never. The C++
@@ -404,9 +480,62 @@ function drawScore(fb, s, level, blinkOn) {
   drawMarkers(fb, s, scaled(MARKER_COLOR, level), SCORE_ROUND_Y, SCORE_TARGET_Y);
 }
 
-export function renderBoard(fb, s, haveState, live, blinkOn, layout = 'full') {
+function drawPips(fb, form, y, win, loss) {
+  const n = Math.min(form.length, FORM_PIPS);
+  for (let i = 0; i < n; i += 1) {
+    const x = FORM_PIPS_X + (FORM_PIPS - n + i) * FORM_PIP_PITCH;
+    if (form[i] === 0x57) drawBlock(fb, x, y + 2, FORM_PIP, FORM_PIP, win);
+    else px(fb, x + 1, y + 3, loss);
+  }
+}
+
+function formLayout(l) {
+  let wlChars = 3;
+  let pprChars = 0;
+  for (let i = 0; i < l.count && i < LINEUP_MAX; i += 1) {
+    const n = Math.min(formatRecord(l.rows[i].wins, l.rows[i].losses).length, FORM_WL_MAX);
+    if (n > wlChars) wlChars = n;
+    if (l.rows[i].wins + l.rows[i].losses > 0) {
+      const p = Math.min(formatTenths(l.rows[i].ppr).length, FORM_PPR_MAX);
+      if (p > pprChars) pprChars = p;
+    }
+  }
+  const pprRight = FORM_PIPS_X - FORM_COL_GAP;
+  const pprW = pprChars > 0 ? pprChars * FONT_ADVANCE - 1 + FORM_COL_GAP : 0;
+  const wlRight = pprRight - pprW;
+  const nameChars = idiv(wlRight - (wlChars * FONT_ADVANCE - 1) - FORM_COL_GAP, FONT_ADVANCE);
+  return { wlChars, pprChars, wlRight, pprRight, nameChars };
+}
+
+function drawForm(fb, s, l, level) {
+  const colorA = scaled(s.colorA, level);
+  const colorB = scaled(s.colorB, level);
+  const grey = scaled(MARKER_COLOR, level);
+  const y0 = idiv(PANEL_H - l.count * FORM_ROW_H, 2);
+  const f = formLayout(l);
+
+  for (let i = 0; i < l.count && i < LINEUP_MAX; i += 1) {
+    const r = l.rows[i];
+    const color = i < idiv(l.count, 2) ? colorA : colorB;
+    const y = y0 + i * FORM_ROW_H;
+
+    drawText(fb, r.name, 0, y, color, f.nameChars);
+    drawTextRight(fb, formatRecord(r.wins, r.losses), f.wlRight, y, grey, f.wlChars);
+    if (r.wins + r.losses > 0) {
+      drawTextRight(fb, formatTenths(r.ppr), f.pprRight, y, grey, f.pprChars);
+    }
+    drawPips(fb, r.form, y, color, grey);
+  }
+}
+
+export function renderBoard(fb, s, haveState, live, blinkOn, layout = 'full', lineup = null) {
   const level = live ? LEVEL_LIVE : LEVEL_STALE;
   const score = layout === 'score';
+
+  if (lineup && lineup.count > 0) {
+    drawForm(fb, s, lineup, level);
+    return fb;
+  }
 
   if (!haveState) {
     const grey = scaled(MARKER_COLOR, level);
