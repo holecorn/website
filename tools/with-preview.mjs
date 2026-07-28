@@ -18,6 +18,7 @@ const CHECKS = [
   'verify-copy-link.mjs',
   'verify-stats.mjs',
   'verify-positions.mjs',
+  'verify-lanes.mjs',
 ];
 
 const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT)], {

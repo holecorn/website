@@ -127,6 +127,14 @@ project dependency. It starts and stops its own preview server.
   there the two team cards sit side by side, and 408px between them collapses the
   lanes to about 28px. The token is centred with auto margins rather than a
   `translateX`, because the vibrate animation owns `transform`.
+- **`tools/verify-lanes.mjs` is what holds all of those numbers**, because none of
+  them is reachable from a unit test. The one worth understanding: it asserts the
+  lane *reaches* 72px where there's room, not merely that nothing overflows. The
+  408px cap spends its remainder on the `auto` tier-label column, so widening
+  those labels or changing their font takes it out of the lanes and breaks nothing
+  visible — measured, `hole · 3 points` instead of `hole · 3` silently costs 9px
+  per lane. Overflow checks pass throughout; only the reaches-the-cap assertion
+  fails.
 - **The wide tier and the landscape tier must not both match**, which is what the
   wide tier's `min-height: 451px` is for — the exact complement of the landscape
   tier's `max-height: 450px`. A big phone on its side (932x430 on an iPhone Pro
