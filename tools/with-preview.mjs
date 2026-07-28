@@ -19,6 +19,7 @@ const CHECKS = [
   'verify-stats.mjs',
   'verify-positions.mjs',
   'verify-lanes.mjs',
+  'verify-panel.mjs',
 ];
 
 const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT)], {

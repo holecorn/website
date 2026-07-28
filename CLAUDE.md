@@ -19,7 +19,7 @@ npm run lint     # oxlint
 npm test         # vitest run
 npm run test:watch
 npm run test:browser  # Playwright checks against a preview build (CI runs these)
-npm run test:firmware # host C++ suites + the glyphs.h drift check (CI runs these)
+npm run test:firmware # host C++ suites + the generated-glyph and panel.js drift checks (CI runs these)
 ```
 
 `test:browser` needs `npm install --no-save playwright` first — it is not a
@@ -54,6 +54,13 @@ project dependency. It starts and stops its own preview server.
 - `src/Display.jsx` / `src/Display.css` — the `?display=1` view, routed in
   `src/main.jsx`. `src/ScoreboardSettings.jsx` is its settings UI on the setup
   screen.
+- `src/panel.js` — the HUB75 panel's framebuffer, a port of the firmware's
+  `render.h`. Pure and framework-free; held **pixel-identical** to the C++ by
+  `npm run test:firmware`. `src/panelGlyphs.js` beside it is generated.
+- `src/panelPaint.js` — turns that framebuffer into LEDs on a canvas. No React,
+  so a browser check can drive it directly.
+- `src/Panel.jsx` / `src/Panel.css` — the `?panel=1` emulator view: the same MQTT
+  subscription the display uses, drawn through the two files above.
 - `src/segments.js` — seven-segment digit geometry. The mitre rule that stops
   segments overlapping is documented there and locked in by
   `src/segments.test.js`; read the comment before nudging any coordinate.
@@ -422,6 +429,40 @@ board is on the bench** — the host suites stop at parsing, layout and duty. Do
 reintroduce a second target to get coverage back: a divergent copy reads as
 coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
 
+- **`src/panel.js` is a second implementation of `render.h`, and the only reason
+  that is allowed is the pixel check.** It exists so the panel can be watched in
+  a browser during a real game (`?panel=1`), which stills can't show. What keeps
+  it from becoming the Wokwi mistake is that it is not maintained by inspection:
+  `test_render.cpp` writes `out/scenes.json` describing every scene it dumped,
+  and `tools/test-firmware.mjs` renders each through `src/panel.js` and compares
+  framebuffers byte for byte. **Change `render.h` and the JS fails until it is
+  changed to match** — so treat them as one thing in two languages, and don't
+  "tidy" either alone. The scene list lives in the C++ on purpose; a scene table
+  maintained in two languages is exactly the drift being guarded against.
+  - **Every division in `src/panel.js` truncates**, because these are `int`
+    expressions in C++. `scaled()` is the one that bites: at `LEVEL_STALE` the
+    blue channel of `#2f80ed` is 55 truncated and 56 rounded, and that single
+    pixel fails the check. Verified by mutation, so `idiv` is load-bearing rather
+    than stylistic.
+  - **Labels are UTF-8 byte arrays, not strings**, because that is what reaches
+    the board — so a name outside the 5x7 font renders as spaces and a 40-byte
+    label is cut mid-character. Don't "fix" either on the JS side alone; the
+    limitation is the firmware's and the point is to see it.
+  - `glyphs.h` and `src/panelGlyphs.js` come from **one run** of
+    `generate_glyphs.mjs`, so the emulator can't quantise the polygons
+    differently. Both are checked for staleness.
+  - **`src/panelPaint.js` is outside the pixel check** — it draws the framebuffer
+    as dots, which no framebuffer comparison can see. `tools/verify-panel.mjs`
+    covers it, and is the only thing that would notice a blank canvas.
+  - The emulator exercises publish → retain → subscribe → this layout over a real
+    broker, which the host suites can't. **It still says nothing about WiFi or
+    PubSubClient**, so it does not close the gap above.
+  - **It ships to everyone**, not behind a lazy boundary: measured, the whole
+    emulator is 2.87 kB gzipped of the main chunk (79.82 → 82.69), against the
+    ~100 kB the mqtt chunk costs. A `lazy()` split would buy that back and give
+    every display a Suspense flash for it, so it wasn't worth it — but re-measure
+    before adding panel-side features rather than assuming it stays small.
+
 The parts worth knowing before touching it:
 
 - **`board_logic.h` is deliberately Arduino-free** so it host-compiles against
@@ -537,8 +578,11 @@ checks the page rendered *before* clicking anything: the failure is a blank page
 and waiting on a button that will never appear times out the whole run instead
 of reporting.
 
-`npm run test:firmware` compiles and runs both host C++ suites and checks that
-`glyphs.h` still matches `src/segments.js`. One assertion in `test_render.cpp`
+`npm run test:firmware` compiles and runs both host C++ suites, checks that
+`glyphs.h` and `src/panelGlyphs.js` still match `src/segments.js`, and compares
+`src/panel.js` against the framebuffers `test_render.cpp` just produced. That
+last one is what makes a browser copy of `render.h` safe to have at all — see
+Firmware above. One assertion in `test_render.cpp`
 is not about rendering at all: `DUTY_CEILING` caps how much of the panel any
 scene may light, because the decision to run both panels through the
 controller's 5 V terminals depends on it and no electrical test exists to catch

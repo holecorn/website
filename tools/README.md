@@ -59,11 +59,12 @@ rendering aid with nothing to assert.
 
 | Script | |
 | --- | --- |
-| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, fails if `glyphs.h` or `src/panelGlyphs.js` no longer matches `src/segments.js`. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
+| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, fails if `glyphs.h` or `src/panelGlyphs.js` no longer matches `src/segments.js`, and compares `src/panel.js` against the C++ framebuffers pixel for pixel. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
 | `measure-digits.mjs` | Reports seven-segment digit height in **millimetres** across real device sizes. Needs `npm run dev`. |
 | `verify-copy-link.mjs` | Checks **Copy display link** puts the link on the clipboard, falls back to a manual-copy dialog when the Clipboard API is missing or refuses (plain http, denied permission), and that the **QR code** rasterises and decodes back to the display link. Needs `npm run preview`. |
 | `verify-positions.mjs` | Checks the court diagram and the in-game stats panel: that the court names the same thrower the scoring lanes do (two independent derivations that App.jsx could still cross over), that the phone toggles and the persistent wide-screen column are the same panels, that the rail runs court/stats/history, that the stats follow the live game round by round, and that the four-bagger badge isn't clipped by a long name. Needs `npm run preview`. |
 | `verify-lanes.mjs` | Measures the scoring lanes across nine device sizes: the bag token square and centred, the lane track within its 72px cap and above the 44px touch minimum, the card free of dead space with the End round button matching its width, the lane actually *reaching* the cap where there's room (which is what holds `.main`'s 408px against the intrinsic width of the tier labels), and the wide and compact tiers never both matching. Needs `npm run preview`. |
+| `verify-panel.mjs` | Checks the `?panel=1` LED-panel emulator: that the querystring still routes there rather than falling through to the scoring app, and that `panelPaint.js` actually puts the framebuffer's light on the canvas — sampled at LED centres, against the no-state screen, which needs no broker. What the framebuffer *contains* is not checked here; `npm run test:firmware` pins that against the firmware far more tightly. Needs `npm run preview`. |
 | `verify-wakelock.mjs` | Drives a fake `navigator.wakeLock` to check the display re-acquires the lock after the system reclaims it, and degrades to a slow retry rather than spinning. Needs `npm run preview`. |
 | `verify-winner-flash.mjs` | Checks the winner's digits alternate solid/hollow, that only the winning side is affected, and that the flash is skipped under reduced motion. **Manual** — needs `npm run dev` and a reachable MQTT broker. |
 | `with-preview.mjs` | Runs the hermetic checks against a preview build, starting and stopping the server. This is `npm run test:browser`. |
@@ -85,6 +86,11 @@ A 4m viewing distance needs roughly 35mm digits; a 10" tablet currently gives 75
 matrix panels before one was chosen; the panel actually being built is
 `firmware/hub75/`, which has its own host renderer that compiles the firmware's
 own `render.h`. Prefer that for anything about the real board.
+
+Don't confuse these with `src/panel.js`, which is also JavaScript and is *not*
+exploratory: it is a port of `render.h` held pixel-identical to it by
+`npm run test:firmware`, and is what `?panel=1` draws. These scripts approximate
+a panel that was never built; that one reproduces the one that was.
 
 `font5x7.mjs` is not exploratory either — `generate_glyphs.mjs` reads it to emit
 both `firmware/hub75/glyphs.h` and `src/panelGlyphs.js`, so editing it changes

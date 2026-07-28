@@ -202,6 +202,19 @@ When a game is won, the winner's digits flash — hollowing out to a bright rim
 rather than blanking, so the score stays readable throughout. That's skipped for
 anyone who has asked for reduced motion.
 
+### Watching the LED panel
+
+Adding `&panel=1` to a display link opens the **panel emulator** instead: the
+128x32 LED matrix in `firmware/hub75/`, one dot per LED, following the same live
+game. It draws through the firmware's own layout, so what you see is what the
+board will show — including the dimming, the four dashes before the first score
+and the winner blink.
+
+It is small on purpose. The panel is 128x32 whatever you view it on, and being
+able to judge the real thing — whether the names are worth their nine characters,
+say — is the point of looking at it. Use `?display=1` for a scoreboard you
+actually want to read across a garden.
+
 The display dims itself whenever the score might be stale, so a phone that has
 wandered out of signal shows as dim rather than as a confident wrong score. Both
 ends need internet; a phone hotspot is enough, though note ESP32-class hardware

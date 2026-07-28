@@ -1,0 +1,65 @@
+/* Its own file rather than an addition to App.css, for the reason noted in
+   CLAUDE.md: that file's responsive tiers rely on staying last in source order,
+   so appending base rules there is a trap. */
+
+.panel {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: #000;
+}
+
+/* Full width so the ResizeObserver has something to measure; the canvas inside
+   is sized in whole LEDs and centred in whatever is left over. */
+.panel-frame {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.panel-canvas {
+  border-radius: 3px;
+  /* The module's own bezel, so the lit area doesn't bleed into the page. */
+  outline: 6px solid #101418;
+}
+
+.panel-caption {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* The measure caps the text, not the container: `.panel-message` is the same
+   element as `.panel`, so capping it here leaves the page background showing
+   beside the board. */
+.panel-message {
+  gap: 8px;
+  color: var(--text);
+  text-align: center;
+}
+
+.panel-title {
+  margin: 0;
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  font-size: 28px;
+  letter-spacing: 0.06em;
+}
+
+.panel-message p {
+  max-width: 32ch;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.panel-message code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--panel);
+  font-size: 0.9em;
+}

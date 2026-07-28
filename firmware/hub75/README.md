@@ -19,6 +19,12 @@ bench.** The host suites cover parsing, buffer sizing, layout, bounds, duty and
 `liveWithGrace()`; the network stack is first tested at first power-up. That is a
 known gap, not an oversight.
 
+The browser emulator (below) narrows it a little and must not be mistaken for
+closing it: over a real broker it exercises publish → retain → subscribe →
+this layout, so a payload change that breaks the panel shows up without hardware.
+It says nothing about the ESP32's WiFi stack or PubSubClient, which are the parts
+that will actually fail first.
+
 ## Why this size
 
 Sized against 7 m worst case, 4 m typical — spectators are across the court or
@@ -205,6 +211,45 @@ covers it. Output lands in `out/`, also gitignored.
 panel (on real hardware that wraps onto the wrong module), the winner flash must
 blank the winning pair without blanking the rest, and an out-of-range score,
 round or name must stay on the panel.
+
+Those are stills. To watch the panel follow a **live game**, add `&panel=1` to a
+display link and use the browser emulator — `src/panel.js`, which
+`npm run test:firmware` holds pixel-identical to `render.h` over every scene
+`shot()` dumps. See "Emulated in the browser" below.
+
+## Emulated in the browser
+
+`src/panel.js` is a JavaScript port of `render.h`, so the panel can be watched
+during a real game rather than only rendered as stills. That makes it a second
+implementation of working code, which is how the deleted `firmware/wokwi/` target
+started going wrong — so it is not maintained by inspection. `test_render.cpp`
+writes `out/scenes.json` describing every scene it dumped, and
+`tools/test-firmware.mjs` renders each one through `src/panel.js` and compares
+the framebuffers **byte for byte**. One differing pixel fails CI with the
+coordinate and both colours.
+
+The C++ is the source of truth for the scene list, deliberately: a table of
+scenes maintained in two languages is the drift the check exists to catch.
+
+Two things follow from matching C++ that look wrong in JavaScript:
+
+- Every division truncates. The layout constants depend on the remainder being
+  thrown away, and `scaled()` dims by integer division — at `LEVEL_STALE` the
+  blue channel of `#2f80ed` comes out 55, where rounding would give 56. That one
+  pixel is enough to fail the check, which is how it was confirmed to be
+  load-bearing.
+- Labels are handled as UTF-8 **bytes**, not JavaScript strings, because that is
+  what reaches the board. A name the 5x7 font has no glyph for renders as spaces
+  and a 40-byte label is cut mid-character — both faithfully, rather than being
+  quietly fixed on one side only.
+
+`glyphs.h` and `src/panelGlyphs.js` are emitted by the same run of
+`generate_glyphs.mjs`, so the emulator cannot quantise the digit polygons even
+slightly differently from the panel.
+
+The canvas drawing is separate, in `src/panelPaint.js`, and is *not* covered by
+the pixel check — it is what turns a framebuffer into dots on screen.
+`tools/verify-panel.mjs` covers it in the browser.
 
 ## Glyphs are generated
 

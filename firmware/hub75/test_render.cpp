@@ -109,11 +109,65 @@ static BoardState makeState(int a, int b, int round, const char* ta, const char*
 static const double DUTY_CEILING = 30.0;
 static double worstDuty = 0;
 
+// Every shot() is also described in out/scenes.json, so src/panel.js can be
+// rendered against the same inputs and compared byte for byte — see
+// tools/test-firmware.mjs. Written from here rather than listed there because a
+// scene table maintained in two languages is exactly the drift this is meant to
+// catch.
+static std::vector<std::string> scenes;
+
+static std::string quoted(const char* s) {
+  std::string out = "\"";
+  for (int i = 0; s[i]; i++) {
+    if (s[i] == '"' || s[i] == '\\') out += '\\';
+    out += s[i];
+  }
+  return out + "\"";
+}
+
+static std::string teamJson(char team) {
+  return team ? std::string("\"") + team + "\"" : "null";
+}
+
+static std::string colorJson(Rgb c) {
+  char buf[10];
+  snprintf(buf, sizeof buf, "\"#%02x%02x%02x\"", c.r, c.g, c.b);
+  return buf;
+}
+
+static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
+                   bool blinkOn) {
+  const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
+  scenes.push_back(
+      "{\"name\":" + quoted(name.c_str()) + ",\"a\":" + std::to_string(s.a) +
+      ",\"b\":" + std::to_string(s.b) + ",\"round\":" + std::to_string(s.round) +
+      ",\"target\":" + std::to_string(s.target) + ",\"winner\":" + teamJson(s.winner) +
+      ",\"first\":" + teamJson(s.first) + ",\"teamA\":" + quoted(s.teamA) +
+      ",\"teamB\":" + quoted(s.teamB) + ",\"colorA\":" + colorJson(s.colorA) +
+      ",\"colorB\":" + colorJson(s.colorB) + ",\"haveState\":" + flag(haveState) +
+      ",\"live\":" + flag(live) + ",\"blinkOn\":" + flag(blinkOn) + "}");
+}
+
+static void writeScenes() {
+  FILE* f = fopen("out/scenes.json", "wb");
+  if (!f) {
+    printf("  cannot write out/scenes.json — run `mkdir -p out` first\n");
+    exit(1);
+  }
+  fprintf(f, "[\n");
+  for (size_t i = 0; i < scenes.size(); i++) {
+    fprintf(f, "  %s%s\n", scenes[i].c_str(), i + 1 < scenes.size() ? "," : "");
+  }
+  fprintf(f, "]\n");
+  fclose(f);
+}
+
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
                         bool live, bool blinkOn) {
   Framebuffer fb;
   renderBoard(fb, s, haveState, live, blinkOn);
   fb.write(name);
+  record(name, s, haveState, live, blinkOn);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -131,6 +185,10 @@ int main() {
       makeState(17, 8, 7, "OMICRON & UPSILON", "EPSILON & MU");
   const BoardState won = makeState(21, 8, 9, "NEIL & PSI", "IOTA & ZETA", 'a');
   const BoardState big = makeState(88, 88, 99, "WWWWWWWWWW", "WWWWWWWWWW");
+  // None of the scenes above sets `first`, so without these two the underline —
+  // and which partner it picks — would go uncompared against src/panel.js.
+  const BoardState ruledSingle = makeState(12, 7, 5, "Theta", "Nu", 0, 'a');
+  const BoardState ruledPair = makeState(9, 6, 5, "Nu & Tau", "Alpha & Phi", 0, 'b');
 
   shot("play", play, true, true, true);
   shot("early", early, true, true, true);
@@ -140,6 +198,9 @@ int main() {
   const Framebuffer winOn = shot("winner-on", won, true, true, true);
   const Framebuffer winOff = shot("winner-off", won, true, true, false);
   shot("worst", big, true, true, true);
+  shot("ruled-single", ruledSingle, true, true, true);
+  shot("ruled-pair", ruledPair, true, true, true);
+  writeScenes();
 
   printf("\nchecks\n");
   // segments.js has no dash — the browser never shows one — so the generator
