@@ -417,6 +417,80 @@ check(
   await del.close();
 }
 
+// The stats screen on a wide screen. It is an `.app` too, so it was picking up the
+// play screen's wide-tier grid: everything landed in the 408px first column while
+// 340px stayed reserved for a rail that never renders, putting the content 196px left
+// of centre and squeezing the ten-column career table into a 408px scroller on the
+// widest screens there are. Nothing below App.jsx could catch that — both the grid and
+// the stats screen were individually correct.
+{
+  const wide = await browser.newContext({ viewport: { width: 1194, height: 834 } });
+  const widePage = await wide.newPage();
+  await widePage.goto(URL);
+  await widePage.evaluate((records) => {
+    localStorage.clear();
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify(records));
+  }, [won]);
+  await widePage.reload();
+  await widePage.waitForSelector('.setup');
+  await widePage.getByRole('button', { name: 'Stats' }).click();
+  await widePage.waitForSelector('.stats-table');
+  await widePage.waitForTimeout(200);
+
+  const m = await widePage.evaluate(() => {
+    const el = document.querySelector('.stats-screen');
+    const box = el.getBoundingClientRect();
+    const scroller = document.querySelector('.stats-scroll');
+    // Seven chips, and `.stat-chips` is an auto-fit grid — so whether they orphan is a
+    // function of the width available, and 720px fell four pixels short of fitting all
+    // seven, leaving a lone SKUNKS on its own row.
+    const chipTops = new Set(
+      [...document.querySelectorAll('.stat-chip')].map((n) => Math.round(n.getBoundingClientRect().top)),
+    );
+    const prose = document.querySelector('.durability p');
+    // Measured on the drawn sections, not on `.stats-screen` itself: under the grid the
+    // box was centred at 1040px while everything visible sat in its 408px first column,
+    // so the box's own gutters looked fine and the screen still read as shoved left.
+    const drawn = [...el.querySelectorAll('.stats-section')].map((n) => n.getBoundingClientRect());
+    return {
+      display: getComputedStyle(el).display,
+      maxWidth: getComputedStyle(el).maxWidth,
+      left: Math.round(Math.min(...drawn.map((r) => r.left))),
+      right: Math.round(window.innerWidth - Math.max(...drawn.map((r) => r.right))),
+      width: Math.round(box.width),
+      // The career table scrolls sideways on a phone by design; on a screen this wide
+      // it should not have to.
+      tableOverflows: scroller.scrollWidth > scroller.clientWidth + 1,
+      chipRows: chipTops.size,
+      // Characters per line, not pixels: the paragraph is capped independently of the
+      // screen because line length is a property of the text, and uncapped at 1040px it
+      // runs to ~119 characters against the 45-75 that reads comfortably. Measured by
+      // rendering its own text unwrapped, so the figure is for this font and this string
+      // rather than an assumed character width — an earlier pixel threshold here was
+      // looser than the container's own padding and passed with the cap removed.
+      proseChars: (() => {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+        probe.textContent = prose.textContent;
+        prose.parentNode.appendChild(probe);
+        const charW = probe.getBoundingClientRect().width / prose.textContent.length;
+        probe.remove();
+        return Math.round(prose.getBoundingClientRect().width / charW);
+      })(),
+    };
+  });
+  check('the stats screen is centred', m.left === m.right, `${m.left}px left vs ${m.right}px right`);
+  check('it does not take the play screen grid', m.display !== 'grid', m.display);
+  // `.app` also declares max-width, and Stats.css is bundled first, so the single-class
+  // form lost at equal specificity and the screen ran at `.app`'s 480px.
+  check('its own max-width wins over .app', m.maxWidth === '1040px', m.maxWidth);
+  check('and it uses that width', m.width === 1040, `${m.width}px`);
+  check('so the career table need not scroll sideways', !m.tableOverflows);
+  check('the seven summary chips fit one row', m.chipRows === 1, `${m.chipRows} rows`);
+  check('and the prose stays a readable line length', m.proseChars <= 85, `~${m.proseChars} chars`);
+  await wide.close();
+}
+
 const plain = await browser.newContext();
 await plain.addInitScript(() => {
   delete Crypto.prototype.randomUUID;

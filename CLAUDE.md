@@ -178,6 +178,35 @@ project dependency. It starts and stops its own preview server.
   `Positions.css` is its own file for the same reason `Stats.css` is: appending
   base rules to `App.css` is a trap, so a new surface brings its own file and its
   own tier at the end of it.
+- **The wide tier's grid is the *play* screen's, so it excludes `.stats-screen` as well
+  as `.setup`.** The stats screen is an `.app` too, and without the exclusion it took the
+  grid: everything landed in the 408px first column while 340px stayed reserved for a rail
+  that never renders. Measured on an 11" iPad, that put the content **196px left of
+  centre** and squeezed the ten-column career table into a 408px scroller on the widest
+  screens there are — while the mostly-empty box was itself perfectly centred, which is
+  why it read as a slight offset rather than a broken layout.
+- **`.app.stats-screen`, not `.stats-screen`, and that is not tidiness.** All three of its
+  declarations (`max-width`, `gap`, `padding-top`) also exist on `.app`, and at equal
+  specificity source order decides — which `App.jsx` settles by importing `Stats.jsx`, and
+  so `Stats.css`, *before* its own `App.css`. So the single-class form lost all three and
+  the screen silently ran at `.app`'s 480px with a 16px gap; its `max-width` was dead code
+  from the day it was written. **A new screen with its own file inherits this trap**:
+  anything it re-declares from `.app` needs the two-class form.
+- **The stats screen caps at 1040px, the same number the play screen's wide tier uses**, so
+  it fills an iPad rather than sitting in 237px gutters. It is capped *at all* because the
+  components stop reading well well before a monitor's full width — the seven summary chips
+  would inflate to 265px each, and a Recent match row would put the score a foot from the
+  name. **`.stat-chips` is an auto-fit grid, so whether the seven chips orphan is a
+  function of the width available**, and 720px missed fitting all seven by *four pixels*
+  (`7 x 92 + 6 x 8 = 692` against 688), stranding SKUNKS on its own row.
+- **The durability paragraph is capped separately, in `ch`.** Line length is a property of
+  the text, not of the layout: at 1040px it runs to 136 characters against the 45-75 that
+  reads comfortably. Don't fold it into the screen width — capping the screen for the sake
+  of one paragraph is what kept this screen narrow in the first place.
+  `verify-stats.mjs` covers all of the above, and two of those assertions were worthless
+  when first written: centring measured `.stats-screen` itself, whose gutters were correct
+  throughout, and the prose bound was a pixel threshold looser than the container's own
+  padding. Both now measure the drawn sections and the rendered character count.
 - **The court and the history are wrapped in one `.side-rail`, which is
   `display: contents` until the wide tier.** They have to be a single grid item:
   placed separately in column 2 they auto-place into *different rows*, and row 1

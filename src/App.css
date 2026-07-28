@@ -1085,8 +1085,13 @@
    right column instead of toggles. */
 @media (min-width: 900px) and (orientation: landscape) and (min-height: 451px) {
   /* Column 1 matches `.main`'s cap, so the rail sits beside the cards instead of
-     across a gutter, and the pair is centred rather than left-aligned. */
-  .app:not(.setup) {
+     across a gutter, and the pair is centred rather than left-aligned.
+     `:not(.stats-screen)` because that screen is also an `.app` and has no rail: it
+     was getting this grid, dropping all its content into the 408px column while 340px
+     stayed reserved for a rail that never renders. Measured, that put the content
+     196px left of centre and squeezed the career table into a 408px scroller on the
+     widest screens there are. */
+  .app:not(.setup):not(.stats-screen) {
     max-width: 1040px;
     display: grid;
     grid-template-columns: minmax(0, 408px) minmax(260px, 340px);
@@ -1095,10 +1100,10 @@
     column-gap: 24px;
     row-gap: 16px;
   }
-  .app:not(.setup) > *:not(.side-rail):not(.footer) {
+  .app:not(.setup):not(.stats-screen) > *:not(.side-rail):not(.footer) {
     grid-column: 1;
   }
-  .app:not(.setup) > .footer {
+  .app:not(.setup):not(.stats-screen) > .footer {
     grid-column: 1 / -1;
   }
   .side-rail {

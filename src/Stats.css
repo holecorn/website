@@ -2,8 +2,18 @@
    to stay last in source order to win at equal specificity, so appending base
    rules there would be a trap for the next person. */
 
-.stats-screen {
-  max-width: 720px;
+/* `.app.stats-screen`, not `.stats-screen`. Every one of these three declarations
+   also exists on `.app` in App.css, and at equal specificity source order decides —
+   which App.jsx settles by importing Stats.jsx (and so this file) *before* its own
+   App.css. So the single-class form lost all three and the screen silently ran at
+   `.app`'s 480px and 16px gap. Two classes wins regardless of bundle order. */
+.app.stats-screen {
+  /* 1040px, the same cap the play screen's wide tier uses, so this screen fills an iPad
+     the way that one does — 77px gutters rather than the 237px a 720px cap left. Capped
+     at all because the components below stop reading well long before a 24" monitor's
+     full width: the seven chips would inflate to 265px each, and a Recent match row
+     would put the score a foot from the name. */
+  max-width: 1040px;
   gap: 20px;
   padding-top: 24px;
 }
@@ -383,7 +393,11 @@
   background: var(--panel);
 }
 
+/* Capped independently of the screen, because line length is a property of the text and
+   not of the layout: at 1040px this paragraph runs to ~119 characters, well past the
+   45-75 that reads comfortably. */
 .durability p {
+  max-width: 72ch;
   margin: 0 0 12px;
   font-size: 13px;
   line-height: 1.5;
