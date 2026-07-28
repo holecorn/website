@@ -52,6 +52,7 @@ function fakeBroker() {
 const CONFIG = { broker: 'wss://example:8884/mqtt', username: '', password: '', code: 'abc12' };
 const STATE = 'holecorn/abc12/state';
 const ONLINE = 'holecorn/abc12/online';
+const LAYOUT = 'holecorn/abc12/layout';
 const PAYLOAD = { a: 3, b: 1 };
 
 let broker;
@@ -234,5 +235,60 @@ describe('display subscription', () => {
     };
     await open('display');
     expect(opts.will).toBeUndefined();
+  });
+});
+
+describe('panel layout', () => {
+  it('publishes the layout retained on its own topic, not in the state payload', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendLayout('score');
+    const [msg] = broker.of(LAYOUT);
+    expect(msg.payload).toBe('score');
+    // Retained is what lets a board that boots later pick the choice up without
+    // the phone having to republish.
+    expect(msg.opts).toMatchObject({ retain: true, qos: 1 });
+    // And it must not have ridden along in the score, whose budget is why it has
+    // a topic of its own.
+    expect(broker.of(STATE)).toHaveLength(0);
+  });
+
+  it('holds a layout chosen before the link opened, and re-asserts it on reconnect', async () => {
+    const link = await open('publisher');
+    link.sendLayout('score');
+    expect(broker.of(LAYOUT)).toHaveLength(0);
+
+    broker.goOnline();
+    expect(broker.of(LAYOUT).map((m) => m.payload)).toEqual(['score']);
+
+    // A reconnect may find a retained value on the broker from an older session,
+    // so the current choice is re-asserted rather than assumed to have survived.
+    broker.client.connected = false;
+    broker.fire('close');
+    broker.goOnline();
+    expect(broker.of(LAYOUT).map((m) => m.payload)).toEqual(['score', 'score']);
+  });
+
+  it('ignores a layout send after close', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.close();
+    link.sendLayout('score');
+    expect(broker.of(LAYOUT)).toHaveLength(0);
+  });
+
+  it('subscribes a display to the layout alongside state and presence', async () => {
+    await open('display');
+    broker.goOnline();
+    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT]);
+  });
+
+  it('routes a layout message to its own handler, not the state parser', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', LAYOUT, Buffer.from('score'));
+    broker.fire('message', LAYOUT, Buffer.from('ticker'));
+    expect(seen).toEqual([{ layout: 'score' }, { layout: 'ticker' }]);
   });
 });

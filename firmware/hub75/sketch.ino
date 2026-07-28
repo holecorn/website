@@ -59,8 +59,10 @@ PubSubClient client(net);
 
 char stateTopic[64];
 char onlineTopic[64];
+char layoutTopic[64];
 
 BoardState state;
+PanelLayout layout = PANEL_FULL;
 long long lastV = 0;
 bool haveState = false;
 bool scorerOnline = false;
@@ -91,7 +93,7 @@ void render() {
 
   panel->fillScreen(0);
   PanelCanvas canvas;
-  renderBoard(canvas, state, haveState, live, blinkOn);
+  renderBoard(canvas, state, haveState, live, blinkOn, layout);
 }
 
 // ------------------------------------------------------------------- mqtt ----
@@ -101,6 +103,20 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
     // Retained, and set as the publisher's will, so this also fires when the
     // scoring phone disappears without saying goodbye.
     scorerOnline = length > 0 && payload[0] == '1';
+    return;
+  }
+
+  if (strcmp(topic, layoutTopic) == 0) {
+    // Retained, so this also arrives on connect. parseLayout leaves `layout`
+    // alone for an id this build doesn't know, which keeps a board fed by a newer
+    // app drawing what it already was.
+    PanelLayout next;
+    if (parseLayout((const char*)payload, length, next)) {
+      layout = next;
+      Serial.printf("layout %s\n", PANEL_LAYOUT_IDS[layout]);
+    } else {
+      Serial.println("unknown layout id, keeping the current one");
+    }
     return;
   }
 
@@ -152,7 +168,8 @@ bool connectMqtt() {
   // the connection. Without this the board stays connected, never receives
   // anything, and never retries — it just dims. scoreboardLink.test.js covers
   // the same failure on the browser side.
-  if (!client.subscribe(stateTopic, 1) || !client.subscribe(onlineTopic, 1)) {
+  if (!client.subscribe(stateTopic, 1) || !client.subscribe(onlineTopic, 1) ||
+      !client.subscribe(layoutTopic, 1)) {
     Serial.println("mqtt subscribe refused — check topic permissions");
     client.disconnect();
     return false;
@@ -189,6 +206,7 @@ void setup() {
 
   snprintf(stateTopic, sizeof stateTopic, "holecorn/%s/state", GAME_CODE);
   snprintf(onlineTopic, sizeof onlineTopic, "holecorn/%s/online", GAME_CODE);
+  snprintf(layoutTopic, sizeof layoutTopic, "holecorn/%s/layout", GAME_CODE);
 
   // Deliberately not waiting for a connection here. loop() owns reconnection,
   // so blocking would only mean the board hangs on dashes if the hotspot is not

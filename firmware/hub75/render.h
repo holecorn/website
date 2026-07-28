@@ -10,29 +10,7 @@
 static const int PANEL_W = 128;
 static const int PANEL_H = 32;
 
-// Rows 30-31 stay dark: the digits are width-limited here, so the spare height
-// buys nothing.
-static const int NAME_Y = 0;
-static const int DIGIT_Y = 10;
 static const int DIGIT_GAP = 2;
-static const int PAIR_W = GLYPH_DIGIT_W * 2 + DIGIT_GAP;
-
-// Reserving a column for the "V" is what costs a name its tenth character. A
-// narrower mark that would not was tried: three columns reads as a colon.
-static const int VERSUS_PAD = 3;
-static const int NAME_REGION_W = (PANEL_W - FONT_W - 2 * VERSUS_PAD) / 2;
-static const int NAME_CHARS = NAME_REGION_W / FONT_ADVANCE;
-
-// Centred in their halves would be 20, but that leaves "TO 21" only 5px of
-// clearance. 16 buys 9px, for 4px of misalignment under the names — 20mm on a
-// 640mm board.
-static const int SIDE_MARGIN = 16;
-static const int LEFT_X = SIDE_MARGIN;
-static const int RIGHT_X = PANEL_W - SIDE_MARGIN - PAIR_W;
-
-static const int ROUND_Y = DIGIT_Y + 2;
-static const int TARGET_Y = DIGIT_Y + 11;
-static const int UNDERLINE_Y = FONT_H + 1;
 
 // Stale scores dim rather than blank, the same choice the browser display
 // makes, so a board nobody is feeding never looks authoritative.
@@ -60,6 +38,62 @@ inline Rgb scaled(Rgb c, uint8_t level) {
              uint8_t(c.b * level / 255)};
 }
 
+// Picks a digit size out of glyphs.h. Both tables are uint32_t rows of
+// GLYPH_MAX_H, so one pointer type covers either.
+struct DigitFont {
+  const uint32_t (*seg)[GLYPH_MAX_H];
+  int w;
+  int h;
+};
+static const DigitFont DIGITS_SMALL = {GLYPH_SEGMENT_SMALL, GLYPH_SMALL_W, GLYPH_SMALL_H};
+static const DigitFont DIGITS_BIG = {GLYPH_SEGMENT_BIG, GLYPH_BIG_W, GLYPH_BIG_H};
+
+inline int pairWidth(const DigitFont& f) { return f.w * 2 + DIGIT_GAP; }
+
+// ----------------------------------------------------- full layout geometry --
+//
+// Rows 30-31 stay dark: with a name row above them the digits are width-limited,
+// so the spare height buys nothing here. PANEL_SCORE is the layout that spends
+// it, by giving up the names.
+static const int NAME_Y = 0;
+static const int DIGIT_Y = 10;
+static const int PAIR_W = GLYPH_SMALL_W * 2 + DIGIT_GAP;
+
+// Reserving a column for the "V" is what costs a name its tenth character. A
+// narrower mark that would not was tried: three columns reads as a colon.
+static const int VERSUS_PAD = 3;
+static const int NAME_REGION_W = (PANEL_W - FONT_W - 2 * VERSUS_PAD) / 2;
+static const int NAME_CHARS = NAME_REGION_W / FONT_ADVANCE;
+
+// Centred in their halves would be 20, but that leaves "TO 21" only 5px of
+// clearance. 16 buys 9px, for 4px of misalignment under the names — 20mm on a
+// 640mm board.
+static const int SIDE_MARGIN = 16;
+static const int LEFT_X = SIDE_MARGIN;
+static const int RIGHT_X = PANEL_W - SIDE_MARGIN - PAIR_W;
+
+static const int ROUND_Y = DIGIT_Y + 2;
+static const int TARGET_Y = DIGIT_Y + 11;
+static const int UNDERLINE_Y = FONT_H + 1;
+
+// ---------------------------------------------------- score layout geometry --
+//
+// No names, so the digits take all 32 rows bar the rule: 30px is 150mm at P5
+// against the full layout's 100mm, which is the trade this layout exists to
+// offer. Width is not the constraint — two 36px pairs and a 44px middle column
+// leave the round and target line where they already were.
+static const int SCORE_DIGIT_Y = 0;
+static const int SCORE_PAIR_W = GLYPH_BIG_W * 2 + DIGIT_GAP;
+static const int SCORE_MARGIN = 6;
+static const int SCORE_LEFT_X = SCORE_MARGIN;
+static const int SCORE_RIGHT_X = PANEL_W - SCORE_MARGIN - SCORE_PAIR_W;
+static const int SCORE_ROUND_Y = 6;
+static const int SCORE_TARGET_Y = 17;
+// Bottom row, with row 30 left as a gap. Without the names there is nothing to
+// underline, so who throws next is ruled under their score instead — dropping it
+// would make this a different comparison than names-versus-no-names.
+static const int SCORE_RULE_Y = PANEL_H - 1;
+
 template <typename Canvas>
 void drawText(Canvas& c, const char* s, int x, int y, Rgb color, int maxChars) {
   for (int i = 0; s[i] && i < maxChars; i++) {
@@ -79,18 +113,29 @@ inline int textWidth(const char* s, int maxChars) {
 }
 
 template <typename Canvas>
-void drawDigit(Canvas& c, char ch, int x, int y, Rgb color) {
+void drawDigit(Canvas& c, char ch, int x, int y, Rgb color, const DigitFont& f) {
   const uint8_t mask = GLYPH_MASK[glyphIndex(ch)];
   for (int s = 0; s < 7; s++) {
     if (!(mask & (1 << s))) continue;
-    for (int ry = 0; ry < GLYPH_DIGIT_H; ry++) {
-      const uint16_t bits = GLYPH_SEGMENT[s][ry];
+    for (int ry = 0; ry < f.h; ry++) {
+      const uint32_t bits = f.seg[s][ry];
       if (!bits) continue;
-      for (int rx = 0; rx < GLYPH_DIGIT_W; rx++) {
-        if (bits & (1 << rx)) c.px(x + rx, y + ry, color.r, color.g, color.b);
+      for (int rx = 0; rx < f.w; rx++) {
+        if (bits & (1u << rx)) c.px(x + rx, y + ry, color.r, color.g, color.b);
       }
     }
   }
+}
+
+template <typename Canvas>
+void drawPair(Canvas& c, const char* pair, int x, int y, Rgb color, const DigitFont& f) {
+  drawDigit(c, pair[0], x, y, color, f);
+  drawDigit(c, pair[1], x + f.w + DIGIT_GAP, y, color, f);
+}
+
+template <typename Canvas>
+void drawRule(Canvas& c, int x0, int x1, int y, Rgb color) {
+  for (int x = x0; x < x1; x++) c.px(x, y, color.r, color.g, color.b);
 }
 
 // ------------------------------------------------------------ doubles names --
@@ -208,39 +253,57 @@ void drawSide(Canvas& c, const char* name, int joinAt, const char* pair, int pai
     }
     const int x0 = nx + start * FONT_ADVANCE;
     const int x1 = x0 + len * FONT_ADVANCE - 1;  // matches textWidth
-    for (int x = x0; x < x1; x++) c.px(x, UNDERLINE_Y, color.r, color.g, color.b);
+    drawRule(c, x0, x1, UNDERLINE_Y, color);
   }
   if (!showScore) return;
-  drawDigit(c, pair[0], pairX, DIGIT_Y, color);
-  drawDigit(c, pair[1], pairX + GLYPH_DIGIT_W + DIGIT_GAP, DIGIT_Y, color);
+  drawPair(c, pair, pairX, DIGIT_Y, color, DIGITS_SMALL);
 }
 
-// `blinkOn` is the winner flash beat. The browser hollows the digits instead,
-// which at 20px is illegible — a 1px rim around a 2px stroke leaves nothing —
-// so the winning pair blanks on alternate beats.
+// The round marker and target line, which both layouts carry — only their rows
+// differ. `round` counts rounds *completed*, so the one being played is the next
+// one, except once the game is won when there is no next. Display.jsx does the
+// same sum; the two must agree, because they render the same retained message
+// side by side.
 template <typename Canvas>
-void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn) {
-  const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;
-
-  if (!haveState) {
-    const Rgb grey = scaled(MARKER_COLOR, level);
-    for (int i = 0; i < 2; i++) {
-      drawDigit(c, '-', LEFT_X + i * (GLYPH_DIGIT_W + DIGIT_GAP), DIGIT_Y, grey);
-      drawDigit(c, '-', RIGHT_X + i * (GLYPH_DIGIT_W + DIGIT_GAP), DIGIT_Y, grey);
+void drawMarkers(Canvas& c, const BoardState& s, Rgb grey, int roundY, int targetY) {
+  {
+    int r = s.round + (s.winner ? 0 : 1);
+    if (r > 99) r = 99;
+    char marker[5] = {'R', 0, 0, 0, 0};
+    if (r >= 10) {
+      marker[1] = char('0' + r / 10);
+      marker[2] = char('0' + r % 10);
+    } else {
+      marker[1] = char('0' + r);
     }
-    return;
+    drawText(c, marker, (PANEL_W - textWidth(marker, 4)) / 2, roundY, grey, 4);
   }
 
+  if (s.target > 0) {
+    // The app caps the target at 99, so two digits is the worst case and
+    // "TO 99" is the widest this line ever gets.
+    const int t = s.target > 99 ? 99 : s.target;
+    char label[8] = {'T', 'O', ' ', 0, 0, 0, 0, 0};
+    int n = 3;
+    if (t >= 10) label[n++] = char('0' + t / 10);
+    label[n++] = char('0' + t % 10);
+    drawText(c, label, (PANEL_W - textWidth(label, 8)) / 2, targetY, grey, 8);
+  }
+}
+
+// Which partner is up, mirroring activeIdx in App.jsx. Derived from the round
+// rather than published, because the app derives it the same way.
+inline int upPartnerFor(const BoardState& s) { return s.round % 2; }
+
+template <typename Canvas>
+void drawFull(Canvas& c, const BoardState& s, uint8_t level, bool blinkOn) {
   char digits[5];
   formatDigits(s.a, s.b, digits);
 
   char nameA[NAME_CHARS + 1], nameB[NAME_CHARS + 1];
   const int joinA = fitLabel(s.teamA, nameA, NAME_CHARS + 1);
   const int joinB = fitLabel(s.teamB, nameB, NAME_CHARS + 1);
-
-  // Which partner is up, mirroring activeIdx in App.jsx. Derived from the round
-  // rather than published, because the app derives it the same way.
-  const int upPartner = s.round % 2;
+  const int upPartner = upPartnerFor(s);
 
   // Once the game is won nobody is throwing, so the rule comes off.
   drawSide(c, nameA, joinA, digits, LEFT_X, 0, scaled(s.colorA, level),
@@ -253,32 +316,56 @@ void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool
 
   // Belongs to neither team, so it takes the neutral colour.
   drawText(c, "V", (PANEL_W - FONT_W) / 2, NAME_Y, grey, 1);
+  drawMarkers(c, s, grey, ROUND_Y, TARGET_Y);
+}
 
-  {
-    // `round` counts rounds *completed*, so the one being played is the next
-    // one — except once the game is won, when there is no next. Display.jsx
-    // does the same sum; the two must agree, because they render the same
-    // retained message side by side.
-    int r = s.round + (s.winner ? 0 : 1);
-    if (r > 99) r = 99;
-    char marker[5] = {'R', 0, 0, 0, 0};
-    if (r >= 10) {
-      marker[1] = char('0' + r / 10);
-      marker[2] = char('0' + r % 10);
-    } else {
-      marker[1] = char('0' + r);
-    }
-    drawText(c, marker, (PANEL_W - textWidth(marker, 4)) / 2, ROUND_Y, grey, 4);
+template <typename Canvas>
+void drawScore(Canvas& c, const BoardState& s, uint8_t level, bool blinkOn) {
+  char digits[5];
+  formatDigits(s.a, s.b, digits);
+
+  const Rgb colorA = scaled(s.colorA, level);
+  const Rgb colorB = scaled(s.colorB, level);
+
+  if (!(s.winner == 'a' && !blinkOn)) {
+    drawPair(c, digits, SCORE_LEFT_X, SCORE_DIGIT_Y, colorA, DIGITS_BIG);
+  }
+  if (!(s.winner == 'b' && !blinkOn)) {
+    drawPair(c, digits + 2, SCORE_RIGHT_X, SCORE_DIGIT_Y, colorB, DIGITS_BIG);
   }
 
-  if (s.target > 0) {
-    // The app caps the target at 99, so two digits is the worst case and
-    // "TO 99" is the widest this line ever gets.
-    const int t = s.target > 99 ? 99 : s.target;
-    char label[8] = {'T', 'O', ' ', 0, 0, 0, 0, 0};
-    int n = 3;
-    if (t >= 10) label[n++] = char('0' + t / 10);
-    label[n++] = char('0' + t % 10);
-    drawText(c, label, (PANEL_W - textWidth(label, 8)) / 2, TARGET_Y, grey, 8);
+  if (s.winner == 0 && s.first == 'a') {
+    drawRule(c, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorA);
+  }
+  if (s.winner == 0 && s.first == 'b') {
+    drawRule(c, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorB);
+  }
+
+  drawMarkers(c, s, scaled(MARKER_COLOR, level), SCORE_ROUND_Y, SCORE_TARGET_Y);
+}
+
+// `blinkOn` is the winner flash beat. The browser hollows the digits instead,
+// which at 20px is illegible — a 1px rim around a 2px stroke leaves nothing —
+// so the winning pair blanks on alternate beats.
+template <typename Canvas>
+void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn,
+                 PanelLayout layout = PANEL_FULL) {
+  const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;
+  const bool score = layout == PANEL_SCORE;
+
+  if (!haveState) {
+    const Rgb grey = scaled(MARKER_COLOR, level);
+    const DigitFont& f = score ? DIGITS_BIG : DIGITS_SMALL;
+    const int y = score ? SCORE_DIGIT_Y : DIGIT_Y;
+    const char dashes[3] = {'-', '-', '\0'};
+    drawPair(c, dashes, score ? SCORE_LEFT_X : LEFT_X, y, grey, f);
+    drawPair(c, dashes, score ? SCORE_RIGHT_X : RIGHT_X, y, grey, f);
+    return;
+  }
+
+  if (score) {
+    drawScore(c, s, level, blinkOn);
+  } else {
+    drawFull(c, s, level, blinkOn);
   }
 }

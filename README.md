@@ -226,6 +226,27 @@ say — is the point of looking at it. Use `?display=1` for a scoreboard you
 actually want to read across a garden. The emulator has no wake lock and no
 fullscreen tap, so a tablet left showing it will sleep.
 
+### Choosing what the panel shows
+
+Two arrangements fit a 128x32 panel, picked under **Panel layout** in the
+**External scoreboard** settings:
+
+| | shows | digits |
+| --- | --- | --- |
+| **Names + score** | both team names, the score, the round and the target | 100 mm — reads to ~11 m, names to 4–9 m |
+| **Score only, bigger** | the score, the round and the target | **150 mm** — reads to ~17 m |
+
+Giving up the names buys half again the digit height, because the names and the
+digits are competing for the same 32 rows. Whoever throws next is still marked
+either way — under their name in the first, under their score in the second.
+
+The choice reaches the board **immediately, mid-game included**, so you can flip
+between them while someone is scoring and see which you prefer. On the play
+screen there's a **Panel:** button that cycles them without leaving the game.
+It's remembered per browser and survives **New game**, and because it's held on
+the broker rather than sent with each score, a panel that reboots comes back on
+the layout you chose.
+
 ### Hardware board
 
 The firmware subscribes to the same topic and holds no game rules of its own —

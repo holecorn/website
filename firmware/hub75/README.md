@@ -48,10 +48,13 @@ trusting them — this is the one figure here that is a rule of thumb rather
 than a measurement.
 
 Panel *width* buys name length; panel *height* buys digit height. Four digits
-side by side run out of width first, which is why rows 30-31 are left dark —
-the spare height would buy nothing.
+side by side run out of width first, which is why the `full` layout leaves rows
+30-31 dark: with a name row above them there is nothing to spend the height on.
+Spending it means giving up the names, which is the `score` layout below.
 
 ## What it shows
+
+The `full` layout; `score` drops the names for taller digits — see Two layouts.
 
 ```
    NU/TAU      V      ALPHA/PHI
@@ -260,12 +263,45 @@ The canvas drawing is separate, in `src/panelPaint.js`, and is *not* covered by
 the pixel check — it is what turns a framebuffer into dots on screen.
 `tools/verify-panel.mjs` covers it in the browser.
 
+## Two layouts
+
+Both fit 128x32; the choice arrives on `holecorn/<code>/layout` and is held in
+`layout` in `sketch.ino`.
+
+| id | draws | digits | worst-case duty |
+| --- | --- | --- | --- |
+| `full` | names, score, round, target, rule under whoever throws | 11x20 = **100 mm** | 19.8% |
+| `score` | score, round, target, rule under whoever throws | 17x30 = **150 mm** | 23.6% |
+
+The names and the digits compete for the same 32 rows, so dropping the names is
+what pays for the extra height — `full` leaves rows 30-31 dark because its digits
+are width-limited, and `score` spends them. Both keep the first-thrower rule
+(under the name, and under the score respectively), so the comparison is names
+against no names rather than against a bare score.
+
+`parseLayout` in `board_logic.h` ignores an id it doesn't know and leaves the
+board on what it was already drawing — an app newer than the firmware must not be
+able to blank it or drop it to a layout nobody chose.
+
+**A new layout is bounded by `DUTY_CEILING`, not by taste.** `test_render.cpp`
+maxes the lit fraction over every scene and fails above 30%, because feeding both
+panels through the controller's 5 V terminals depends on the layout staying far
+from white and no electrical test would catch a regression. It also asserts the
+digit height by *measuring the framebuffer*, not by comparing `GLYPH_BIG_H` with
+itself, and `tools/test-firmware.mjs` refuses to pass if a layout has no scenes
+to compare.
+
 ## Glyphs are generated
 
 `glyphs.h` comes from `src/segments.js` and `tools/panel-preview/font5x7.mjs`,
 so the panel's digits are the browser's geometry rather than a redrawing of it.
 Rasterising tests each pixel centre against the real polygon, so the header
 holds the quantisation the panel will actually show.
+
+Both digit sizes come out of one run, so the two layouts cannot quantise the same
+polygon differently. Rows are `uint32_t` because the big digit is 17 columns wide
+and would not fit a `uint16_t` — which also caps any future size at 32 columns,
+far past what four digits can spend of 128.
 
 ```bash
 node firmware/hub75/generate_glyphs.mjs

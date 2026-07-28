@@ -5,7 +5,7 @@
 // has no Web Bluetooth, Web Serial or WebUSB. So both ends meet at a hosted
 // broker instead: the browser over WSS, firmware over MQTTS on the same topic.
 
-import { stateTopic, onlineTopic } from './scoreboard.js';
+import { layoutTopic, onlineTopic, stateTopic } from './scoreboard.js';
 
 const RECONNECT_PERIOD = 4000;
 const CONNECT_TIMEOUT = 8000;
@@ -42,6 +42,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
 
   const state = stateTopic(config.code);
   const online = onlineTopic(config.code);
+  const layout = layoutTopic(config.code);
   const publisher = role === 'publisher';
 
   onStatus('connecting');
@@ -58,6 +59,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   });
 
   let latest = null;
+  let latestLayout = null;
   let closed = false;
   let presence = null;
 
@@ -70,6 +72,14 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       qos: 1,
       retain: true,
     });
+  };
+
+  // Retained and whole-value, like the score: a display that joins late gets the
+  // current layout from the broker with no request-response of its own.
+  const sendLayout = (id) => {
+    latestLayout = id;
+    if (closed || !client.connected) return;
+    client.publish(layout, id, { qos: 1, retain: true });
   };
 
   client.on('connect', () => {
@@ -85,8 +95,11 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       clearInterval(presence);
       presence = setInterval(announce, PRESENCE_INTERVAL);
       if (latest) send(latest);
+      // Re-asserted on every connect for the same reason the score is: the
+      // retained value on the broker may predate this session.
+      if (latestLayout) sendLayout(latestLayout);
     } else {
-      client.subscribe([state, online], { qos: 1 }, (err, granted) => {
+      client.subscribe([state, online, layout], { qos: 1 }, (err, granted) => {
         // A broker with per-topic permissions refuses the subscription rather
         // than the connection, which would otherwise leave the board sitting on
         // "connected" having never received anything. Granted QoS 128 is a
@@ -118,6 +131,10 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       onMessage({ senderOnline: text === '1' });
       return;
     }
+    if (topic === layout) {
+      onMessage({ layout: text });
+      return;
+    }
     try {
       onMessage({ payload: JSON.parse(text) });
     } catch {
@@ -127,6 +144,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
 
   return {
     send,
+    sendLayout,
     close() {
       if (closed) return;
       closed = true;

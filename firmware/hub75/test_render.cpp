@@ -56,6 +56,19 @@ struct Framebuffer {
     return false;
   }
 
+  // Topmost to bottommost lit row within a column span, inclusive. Used to
+  // measure a digit's drawn height off the panel rather than off a constant.
+  int litSpan(int x0, int x1) const {
+    int top = -1, bottom = -1;
+    for (int y = 0; y < PANEL_H; y++) {
+      if (litRow(y, x0, x1)) {
+        if (top < 0) top = y;
+        bottom = y;
+      }
+    }
+    return top < 0 ? 0 : bottom - top + 1;
+  }
+
   int lit() const {
     int n = 0;
     for (int i = 0; i < PANEL_W * PANEL_H; i++) {
@@ -154,10 +167,11 @@ static std::string colorJson(Rgb c) {
 }
 
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
-                   bool blinkOn) {
+                   bool blinkOn, PanelLayout layout) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
-      "{\"name\":" + quoted(name.c_str()) + ",\"a\":" + std::to_string(s.a) +
+      "{\"name\":" + quoted(name.c_str()) +
+      ",\"layout\":" + quoted(PANEL_LAYOUT_IDS[layout]) + ",\"a\":" + std::to_string(s.a) +
       ",\"b\":" + std::to_string(s.b) + ",\"round\":" + std::to_string(s.round) +
       ",\"target\":" + std::to_string(s.target) + ",\"winner\":" + teamJson(s.winner) +
       ",\"first\":" + teamJson(s.first) + ",\"teamA\":" + quoted(s.teamA) +
@@ -181,11 +195,11 @@ static void writeScenes() {
 }
 
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
-                        bool live, bool blinkOn) {
+                        bool live, bool blinkOn, PanelLayout layout = PANEL_FULL) {
   Framebuffer fb;
-  renderBoard(fb, s, haveState, live, blinkOn);
+  renderBoard(fb, s, haveState, live, blinkOn, layout);
   fb.write(name);
-  record(name, s, haveState, live, blinkOn);
+  record(name, s, haveState, live, blinkOn, layout);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -194,8 +208,11 @@ static Framebuffer shot(const std::string& name, const BoardState& s, bool haveS
 }
 
 int main() {
-  printf("layout: %dx%d, digits %dx%d at y=%d, %d name chars/team\n\n", PANEL_W, PANEL_H,
-         GLYPH_DIGIT_W, GLYPH_DIGIT_H, DIGIT_Y, NAME_CHARS);
+  printf("panel %dx%d\n", PANEL_W, PANEL_H);
+  printf("  full  digits %dx%d at y=%d, %d name chars/team\n", GLYPH_SMALL_W, GLYPH_SMALL_H,
+         DIGIT_Y, NAME_CHARS);
+  printf("  score digits %dx%d at y=%d, no names\n\n", GLYPH_BIG_W, GLYPH_BIG_H,
+         SCORE_DIGIT_Y);
 
   const BoardState play = makeState(17, 8, 7, "NEIL & PSI", "IOTA & ZETA");
   const BoardState early = makeState(0, 0, 1, "NEIL", "IOTA");
@@ -224,12 +241,30 @@ int main() {
   const Framebuffer noState = shot("no-state", play, false, true, true);
   const Framebuffer winOn = shot("winner-on", won, true, true, true);
   const Framebuffer winOff = shot("winner-off", won, true, true, false);
-  shot("worst", big, true, true, true);
+  const Framebuffer worst = shot("worst", big, true, true, true);
   shot("ruled-single", ruledSingle, true, true, true);
   shot("ruled-pair-odd", ruledPairOdd, true, true, true);
   shot("ruled-pair-even", ruledPairEven, true, true, true);
   // shot() asserts nothing is drawn off-panel, which is what this scene is for.
   shot("overflow", overflow, true, true, true);
+
+  // The same states through PANEL_SCORE. `worst` is here for DUTY_CEILING:
+  // bigger digits light more of the panel, and the decision to feed both panels
+  // through the controller's 5 V terminals rests on no layout approaching white.
+  const Framebuffer scorePlay = shot("score-play", ruledSingle, true, true, true, PANEL_SCORE);
+  shot("score-early", early, true, true, true, PANEL_SCORE);
+  shot("score-stale", play, true, false, true, PANEL_SCORE);
+  const Framebuffer scoreNoState = shot("score-no-state", play, false, true, true, PANEL_SCORE);
+  const Framebuffer scoreWinOn = shot("score-winner-on", won, true, true, true, PANEL_SCORE);
+  const Framebuffer scoreWinOff = shot("score-winner-off", won, true, true, false, PANEL_SCORE);
+  const Framebuffer scoreWorst = shot("score-worst", big, true, true, true, PANEL_SCORE);
+  shot("score-overflow", overflow, true, true, true, PANEL_SCORE);
+  // Blank names put nothing but digits in the pair columns, which is what lets
+  // the two layouts' digit heights be measured off the panel below. A blank
+  // player name is a real case anyway — drawSide has a branch for it.
+  const BoardState blank = makeState(88, 88, 9, "", "");
+  const Framebuffer fullBlank = shot("blank-names", blank, true, true, true);
+  const Framebuffer scoreBlank = shot("score-blank-names", blank, true, true, true, PANEL_SCORE);
   writeScenes();
 
   printf("\nchecks\n");
@@ -242,6 +277,34 @@ int main() {
   // stops being readable for half of every beat.
   check(winOff.lit() > 100, "winner blink blanked too much");
   check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");
+
+  // PANEL_SCORE exists to buy digit height by giving up the names, so the thing
+  // worth asserting is that it actually does. Anything less and the layout is a
+  // worse version of PANEL_FULL with the names deleted.
+  check(GLYPH_BIG_H > GLYPH_SMALL_H * 5 / 4, "score digits must be meaningfully taller");
+  check(SCORE_DIGIT_Y + GLYPH_BIG_H <= SCORE_RULE_Y, "score digits must clear the rule row");
+  // Measured off the framebuffer, not read off the constants: this is the whole
+  // claim of the layout, and asserting GLYPH_BIG_H against itself would prove
+  // nothing about what got drawn.
+  const int fullDigitH = fullBlank.litSpan(LEFT_X, LEFT_X + PAIR_W);
+  const int scoreDigitH = scoreBlank.litSpan(SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W);
+  printf("  digit height on the panel: full %d, score %d\n", fullDigitH, scoreDigitH);
+  check(fullDigitH == GLYPH_SMALL_H, "full layout draws its digits at the small size");
+  check(scoreDigitH == GLYPH_BIG_H, "score layout draws its digits at the big size");
+  check(scoreDigitH * 4 >= fullDigitH * 5, "score digits must be at least 25% taller");
+  // Who throws next survives the loss of the names, ruled under their score.
+  check(scorePlay.litRow(SCORE_RULE_Y, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W),
+        "score layout rules the side due to throw");
+  check(!scorePlay.litRow(SCORE_RULE_Y, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W),
+        "score layout rules only the side due to throw");
+  check(scoreWorst.lit() > worst.lit(), "score layout should light more than full — it is bigger");
+  check(scoreNoState.lit() > 0, "score no-state must draw dashes, not nothing");
+  check(scoreWinOff.lit() < scoreWinOn.lit(), "score winner blink should blank the winning pair");
+  check(scoreWinOff.lit() > 100, "score winner blink blanked too much");
+  // The middle column has to clear both pairs at this digit width, or the round
+  // marker lands on top of a score.
+  check(textWidth("TO 99", 8) < SCORE_RIGHT_X - (SCORE_LEFT_X + SCORE_PAIR_W),
+        "the score layout's target line clears both pairs");
 
 
   Rgb c;

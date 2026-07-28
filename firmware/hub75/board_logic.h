@@ -24,6 +24,45 @@ struct Rgb {
 // rather than a size to keep chasing.
 static const size_t TEAM_LABEL_MAX = 40;
 
+// Which arrangement the panel draws. Published on holecorn/<code>/layout as a
+// short id, deliberately **not** carried in the score payload: it is a different
+// fact with a different lifetime, the score budget is already 74% spent in the
+// worst case, and a separate retained topic means a board that reboots recovers
+// the choice the same way it recovers presence.
+enum PanelLayout : uint8_t {
+  PANEL_FULL = 0,   // names, score, round, target — reads to ~4-9 m
+  PANEL_SCORE = 1,  // score only, digits half again as tall
+};
+static const int PANEL_LAYOUT_COUNT = 2;
+static const char* const PANEL_LAYOUT_IDS[PANEL_LAYOUT_COUNT] = {"full", "score"};
+
+// Returns false for anything unrecognised and leaves `out` alone. An id from a
+// newer app than this firmware must keep the board drawing whatever it already
+// was — blanking it or dropping to a layout nobody chose would both be worse
+// than ignoring the message. The payload is an MQTT byte array and is not
+// NUL-terminated, hence the length compare.
+inline bool parseLayout(const char* payload, size_t length, PanelLayout& out) {
+  if (!payload) return false;
+  for (int i = 0; i < PANEL_LAYOUT_COUNT; i++) {
+    const char* id = PANEL_LAYOUT_IDS[i];
+    size_t n = 0;
+    while (id[n]) n++;
+    if (n != length) continue;
+    bool same = true;
+    for (size_t j = 0; j < n; j++) {
+      if (id[j] != payload[j]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) {
+      out = PanelLayout(i);
+      return true;
+    }
+  }
+  return false;
+}
+
 struct BoardState {
   int a = 0;
   int b = 0;

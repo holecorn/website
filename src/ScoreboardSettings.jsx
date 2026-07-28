@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { renderSVG } from 'uqr';
-import { configComplete, displayUrl, newCode, normalizeCode } from './scoreboard.js';
+import {
+  LAYOUT_LABELS,
+  configComplete,
+  displayUrl,
+  newCode,
+  normalizeCode,
+  normalizeLayout,
+} from './scoreboard.js';
+import { PANEL_LAYOUTS } from './panelRender.js';
 
 const STATUS_LABEL = {
   idle: 'off',
@@ -115,6 +123,26 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
           <input type="password" value={config.password} onChange={set('password')} />
         </label>
       </div>
+
+      <fieldset className="sb-layout">
+        <legend>Panel layout</legend>
+        {PANEL_LAYOUTS.map((id) => (
+          <label key={id}>
+            <input
+              type="radio"
+              name="panel-layout"
+              value={id}
+              checked={normalizeLayout(config.layout) === id}
+              onChange={() => onChange({ ...config, layout: id })}
+            />
+            {LAYOUT_LABELS[id] ?? id}
+          </label>
+        ))}
+        <p className="sb-hint">
+          Changes reach the board straight away, mid-game included. Watch it in the
+          emulator by adding <code>&amp;panel=1</code> to the display link.
+        </p>
+      </fieldset>
 
       <div className="sb-actions">
         <button type="button" disabled={!ready} onClick={copyLink}>

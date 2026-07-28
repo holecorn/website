@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { acceptsUpdate, configComplete, scoreboardPayload } from './scoreboard.js';
+import { acceptsUpdate, configComplete, normalizeLayout, scoreboardPayload } from './scoreboard.js';
 import { openScoreboardLink } from './scoreboardLink.js';
+import { PANEL_LAYOUTS } from './panelRender.js';
 
 // Renames fire per keystroke; the score itself only moves once a round.
 const PUBLISH_DEBOUNCE = 400;
@@ -28,6 +29,7 @@ function useLink({ config, role, active, onMessage }) {
   const [error, setError] = useState(null);
   const linkRef = useRef(null);
   const pendingRef = useRef(null);
+  const pendingLayoutRef = useRef(null);
   const messageRef = useRef(onMessage);
   messageRef.current = onMessage;
 
@@ -70,6 +72,7 @@ function useLink({ config, role, active, onMessage }) {
         }
         linkRef.current = handle;
         if (pendingRef.current) handle.send(pendingRef.current);
+        if (pendingLayoutRef.current) handle.sendLayout(pendingLayoutRef.current);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -84,14 +87,18 @@ function useLink({ config, role, active, onMessage }) {
     };
   }, [active, role, broker, username, password, code]);
 
-  return { status, error, linkRef, pendingRef };
+  return { status, error, linkRef, pendingRef, pendingLayoutRef };
 }
 
 // Publishes the logged score whenever it changes. Fire and forget: nothing here
 // blocks the UI, and a broker that is unreachable just leaves a status pill.
 export function useScoreboardPublisher(game, config) {
   const active = Boolean(config.enabled);
-  const { status, error, linkRef, pendingRef } = useLink({ config, role: 'publisher', active });
+  const { status, error, linkRef, pendingRef, pendingLayoutRef } = useLink({
+    config,
+    role: 'publisher',
+    active,
+  });
   const payload = useMemo(() => scoreboardPayload(game), [game]);
   const sentRef = useRef(null);
 
@@ -106,12 +113,22 @@ export function useScoreboardPublisher(game, config) {
     return () => clearTimeout(id);
   }, [payload, linkRef, pendingRef]);
 
+  // Not debounced: this changes on a button press, not per keystroke, and the
+  // point of a separate topic is that it lands without waiting for a round.
+  // pendingLayoutRef covers a press made before the link is open.
+  const layout = normalizeLayout(config.layout);
+  useEffect(() => {
+    pendingLayoutRef.current = layout;
+    linkRef.current?.sendLayout(layout);
+  }, [layout, linkRef, pendingLayoutRef]);
+
   return { status, error };
 }
 
 export function useScoreboardDisplay(config) {
   const [payload, setPayload] = useState(null);
   const [senderOnline, setSenderOnline] = useState(false);
+  const [layout, setLayout] = useState(PANEL_LAYOUTS[0]);
   const versionRef = useRef(-1);
 
   const { status, error } = useLink({
@@ -123,6 +140,13 @@ export function useScoreboardDisplay(config) {
         setSenderOnline(msg.senderOnline);
         return;
       }
+      if ('layout' in msg) {
+        // An unrecognised id keeps whatever is on screen, mirroring parseLayout
+        // in board_logic.h: an app newer than this build must not blank the board
+        // or drop it to a layout nobody chose.
+        if (PANEL_LAYOUTS.includes(msg.layout)) setLayout(msg.layout);
+        return;
+      }
       const next = msg.payload;
       if (!acceptsUpdate(next, versionRef.current)) return;
       if (Number.isFinite(next.v)) versionRef.current = next.v;
@@ -130,5 +154,5 @@ export function useScoreboardDisplay(config) {
     },
   });
 
-  return { payload, status, error, senderOnline };
+  return { payload, status, error, senderOnline, layout };
 }

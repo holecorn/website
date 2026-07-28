@@ -17,11 +17,10 @@ import {
   FONT_H,
   FONT_ROWS,
   FONT_W,
+  GLYPH_BIG,
   GLYPH_CHARS,
-  GLYPH_DIGIT_H,
-  GLYPH_DIGIT_W,
   GLYPH_MASK,
-  GLYPH_SEGMENT,
+  GLYPH_SMALL,
 } from './panelGlyphs.js';
 
 // Truncating, because every one of these is an `int` division in render.h and
@@ -35,7 +34,7 @@ export const PANEL_H = 32;
 const NAME_Y = 0;
 export const DIGIT_Y = 10;
 const DIGIT_GAP = 2;
-const PAIR_W = GLYPH_DIGIT_W * 2 + DIGIT_GAP;
+const PAIR_W = GLYPH_SMALL.w * 2 + DIGIT_GAP;
 const VERSUS_PAD = 3;
 const NAME_REGION_W = idiv(PANEL_W - FONT_W - 2 * VERSUS_PAD, 2);
 export const NAME_CHARS = idiv(NAME_REGION_W, FONT_ADVANCE);
@@ -45,6 +44,19 @@ const RIGHT_X = PANEL_W - SIDE_MARGIN - PAIR_W;
 const ROUND_Y = DIGIT_Y + 2;
 const TARGET_Y = DIGIT_Y + 11;
 export const UNDERLINE_Y = FONT_H + 1;
+
+const SCORE_DIGIT_Y = 0;
+const SCORE_PAIR_W = GLYPH_BIG.w * 2 + DIGIT_GAP;
+const SCORE_MARGIN = 6;
+const SCORE_LEFT_X = SCORE_MARGIN;
+const SCORE_RIGHT_X = PANEL_W - SCORE_MARGIN - SCORE_PAIR_W;
+const SCORE_ROUND_Y = 6;
+const SCORE_TARGET_Y = 17;
+const SCORE_RULE_Y = PANEL_H - 1;
+
+// Ids as published on holecorn/<code>/layout. Mirrors PANEL_LAYOUT_IDS in
+// board_logic.h; the order is the enum, so don't reorder it.
+export const PANEL_LAYOUTS = ['full', 'score'];
 
 const LEVEL_LIVE = 255;
 const LEVEL_STALE = 60;
@@ -122,18 +134,29 @@ function textWidth(bytes, maxChars) {
   return n ? n * FONT_ADVANCE - 1 : 0;
 }
 
-function drawDigit(fb, code, x, y, color) {
+function drawDigit(fb, code, x, y, color, font) {
   const mask = GLYPH_MASK[glyphIndex(code)];
   for (let s = 0; s < 7; s += 1) {
     if (!(mask & (1 << s))) continue;
-    for (let ry = 0; ry < GLYPH_DIGIT_H; ry += 1) {
-      const bits = GLYPH_SEGMENT[s][ry];
+    for (let ry = 0; ry < font.h; ry += 1) {
+      const bits = font.segments[s][ry];
       if (!bits) continue;
-      for (let rx = 0; rx < GLYPH_DIGIT_W; rx += 1) {
-        if (bits & (1 << rx)) px(fb, x + rx, y + ry, color);
+      for (let rx = 0; rx < font.w; rx += 1) {
+        // >>> 0 because a 17-bit mask shifted left is still safe, but the C++
+        // reads these as uint32_t and a bare & would sign-extend past bit 30.
+        if ((bits & (1 << rx)) >>> 0) px(fb, x + rx, y + ry, color);
       }
     }
   }
+}
+
+function drawPair(fb, pair, x, y, color, font) {
+  drawDigit(fb, pair[0], x, y, color, font);
+  drawDigit(fb, pair[1], x + font.w + DIGIT_GAP, y, color, font);
+}
+
+function drawRule(fb, x0, x1, y, color) {
+  for (let x = x0; x < x1; x += 1) px(fb, x, y, color);
 }
 
 // ------------------------------------------------------------------ state --
@@ -311,32 +334,40 @@ function drawSide(fb, name, joinAt, pair, pairX, regionX, color, showScore, thro
       len = part.len;
     }
     const x0 = nx + start * FONT_ADVANCE;
-    const x1 = x0 + len * FONT_ADVANCE - 1;
-    for (let x = x0; x < x1; x += 1) px(fb, x, UNDERLINE_Y, color);
+    drawRule(fb, x0, x0 + len * FONT_ADVANCE - 1, UNDERLINE_Y, color);
   }
   if (!showScore) return;
-  drawDigit(fb, pair[0], pairX, DIGIT_Y, color);
-  drawDigit(fb, pair[1], pairX + GLYPH_DIGIT_W + DIGIT_GAP, DIGIT_Y, color);
+  drawPair(fb, pair, pairX, DIGIT_Y, color, GLYPH_SMALL);
 }
 
-export function renderBoard(fb, s, haveState, live, blinkOn) {
-  const level = live ? LEVEL_LIVE : LEVEL_STALE;
-  const grey = scaled(MARKER_COLOR, level);
-
-  if (!haveState) {
-    for (let i = 0; i < 2; i += 1) {
-      drawDigit(fb, DASH, LEFT_X + i * (GLYPH_DIGIT_W + DIGIT_GAP), DIGIT_Y, grey);
-      drawDigit(fb, DASH, RIGHT_X + i * (GLYPH_DIGIT_W + DIGIT_GAP), DIGIT_Y, grey);
-    }
-    return fb;
+// The round marker and target line, which both layouts carry — only their rows
+// differ.
+function drawMarkers(fb, s, grey, roundY, targetY) {
+  {
+    // `round` counts rounds *completed*, so the one being played is the next
+    // one — except once the game is won, when there is no next.
+    let r = s.round + (s.winner ? 0 : 1);
+    if (r > 99) r = 99;
+    const marker = [0x52];
+    if (r >= 10) marker.push(0x30 + idiv(r, 10), 0x30 + (r % 10));
+    else marker.push(0x30 + r);
+    drawText(fb, marker, idiv(PANEL_W - textWidth(marker, 4), 2), roundY, grey, 4);
   }
 
+  if (s.target > 0) {
+    // The app caps the target at 99, so "TO 99" is the widest this line gets.
+    const t = s.target > 99 ? 99 : s.target;
+    const label = [0x54, 0x4f, SPACE];
+    if (t >= 10) label.push(0x30 + idiv(t, 10));
+    label.push(0x30 + (t % 10));
+    drawText(fb, label, idiv(PANEL_W - textWidth(label, 8), 2), targetY, grey, 8);
+  }
+}
+
+function drawFull(fb, s, level, blinkOn) {
   const digits = formatDigits(s.a, s.b);
   const a = fitLabel(s.teamA, NAME_CHARS + 1);
   const b = fitLabel(s.teamB, NAME_CHARS + 1);
-
-  // Which partner is up, mirroring activeIdx in App.jsx. Derived from the round
-  // rather than published, because the app derives it the same way.
   const upPartner = s.round % 2;
 
   // Once the game is won nobody is throwing, so the rule comes off.
@@ -346,27 +377,48 @@ export function renderBoard(fb, s, haveState, live, blinkOn) {
     scaled(s.colorB, level), !(s.winner === 'b' && !blinkOn),
     s.winner === null && s.first === 'b', upPartner);
 
+  const grey = scaled(MARKER_COLOR, level);
   drawText(fb, VERSUS, idiv(PANEL_W - FONT_W, 2), NAME_Y, grey, 1);
+  drawMarkers(fb, s, grey, ROUND_Y, TARGET_Y);
+}
 
-  {
-    // `round` counts rounds *completed*, so the one being played is the next
-    // one — except once the game is won, when there is no next.
-    let r = s.round + (s.winner ? 0 : 1);
-    if (r > 99) r = 99;
-    const marker = [0x52];
-    if (r >= 10) marker.push(0x30 + idiv(r, 10), 0x30 + (r % 10));
-    else marker.push(0x30 + r);
-    drawText(fb, marker, idiv(PANEL_W - textWidth(marker, 4), 2), ROUND_Y, grey, 4);
+function drawScore(fb, s, level, blinkOn) {
+  const digits = formatDigits(s.a, s.b);
+  const colorA = scaled(s.colorA, level);
+  const colorB = scaled(s.colorB, level);
+
+  if (!(s.winner === 'a' && !blinkOn)) {
+    drawPair(fb, digits, SCORE_LEFT_X, SCORE_DIGIT_Y, colorA, GLYPH_BIG);
+  }
+  if (!(s.winner === 'b' && !blinkOn)) {
+    drawPair(fb, digits.subarray(2), SCORE_RIGHT_X, SCORE_DIGIT_Y, colorB, GLYPH_BIG);
   }
 
-  if (s.target > 0) {
-    // The app caps the target at 99, so "TO 99" is the widest this line gets.
-    const t = s.target > 99 ? 99 : s.target;
-    const label = [0x54, 0x4f, SPACE];
-    if (t >= 10) label.push(0x30 + idiv(t, 10));
-    label.push(0x30 + (t % 10));
-    drawText(fb, label, idiv(PANEL_W - textWidth(label, 8), 2), TARGET_Y, grey, 8);
+  if (s.winner === null && s.first === 'a') {
+    drawRule(fb, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorA);
+  }
+  if (s.winner === null && s.first === 'b') {
+    drawRule(fb, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorB);
   }
 
+  drawMarkers(fb, s, scaled(MARKER_COLOR, level), SCORE_ROUND_Y, SCORE_TARGET_Y);
+}
+
+export function renderBoard(fb, s, haveState, live, blinkOn, layout = 'full') {
+  const level = live ? LEVEL_LIVE : LEVEL_STALE;
+  const score = layout === 'score';
+
+  if (!haveState) {
+    const grey = scaled(MARKER_COLOR, level);
+    const font = score ? GLYPH_BIG : GLYPH_SMALL;
+    const y = score ? SCORE_DIGIT_Y : DIGIT_Y;
+    const dashes = [DASH, DASH];
+    drawPair(fb, dashes, score ? SCORE_LEFT_X : LEFT_X, y, grey, font);
+    drawPair(fb, dashes, score ? SCORE_RIGHT_X : RIGHT_X, y, grey, font);
+    return fb;
+  }
+
+  if (score) drawScore(fb, s, level, blinkOn);
+  else drawFull(fb, s, level, blinkOn);
   return fb;
 }

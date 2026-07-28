@@ -165,6 +165,34 @@ int main() {
     CHECK(strcmp(buf, "99 0") == 0);
   }
 
+  printf("parseLayout\n");
+  {
+    PanelLayout got = PANEL_FULL;
+    CHECK(parseLayout("score", 5, got) && got == PANEL_SCORE);
+    CHECK(parseLayout("full", 4, got) && got == PANEL_FULL);
+
+    // An id from a newer app must leave the board on whatever it was drawing.
+    // Falling back to PANEL_FULL instead would silently override a choice.
+    got = PANEL_SCORE;
+    CHECK(!parseLayout("ticker", 6, got) && got == PANEL_SCORE);
+    CHECK(!parseLayout("", 0, got) && got == PANEL_SCORE);
+    CHECK(!parseLayout(nullptr, 4, got) && got == PANEL_SCORE);
+
+    // MQTT payloads are not NUL-terminated, so neither a prefix nor a longer
+    // string may match, and only `length` bytes may be read.
+    CHECK(!parseLayout("score", 4, got));
+    CHECK(!parseLayout("scoreboard", 10, got));
+    CHECK(parseLayout("scoreXX", 5, got) && got == PANEL_SCORE);
+
+    // Every id the app can publish has to parse back to its own enum, or the
+    // two lists have drifted.
+    for (int i = 0; i < PANEL_LAYOUT_COUNT; i++) {
+      PanelLayout round = PANEL_FULL;
+      CHECK(parseLayout(PANEL_LAYOUT_IDS[i], strlen(PANEL_LAYOUT_IDS[i]), round) &&
+            round == PanelLayout(i));
+    }
+  }
+
   printf(failures ? "\n%d CHECK(s) FAILED\n" : "\nall checks passed\n", failures);
   return failures ? 1 : 0;
 }

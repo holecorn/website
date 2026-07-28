@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  LAYOUT_LABELS,
   configComplete,
   configFromSearch,
   loadScoreboardConfig,
@@ -101,7 +102,7 @@ export default function Panel() {
     return merged;
   });
 
-  const { payload, status, error, senderOnline } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, layout } = useScoreboardDisplay(config);
   const blinkOn = useBlink(payload?.winner ?? null);
   const live = useBoardLive(status === 'connected', senderOnline);
 
@@ -112,9 +113,9 @@ export default function Panel() {
   useEffect(() => {
     if (!canvasRef.current) return;
     const fb = createFramebuffer();
-    renderBoard(fb, boardState(payload), payload !== null, live, blinkOn);
+    renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout);
     paintPanel(canvasRef.current, fb, cell);
-  }, [payload, live, blinkOn, cell]);
+  }, [payload, live, blinkOn, cell, layout]);
 
   if (!configComplete(config)) {
     return (
@@ -146,7 +147,7 @@ export default function Panel() {
         />
       </div>
       <p className="panel-caption">
-        {PANEL_W}x{PANEL_H} · {PANEL_MM} ·{' '}
+        {PANEL_W}x{PANEL_H} · {PANEL_MM} · {LAYOUT_LABELS[layout] ?? layout} ·{' '}
         {status === 'connected'
           ? live
             ? 'live'

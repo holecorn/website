@@ -7,6 +7,7 @@
 // display that reboots or reconnects mid-game recover with no resync logic.
 
 import { totals, teamLabel } from './scoring.js';
+import { PANEL_LAYOUTS } from './panelRender.js';
 
 // The scorer and the display keep separate copies, so opening a display link in
 // the same browser as the scorer cannot overwrite the scorer's game code.
@@ -27,7 +28,19 @@ const EMPTY_CONFIG = {
   password: '',
   code: '',
   enabled: false,
+  layout: 'full',
 };
+
+// What each panel arrangement is called on the setup screen. Keyed by the ids in
+// panelRender.js, which are the ones published and the ones board_logic.h parses.
+export const LAYOUT_LABELS = {
+  full: 'Names + score',
+  score: 'Score only, bigger',
+};
+
+export function normalizeLayout(raw) {
+  return PANEL_LAYOUTS.includes(raw) ? raw : PANEL_LAYOUTS[0];
+}
 
 export function scoreboardPayload(game) {
   const t = totals(game);
@@ -83,6 +96,16 @@ export function stateTopic(code) {
 // is 0-0" from "the phone has gone away".
 export function onlineTopic(code) {
   return `holecorn/${normalizeCode(code)}/online`;
+}
+
+// Its own retained topic rather than a field in the score payload: the payload's
+// worst case already spends 74% of the board's buffer, the firmware pins its
+// shape, and a layout is a different fact with a different lifetime — it changes
+// when you press a button, not when a round is scored. Retained, so a board that
+// reboots recovers the choice the same way it recovers presence, and a change
+// takes effect at once rather than waiting for the next round to be committed.
+export function layoutTopic(code) {
+  return `holecorn/${normalizeCode(code)}/layout`;
 }
 
 export function normalizeCode(raw) {

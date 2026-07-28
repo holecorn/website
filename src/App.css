@@ -227,6 +227,38 @@
   margin-top: 14px;
 }
 
+/* A fieldset rather than a row of buttons, because these are one choice out of
+   several and a radio group is what says that to a screen reader. */
+.sb-layout {
+  margin: 14px 0 0;
+  padding: 8px 12px 2px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sb-layout legend {
+  padding: 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sb-layout label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--text);
+}
+
+.sb-layout code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg);
+  font-size: 0.9em;
+}
+
 .sb-error {
   margin: 10px 0 0;
   color: #eb5757;

@@ -119,6 +119,14 @@ if (!ran['test_render.cpp']) {
     if (scenes.length < 10) {
       throw new Error(`only ${scenes.length} scenes in out/scenes.json — expected every shot()`);
     }
+    // A layout with no scenes is unpinned, and adding one is exactly when nobody
+    // remembers to dump it. This is what makes that a failure rather than a
+    // silently narrower check.
+    const covered = new Set(scenes.map((s) => s.layout));
+    const missing = panel.PANEL_LAYOUTS.filter((id) => !covered.has(id));
+    if (missing.length > 0) {
+      throw new Error(`no scenes for layout ${missing.join(', ')} — add a shot() for it`);
+    }
 
     for (const scene of scenes) {
       const buf = readFileSync(resolve(dir, `${scene.name}.ppm`));
@@ -127,7 +135,14 @@ if (!ran['test_render.cpp']) {
       }
       const expected = buf.subarray(header.length);
       const fb = panel.createFramebuffer();
-      panel.renderBoard(fb, panel.boardState(scene), scene.haveState, scene.live, scene.blinkOn);
+      panel.renderBoard(
+        fb,
+        panel.boardState(scene),
+        scene.haveState,
+        scene.live,
+        scene.blinkOn,
+        scene.layout,
+      );
 
       if (fb.outOfBounds > 0) {
         problems.push(`${scene.name}: drew ${fb.outOfBounds} px outside the panel`);

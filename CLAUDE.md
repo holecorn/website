@@ -54,8 +54,8 @@ project dependency. It starts and stops its own preview server.
 - `src/Display.jsx` / `src/Display.css` — the `?display=1` view, routed in
   `src/main.jsx`. `src/ScoreboardSettings.jsx` is its settings UI on the setup
   screen.
-- `src/panelRender.js` — the HUB75 panel's framebuffer, a port of the firmware's
-  `render.h`. Pure and framework-free; its `renderBoard` is held
+- `src/panelRender.js` — the HUB75 panel's framebuffer and its layouts, a port
+  of the firmware's `render.h`. Pure and framework-free; its `renderBoard` is held
   **pixel-identical** to the C++ by `npm run test:firmware`, and the parse-side
   coercions around it by `src/panelRender.test.js`. `src/panelGlyphs.js` is
   generated.
@@ -390,6 +390,43 @@ project dependency. It starts and stops its own preview server.
 - **The panel blanks the winning pair instead**, because at 20px a 1px rim around
   a 2px stroke leaves nothing to read. That divergence is deliberate, not an
   oversight.
+- **Panel layouts travel on their own retained topic**, `holecorn/<code>/layout`,
+  carrying an id (`full`, `score`). Not a field in the score payload, and this is
+  the same reasoning that keeps `mode` out of it: the worst case already spends
+  74% of the board's buffer, `test_board_logic.cpp` and `scoreboard.test.js` pin
+  the payload's shape, and a layout is a different fact with a different
+  lifetime — it changes on a button press, not when a round is scored. Retained
+  means a board that reboots recovers the choice the way it recovers presence,
+  and a change lands **at once** rather than waiting for the next commit, which
+  matters because a wash publishes nothing.
+  - **An unrecognised id keeps whatever is on screen** — `parseLayout` in
+    `board_logic.h` leaves its out-param alone and `useScoreboardDisplay` skips
+    the `setLayout`. Falling back to `full` instead would let an app newer than
+    the firmware silently override a choice, and blanking would be worse. Both
+    sides are tested.
+  - **The layout is deliberately absent from the display link.** The retained
+    topic is the single source; a URL carrying it would let a stale bookmark
+    override the live choice on open.
+  - **Every layout needs its own scenes, and `test-firmware.mjs` fails without
+    them** — it checks the manifest covers every id in `PANEL_LAYOUTS`. Adding a
+    layout is exactly when nobody remembers to dump one, and an unpinned layout
+    is a second implementation with no check, which is the whole thing
+    `src/panelRender.js` is allowed to exist under.
+  - **`DUTY_CEILING` is what bounds a new layout, and it is not slack.** Measured:
+    the full layout's worst case is 19.8% lit, the score layout's is 23.6%, and
+    the cap is 30%. Bigger digits light more panel, so a layout that fills more
+    than this has to be checked against the bank rather than waved through — the
+    decision to feed both panels through the controller's 5 V terminals rests on
+    that number and no electrical test would catch it.
+  - **The digit height is asserted off the framebuffer, not off the constant.**
+    `test_render.cpp` measures the lit span in the pair column of a
+    blank-names scene, so it proves what got *drawn* rather than comparing
+    `GLYPH_BIG_H` with itself. A score layout that quietly rendered small digits
+    would otherwise pass.
+  - **The score layout keeps the first-thrower rule**, moved under the score. Two
+    glyph sizes come from **one** `generate_glyphs.mjs` run — 11x20 is 100mm at
+    P5 and 17x30 is 150mm — and the tables are `uint32_t` because 17 columns
+    won't fit the `uint16_t` the single-size version used.
 - **The panel emulator deliberately has neither the wake lock nor the
   fullscreen tap**, both of which `?display=1` has. It is a judging tool you look
   at for a few rounds, and a 128x32 strip is not a scoreboard — so a tablet
@@ -486,12 +523,16 @@ coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
   - The emulator exercises publish → retain → subscribe → this layout over a real
     broker, which the host suites can't. **It still says nothing about WiFi or
     PubSubClient**, so it does not close the gap above.
-  - **It ships to everyone**, not behind a lazy boundary: measured, 2.87 kB
-    gzipped of the main chunk (79.82 → 82.69) plus 0.12 kB of CSS, against the
+  - **It ships to everyone**, not behind a lazy boundary: measured, 3.53 kB
+    gzipped of the main chunk (79.82 → 83.35) plus 0.19 kB of CSS, against the
     104 kB the mqtt chunk already costs `?panel=1` anyway. Splitting it would
     touch only `?panel=1` — `Display` is a separate route and unaffected — so the
-    reason not to is simply that 3 kB doesn't pay for the boundary. Re-measure
-    before adding panel-side features rather than assuming it stays small.
+    reason not to is simply that 4 kB doesn't pay for the boundary. Re-measure
+    before adding panel-side features rather than assuming it stays small; the
+    second glyph size and the score layout together cost 0.66 kB of that.
+    **`scoreboard.js` imports `PANEL_LAYOUTS` from `panelRender.js`**, so the
+    glyph tables are reachable from `?display=1` too — irrelevant while `Panel`
+    is statically imported, but it would defeat a lazy boundary if one were added.
 
 The parts worth knowing before touching it:
 
@@ -503,7 +544,9 @@ The parts worth knowing before touching it:
   names clear it — the names marginally; see
   `firmware/hub75/README.md`. Panel *width* buys name length, *height*
   buys digit height; four digits run out of width first, which is why two rows
-  are left dark. Don't "use the spare height" — it buys nothing.
+  are left dark *in the `full` layout*. Spending that height is what the `score`
+  layout does, and the only way to spend it is to give up the names — the two
+  compete for the same 32 rows, which is the trade the two layouts exist to offer.
 - **`glyphs.h` is generated** from `src/segments.js` by `generate_glyphs.mjs`,
   so the panel's digits are the browser's geometry rather than a redrawing.
   The dash for the no-state screen is defined in the *generator*, not

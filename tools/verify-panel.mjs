@@ -10,9 +10,11 @@
 // The scene used is the no-state screen, because it needs no broker: an
 // unreachable one leaves the board dimmed and showing four dashes, which is
 // deterministic and is also the frame most likely to be mistaken for a failure.
+// That also fixes the layout at the default — the chosen one arrives over MQTT,
+// so only the firmware suite compares the alternatives.
 
 import { chromium } from 'playwright';
-import { GLYPH_DIGIT_H } from '../src/panelGlyphs.js';
+import { GLYPH_SMALL } from '../src/panelGlyphs.js';
 import { DIGIT_Y, PANEL_H, PANEL_W } from '../src/panelRender.js';
 
 const BASE = 'http://localhost:4173/';
@@ -21,7 +23,7 @@ const OFFLINE = 'broker=wss://127.0.0.1:1/mqtt&code=abc12';
 // The dash is segment g: the middle bar of a digit drawn at DIGIT_Y. Derived
 // rather than written out, so moving the digits doesn't leave this sampling a row
 // of unlit LEDs and calling it a pass.
-const DASH_ROW = DIGIT_Y + Math.trunc(GLYPH_DIGIT_H / 2) - 1;
+const DASH_ROW = DIGIT_Y + Math.trunc(GLYPH_SMALL.h / 2) - 1;
 
 let failures = 0;
 const check = (label, cond, detail = '') => {

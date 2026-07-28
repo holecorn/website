@@ -1,17 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { newGame, setBag, endRound, setFirst } from './scoring.js';
 import {
+  LAYOUT_LABELS,
   REORDER_WINDOW,
   acceptsUpdate,
   configComplete,
   configFromSearch,
   displayUrl,
+  layoutTopic,
+  loadScoreboardConfig,
   normalizeCode,
+  normalizeLayout,
   onlineTopic,
   scoreboardPayload,
   segmentDigits,
   stateTopic,
 } from './scoreboard.js';
+import { PANEL_LAYOUTS } from './panelRender.js';
 
 const throwAll = (game, team, tiers) =>
   tiers.reduce((g, tier, i) => setBag(g, team, i, tier), game);
@@ -187,5 +192,29 @@ describe('acceptsUpdate', () => {
 
   it('accepts a message with no stamp at all', () => {
     expect(acceptsUpdate({ a: 3, b: 1 }, 99_999)).toBe(true);
+  });
+});
+
+describe('panel layout', () => {
+  it('has its own retained topic, not a field in the score payload', () => {
+    expect(layoutTopic('K3PQM')).toBe('holecorn/k3pqm/layout');
+    expect(layoutTopic(' k3 pqm ')).toBe(layoutTopic('k3pqm'));
+    // The byte budget is why: a field here would cost every score message.
+    expect(scoreboardPayload(newGame())).not.toHaveProperty('layout');
+  });
+
+  it('falls back to the first layout for anything unrecognised', () => {
+    for (const id of PANEL_LAYOUTS) expect(normalizeLayout(id)).toBe(id);
+    for (const bad of ['ticker', '', null, undefined, 0, {}]) {
+      expect(normalizeLayout(bad)).toBe(PANEL_LAYOUTS[0]);
+    }
+  });
+
+  it('defaults a stored config with no layout to the first one', () => {
+    expect(normalizeLayout(loadScoreboardConfig('display').layout)).toBe(PANEL_LAYOUTS[0]);
+  });
+
+  it('labels every layout, so the UI cannot show a bare id', () => {
+    for (const id of PANEL_LAYOUTS) expect(LAYOUT_LABELS[id]).toBeTruthy();
   });
 });

@@ -6,8 +6,14 @@ import Positions from './Positions.jsx';
 import ScoreboardSettings from './ScoreboardSettings.jsx';
 import Stats from './Stats.jsx';
 import { archiveMatch, dropMatch, newMatchId, requestPersistence } from './archive.js';
-import { loadScoreboardConfig, saveScoreboardConfig } from './scoreboard.js';
+import {
+  LAYOUT_LABELS,
+  loadScoreboardConfig,
+  normalizeLayout,
+  saveScoreboardConfig,
+} from './scoreboard.js';
 import { useScoreboardPublisher } from './useScoreboard.js';
+import { PANEL_LAYOUTS } from './panelRender.js';
 import {
   MAX_TARGET,
   clampTarget,
@@ -479,6 +485,21 @@ export default function App() {
         )}
         {!wideLayout && (
           <button onClick={() => setShowGameStats((s) => !s)}>Game stats</button>
+        )}
+        {sbConfig.enabled && (
+          <button
+            onClick={() =>
+              setSbConfig((c) => ({
+                ...c,
+                layout:
+                  PANEL_LAYOUTS[
+                    (PANEL_LAYOUTS.indexOf(normalizeLayout(c.layout)) + 1) % PANEL_LAYOUTS.length
+                  ],
+              }))
+            }
+          >
+            Panel: {LAYOUT_LABELS[normalizeLayout(sbConfig.layout)]}
+          </button>
         )}
         <button onClick={startNewGame}>New game</button>
       </div>
