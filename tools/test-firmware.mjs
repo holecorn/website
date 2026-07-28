@@ -50,17 +50,23 @@ step('ArduinoJson', () => {
   process.stdout.write(`   downloaded ${ARDUINOJSON}\n`);
 });
 
-step('glyphs.h matches src/segments.js', () => {
-  const before = readFileSync(resolve(root, 'firmware/hub75/glyphs.h'), 'utf8');
+// Both outputs, because they come from one run of the generator: the firmware's
+// header and the emulator's tables. Checking only one would let the panel and
+// src/panel.js quantise the same polygon differently.
+const GENERATED = ['firmware/hub75/glyphs.h', 'src/panelGlyphs.js'];
+
+step('the generated glyph tables match src/segments.js', () => {
+  const read = () => GENERATED.map((f) => readFileSync(resolve(root, f), 'utf8'));
+  const before = read();
   run('node', ['firmware/hub75/generate_glyphs.mjs'], root);
-  const after = readFileSync(resolve(root, 'firmware/hub75/glyphs.h'), 'utf8');
-  if (before !== after) {
+  const stale = GENERATED.filter((_, i) => before[i] !== read()[i]);
+  if (stale.length > 0) {
     throw new Error(
-      'glyphs.h is stale — it has been regenerated, commit the result.\n' +
-        '   Its source is src/segments.js and tools/panel-preview/font5x7.mjs.',
+      `${stale.join(' and ')} stale — regenerated, commit the result.\n` +
+        '   The source is src/segments.js and tools/panel-preview/font5x7.mjs.',
     );
   }
-  process.stdout.write('   up to date\n');
+  process.stdout.write(`   ${GENERATED.join(', ')} up to date\n`);
 });
 
 const SUITES = [

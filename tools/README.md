@@ -59,7 +59,7 @@ rendering aid with nothing to assert.
 
 | Script | |
 | --- | --- |
-| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, and fails if `glyphs.h` no longer matches `src/segments.js`. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
+| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, fails if `glyphs.h` or `src/panelGlyphs.js` no longer matches `src/segments.js`. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
 | `measure-digits.mjs` | Reports seven-segment digit height in **millimetres** across real device sizes. Needs `npm run dev`. |
 | `verify-copy-link.mjs` | Checks **Copy display link** puts the link on the clipboard, falls back to a manual-copy dialog when the Clipboard API is missing or refuses (plain http, denied permission), and that the **QR code** rasterises and decodes back to the display link. Needs `npm run preview`. |
 | `verify-positions.mjs` | Checks the court diagram and the in-game stats panel: that the court names the same thrower the scoring lanes do (two independent derivations that App.jsx could still cross over), that the phone toggles and the persistent wide-screen column are the same panels, that the rail runs court/stats/history, that the stats follow the live game round by round, and that the four-bagger badge isn't clipped by a long name. Needs `npm run preview`. |
@@ -84,8 +84,11 @@ A 4m viewing distance needs roughly 35mm digits; a 10" tablet currently gives 75
 **Exploratory, and superseded for the build itself.** These sized HUB75 RGB LED
 matrix panels before one was chosen; the panel actually being built is
 `firmware/hub75/`, which has its own host renderer that compiles the firmware's
-own `render.h` rather than approximating it in JavaScript. Prefer that for
-anything about the real board. Nothing in `src/` depends on these scripts.
+own `render.h`. Prefer that for anything about the real board.
+
+`font5x7.mjs` is not exploratory either — `generate_glyphs.mjs` reads it to emit
+both `firmware/hub75/glyphs.h` and `src/panelGlyphs.js`, so editing it changes
+the app and the firmware.
 
 They rasterise the **real** polygons from `src/segments.js` onto a panel-sized
 pixel grid, then draw each pixel as an LED — so they show genuine quantisation
