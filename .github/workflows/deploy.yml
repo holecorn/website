@@ -14,6 +14,12 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  # Pinned rather than tracking latest, so the browser cache key is stable and a
+  # Playwright release cannot break a deploy on its own. Keep in step with what
+  # `npm install --no-save playwright` gives you locally.
+  PLAYWRIGHT_VERSION: 1.62.0
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,7 +36,24 @@ jobs:
       # Playwright is not a project dependency — it is a heavy install for
       # scripts that run occasionally, so CI adds it without touching the
       # lockfile and uses the bundled Chromium rather than a system Chrome.
-      - run: npm install --no-save playwright
+      #
+      # Pinned, which the cache below needs to have a stable key, and which also
+      # stops an upstream Playwright release breaking a deploy with no change
+      # here. Bump it deliberately; the browser cache re-fills on the first run.
+      - name: Install Playwright
+        run: npm install --no-save --no-audit --no-fund playwright@${{ env.PLAYWRIGHT_VERSION }}
+      # Saves the ~13s Chromium download. Keyed on the pinned version because the
+      # browsers live in a version-stamped directory — a stale entry would be
+      # ignored and silently re-downloaded, so the key must move when the pin does.
+      - uses: actions/cache@v6
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+      # `--with-deps` is kept on a cache hit, and deliberately: it is ~19s of apt,
+      # but part of what it installs is fonts, and verify-lanes.mjs asserts exact
+      # pixel widths that depend on how `system-ui` resolves. Dropping it to save
+      # the apt time risks moving those metrics, which is a worse trade than 19s.
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       # v5 rather than v3 or v4: this is a composite action, so it has no runtime

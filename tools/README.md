@@ -33,6 +33,9 @@ act push -j build --container-architecture linux/arm64
 act push -j firmware --container-architecture linux/arm64
 ```
 
+`actions/cache` has no backend under act, so the Playwright browser cache always
+misses locally and its effect is only visible on the runners.
+
 **Use `linux/arm64` on Apple Silicon.** The default `linux/amd64` runs under QEMU
 and vitest segfaults there, which looks like a test failure and isn't one. The
 cost is that local runs no longer match the runners' architecture.
