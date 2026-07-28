@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { acceptsUpdate, configComplete, normalizeLayout, scoreboardPayload } from './scoreboard.js';
+import {
+  acceptsUpdate,
+  configComplete,
+  lineupPayload,
+  normalizeLayout,
+  scoreboardPayload,
+  usableLineup,
+} from './scoreboard.js';
 import { openScoreboardLink } from './scoreboardLink.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
 
@@ -30,6 +37,10 @@ function useLink({ config, role, active, onMessage }) {
   const linkRef = useRef(null);
   const pendingRef = useRef(null);
   const pendingLayoutRef = useRef(null);
+  // Holds `{ value }` rather than the payload, because a null lineup is a real
+  // instruction — clear the form screen — and has to be told apart from nothing
+  // pending yet.
+  const pendingLineupRef = useRef(null);
   const messageRef = useRef(onMessage);
   messageRef.current = onMessage;
 
@@ -73,6 +84,7 @@ function useLink({ config, role, active, onMessage }) {
         linkRef.current = handle;
         if (pendingRef.current) handle.send(pendingRef.current);
         if (pendingLayoutRef.current) handle.sendLayout(pendingLayoutRef.current);
+        if (pendingLineupRef.current) handle.sendLineup(pendingLineupRef.current.value);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -87,14 +99,14 @@ function useLink({ config, role, active, onMessage }) {
     };
   }, [active, role, broker, username, password, code]);
 
-  return { status, error, linkRef, pendingRef, pendingLayoutRef };
+  return { status, error, linkRef, pendingRef, pendingLayoutRef, pendingLineupRef };
 }
 
 // Publishes the logged score whenever it changes. Fire and forget: nothing here
 // blocks the UI, and a broker that is unreachable just leaves a status pill.
-export function useScoreboardPublisher(game, config) {
+export function useScoreboardPublisher(game, config, matches) {
   const active = Boolean(config.enabled);
-  const { status, error, linkRef, pendingRef, pendingLayoutRef } = useLink({
+  const { status, error, linkRef, pendingRef, pendingLayoutRef, pendingLineupRef } = useLink({
     config,
     role: 'publisher',
     active,
@@ -122,6 +134,23 @@ export function useScoreboardPublisher(game, config) {
     linkRef.current?.sendLayout(layout);
   }, [layout, linkRef, pendingLayoutRef]);
 
+  // Debounced like the score, because renaming a player rebuilds this per
+  // keystroke. Compared as JSON rather than by identity: the payload is rebuilt
+  // whenever `game` changes, which is on every bag, and republishing an identical
+  // roster would retain the same bytes over and over.
+  const lineup = useMemo(() => lineupPayload(game, matches), [game, matches]);
+  const sentLineupRef = useRef(undefined);
+  useEffect(() => {
+    pendingLineupRef.current = { value: lineup };
+    const json = JSON.stringify(lineup ?? null);
+    if (json === sentLineupRef.current) return undefined;
+    const id = setTimeout(() => {
+      sentLineupRef.current = json;
+      linkRef.current?.sendLineup(lineup);
+    }, PUBLISH_DEBOUNCE);
+    return () => clearTimeout(id);
+  }, [lineup, linkRef, pendingLineupRef]);
+
   return { status, error };
 }
 
@@ -129,6 +158,7 @@ export function useScoreboardDisplay(config) {
   const [payload, setPayload] = useState(null);
   const [senderOnline, setSenderOnline] = useState(false);
   const [layout, setLayout] = useState(PANEL_LAYOUTS[0]);
+  const [lineup, setLineup] = useState(null);
   const versionRef = useRef(-1);
 
   const { status, error } = useLink({
@@ -147,6 +177,13 @@ export function useScoreboardDisplay(config) {
         if (PANEL_LAYOUTS.includes(msg.layout)) setLayout(msg.layout);
         return;
       }
+      if ('lineup' in msg) {
+        // Null is the cleared topic and means "back to the score". Anything else
+        // that isn't usable leaves what is on screen, mirroring parseLineup.
+        if (msg.lineup === null) setLineup(null);
+        else if (usableLineup(msg.lineup)) setLineup(msg.lineup);
+        return;
+      }
       const next = msg.payload;
       if (!acceptsUpdate(next, versionRef.current)) return;
       if (Number.isFinite(next.v)) versionRef.current = next.v;
@@ -154,5 +191,5 @@ export function useScoreboardDisplay(config) {
     },
   });
 
-  return { payload, status, error, senderOnline, layout };
+  return { payload, status, error, senderOnline, layout, lineup };
 }

@@ -53,7 +53,9 @@ const CONFIG = { broker: 'wss://example:8884/mqtt', username: '', password: '', 
 const STATE = 'holecorn/abc12/state';
 const ONLINE = 'holecorn/abc12/online';
 const LAYOUT = 'holecorn/abc12/layout';
+const LINEUP = 'holecorn/abc12/lineup';
 const PAYLOAD = { a: 3, b: 1 };
+const ROSTER = { rows: [{ n: 'Neil', w: 6, l: 4, p: 72, f: 'LWLWW' }, { n: 'Sigma', w: 4, l: 6, p: 60, f: 'WLWLL' }] };
 
 let broker;
 const open = (role, opts = {}) =>
@@ -277,10 +279,10 @@ describe('panel layout', () => {
     expect(broker.of(LAYOUT)).toHaveLength(0);
   });
 
-  it('subscribes a display to the layout alongside state and presence', async () => {
+  it('subscribes a display to the layout and lineup alongside state and presence', async () => {
     await open('display');
     broker.goOnline();
-    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT]);
+    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT, LINEUP]);
   });
 
   it('routes a layout message to its own handler, not the state parser', async () => {
@@ -290,5 +292,90 @@ describe('panel layout', () => {
     broker.fire('message', LAYOUT, Buffer.from('score'));
     broker.fire('message', LAYOUT, Buffer.from('ticker'));
     expect(seen).toEqual([{ layout: 'score' }, { layout: 'ticker' }]);
+  });
+});
+
+describe('the pre-game lineup', () => {
+  it('publishes the roster retained on its own topic', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendLineup(ROSTER);
+
+    const [msg] = broker.of(LINEUP);
+    expect(JSON.parse(msg.payload)).toEqual(ROSTER);
+    expect(msg.opts).toMatchObject({ retain: true, qos: 1 });
+    // Its whole reason for existing: the score payload's budget is already 74%
+    // spent in the worst case, so none of this may ride along with it.
+    expect(broker.of(STATE)).toHaveLength(0);
+  });
+
+  // An empty retained payload is what deletes the retained message on the broker,
+  // and it is the only route back to the score screen — so a null has to publish
+  // rather than be skipped as "nothing to send".
+  it('clears the topic with an empty payload rather than skipping the publish', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendLineup(ROSTER);
+    link.sendLineup(null);
+
+    expect(broker.of(LINEUP).map((m) => m.payload)).toEqual([JSON.stringify(ROSTER), '']);
+    expect(broker.of(LINEUP)[1].opts).toMatchObject({ retain: true, qos: 1 });
+  });
+
+  // The dangerous case: a session that has already moved past setup reconnects and
+  // finds a retained roster on the broker from an earlier one. Without re-asserting
+  // the clear, the board sits on a form screen for the whole game.
+  it('re-asserts a cleared lineup on reconnect, not just a set one', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendLineup(null);
+    expect(broker.of(LINEUP).map((m) => m.payload)).toEqual(['']);
+
+    broker.client.connected = false;
+    broker.fire('close');
+    broker.goOnline();
+    expect(broker.of(LINEUP).map((m) => m.payload)).toEqual(['', '']);
+  });
+
+  it('says nothing on connect before the publisher has computed one', async () => {
+    await open('publisher');
+    broker.goOnline();
+    expect(broker.of(LINEUP)).toHaveLength(0);
+  });
+
+  it('holds a roster sent before the link opened', async () => {
+    const link = await open('publisher');
+    link.sendLineup(ROSTER);
+    expect(broker.of(LINEUP)).toHaveLength(0);
+    broker.goOnline();
+    expect(broker.of(LINEUP)).toHaveLength(1);
+  });
+
+  it('ignores a lineup send after close', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.close();
+    link.sendLineup(ROSTER);
+    expect(broker.of(LINEUP)).toHaveLength(0);
+  });
+
+  it('reports a cleared topic as null so the display goes back to the score', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', LINEUP, Buffer.from(JSON.stringify(ROSTER)));
+    broker.fire('message', LINEUP, Buffer.from(''));
+    expect(seen).toEqual([{ lineup: ROSTER }, { lineup: null }]);
+  });
+
+  // Anything could be on a shared broker's topic. Malformed JSON must leave what
+  // is on screen rather than being reported as a clear, which would blank the
+  // form screen mid-setup.
+  it('drops an unparseable lineup instead of reporting it as cleared', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', LINEUP, Buffer.from('{not json'));
+    expect(seen).toEqual([]);
   });
 });

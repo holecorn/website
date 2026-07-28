@@ -5,7 +5,7 @@
 // has no Web Bluetooth, Web Serial or WebUSB. So both ends meet at a hosted
 // broker instead: the browser over WSS, firmware over MQTTS on the same topic.
 
-import { layoutTopic, onlineTopic, stateTopic } from './scoreboard.js';
+import { layoutTopic, lineupTopic, onlineTopic, stateTopic } from './scoreboard.js';
 
 const RECONNECT_PERIOD = 4000;
 const CONNECT_TIMEOUT = 8000;
@@ -43,6 +43,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   const state = stateTopic(config.code);
   const online = onlineTopic(config.code);
   const layout = layoutTopic(config.code);
+  const lineup = lineupTopic(config.code);
   const publisher = role === 'publisher';
 
   onStatus('connecting');
@@ -60,6 +61,11 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
 
   let latest = null;
   let latestLayout = null;
+  let latestLineup = null;
+  // Tracked separately from the value, because a computed null — "the game has
+  // begun, clear the form screen" — has to be re-asserted on connect and is
+  // otherwise indistinguishable from never having been told.
+  let lineupSet = false;
   let closed = false;
   let presence = null;
 
@@ -82,6 +88,19 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
     client.publish(layout, id, { qos: 1, retain: true });
   };
 
+  // Retained like the layout, and an empty payload is meaningful: it *clears* the
+  // retained message on the broker, which is how the board leaves the form screen.
+  // So a null must still be published, not skipped.
+  const sendLineup = (payload) => {
+    latestLineup = payload;
+    lineupSet = true;
+    if (closed || !client.connected) return;
+    client.publish(lineup, payload ? JSON.stringify(payload) : '', {
+      qos: 1,
+      retain: true,
+    });
+  };
+
   client.on('connect', () => {
     if (closed) return;
     onStatus('connected');
@@ -98,8 +117,12 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       // Re-asserted on every connect for the same reason the score is: the
       // retained value on the broker may predate this session.
       if (latestLayout) sendLayout(latestLayout);
+      // Including a null: the retained lineup on the broker may be one this
+      // session has already moved past, and leaving it would strand the board on
+      // a form screen for the whole game.
+      if (lineupSet) sendLineup(latestLineup);
     } else {
-      client.subscribe([state, online, layout], { qos: 1 }, (err, granted) => {
+      client.subscribe([state, online, layout, lineup], { qos: 1 }, (err, granted) => {
         // A broker with per-topic permissions refuses the subscription rather
         // than the connection, which would otherwise leave the board sitting on
         // "connected" having never received anything. Granted QoS 128 is a
@@ -135,6 +158,20 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       onMessage({ layout: text });
       return;
     }
+    if (topic === lineup) {
+      // An empty payload is the cleared topic, reported as null so the consumer
+      // goes back to the score rather than having to parse "" itself.
+      if (text === '') {
+        onMessage({ lineup: null });
+        return;
+      }
+      try {
+        onMessage({ lineup: JSON.parse(text) });
+      } catch {
+        // Leaves whatever is on screen, as parseLineup does.
+      }
+      return;
+    }
     try {
       onMessage({ payload: JSON.parse(text) });
     } catch {
@@ -145,6 +182,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   return {
     send,
     sendLayout,
+    sendLineup,
     close() {
       if (closed) return;
       closed = true;
