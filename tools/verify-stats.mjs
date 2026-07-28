@@ -125,6 +125,58 @@ await page.waitForFunction(
 check('a second match is archived alongside the first', (await archive()).length === 2);
 
 await page.getByRole('button', { name: 'New game' }).click();
+
+// The pre-game form panel, and the one thing about it no unit test can reach:
+// that it does not push `Start game` further down. The setup screen already
+// overflows every phone — measured, that button's bottom edge sits 55px below the
+// fold on a 393x852 iPhone before anything is added — which is the whole reason
+// the panel goes below it rather than under the names.
+{
+  const startBottom = () =>
+    page
+      .locator('.setup .end-round')
+      .evaluate((e) => Math.round(e.getBoundingClientRect().bottom + window.scrollY));
+
+  check('the form panel is on the setup screen', (await page.locator('.lineup').count()) === 1);
+  const withPanel = await startBottom();
+  await page.addStyleTag({ content: '.lineup{display:none!important}' });
+  const withoutPanel = await startBottom();
+  check(
+    'it does not move Start game',
+    withPanel === withoutPanel,
+    `${withPanel} with, ${withoutPanel} without`,
+  );
+  await page.reload();
+  await page.waitForSelector('.setup');
+
+  const names = await page.locator('.lineup-table tbody th').allInnerTexts();
+  check('both players are listed', names.join(',').includes('Neil'), names.join(','));
+  check('nobody is marked a first-timer', (await page.locator('.lineup-first').count()) === 0);
+
+  // Sigma threw every bag on the floor in both matches, so his PPR is genuinely
+  // 0.0. That has to be *shown*: a blank there reads as missing data rather than a
+  // bad run, and it is the case an emptiness test keyed on the rate itself hides.
+  const haydnRow = page.locator('.lineup-table tbody tr', { hasText: 'Sigma' });
+  const haydnCells = await haydnRow.locator('td').allInnerTexts();
+  check(
+    'a player who averages 0.0 shows it rather than a blank',
+    haydnCells.includes('0.0'),
+    haydnCells.join(' | '),
+  );
+
+  // A name nobody has played under must say so rather than report 0% of
+  // everything — the `played` flag in lineupStats is what carries that.
+  await page.locator('.team-name-input').nth(1).fill('Psi');
+  await page.waitForTimeout(250);
+  check('an unknown name is marked a first-timer', (await page.locator('.lineup-first').count()) === 1);
+  await page.locator('.team-name-input').nth(1).fill('Sigma');
+  await page.waitForTimeout(250);
+  check(
+    'and goes back to a record once the name is known again',
+    (await page.locator('.lineup-first').count()) === 0,
+  );
+}
+
 await page.getByRole('button', { name: 'Stats' }).click();
 
 // Read by column heading, not by position: adding a column shifts every index,
@@ -332,6 +384,38 @@ check(
   'the wash leaves the running score unchanged',
   (await dblPage.locator('.match-round').nth(1).locator('.mr-running').innerText()).replace(/\s/g, '') === '12–0',
 );
+
+// Deleting a match has to reach the form panel, which reads a copy held in
+// App.jsx while Stats keeps its own. Nothing below App can catch the two getting
+// out of step: the panel would keep reporting a match that is gone until the next
+// reload.
+{
+  const del = await browser.newContext();
+  const delPage = await del.newPage();
+  await delPage.goto(URL);
+  await delPage.evaluate((records) => {
+    localStorage.clear();
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify(records));
+  }, [won]);
+  await delPage.reload();
+  await delPage.waitForSelector('.setup');
+  // The seeded record is Neil v Sigma, and a fresh game defaults to Player 1 —
+  // so the names have to be typed for the panel to have anything to show.
+  await delPage.locator('.team-name-input').nth(0).fill('Neil');
+  await delPage.locator('.team-name-input').nth(1).fill('Sigma');
+  await delPage.waitForTimeout(250);
+  check('the form panel shows a seeded match', (await delPage.locator('.lineup').count()) === 1);
+
+  await delPage.getByRole('button', { name: 'Stats' }).click();
+  await delPage.locator('.recent-delete').first().click();
+  await delPage.getByRole('button', { name: '‹ Back' }).click();
+  await delPage.waitForTimeout(250);
+  check(
+    'and is gone as soon as that match is deleted, without a reload',
+    (await delPage.locator('.lineup').count()) === 0,
+  );
+  await del.close();
+}
 
 const plain = await browser.newContext();
 await plain.addInitScript(() => {
