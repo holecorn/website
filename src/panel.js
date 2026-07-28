@@ -33,7 +33,7 @@ export const PANEL_W = 128;
 export const PANEL_H = 32;
 
 const NAME_Y = 0;
-const DIGIT_Y = 10;
+export const DIGIT_Y = 10;
 const DIGIT_GAP = 2;
 const PAIR_W = GLYPH_DIGIT_W * 2 + DIGIT_GAP;
 const VERSUS_PAD = 3;
@@ -142,7 +142,13 @@ function drawDigit(fb, code, x, y, color) {
 // the renderer ints and single chars, so a fractional round or a `winner` of
 // "away" has to land the same way on both sides.
 
-const intOf = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
+// `+ 0` normalises the -0 that Math.trunc returns for -0.5, which a C++ cast to
+// int does not produce. Nothing downstream renders it differently, but leaving it
+// makes the two sides compare unequal for no reason.
+const intOf = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) + 0 : 0;
+};
 
 // Only the first character is looked at, as the firmware does, so "away" is
 // team 'a' on both sides rather than a winner on one and none on the other.
@@ -210,11 +216,32 @@ function formatDigits(a, b) {
   return out;
 }
 
-// `lastLive` is when the link was last actually up, or 0 if never.
+// `lastLive` is when the link was last actually up, or 0 if never. The C++
+// relies on unsigned wrap to survive millis() overflowing at ~49 days; these are
+// Date.now() stamps, so there is no wrap to survive and a `lastLive` in the
+// future simply reads as live.
 export function liveWithGrace(connected, now, lastLive) {
   if (connected) return true;
   if (lastLive === 0) return false;
   return now - lastLive < LIVE_GRACE_MS;
+}
+
+// What the board would show, given the link. `dimAt` is when to look again, or
+// null if the answer cannot change on its own — so a caller schedules one timer
+// rather than polling.
+//
+// The firmware refreshes `lastLive` every pass of loop() while the link is up,
+// so **the grace runs from the drop, not from the connect**. A caller that
+// stamps `lastLive` when the link arrives instead makes the grace expire mid-
+// session and dims the moment the socket goes; `boardLiveness` is pure so that
+// is a unit test rather than something you notice on a phone.
+export function boardLiveness({ connected, senderOnline, now, lastLive }) {
+  // `senderOnline` is the retained presence flag: the firmware ands it in
+  // outside the grace, so a scorer that said goodbye dims at once.
+  if (!senderOnline) return { live: false, dimAt: null };
+  if (connected) return { live: true, dimAt: null };
+  if (!liveWithGrace(false, now, lastLive)) return { live: false, dimAt: null };
+  return { live: true, dimAt: lastLive + LIVE_GRACE_MS };
 }
 
 // --------------------------------------------------------- doubles names --

@@ -15,13 +15,12 @@ import {
   saveScoreboardConfig,
 } from './scoreboard.js';
 import {
-  LIVE_GRACE_MS,
   PANEL_H,
   PANEL_W,
   WINNER_BLINK,
+  boardLiveness,
   boardState,
   createFramebuffer,
-  liveWithGrace,
   renderBoard,
 } from './panel.js';
 import { paintPanel, panelCell } from './panelPaint.js';
@@ -46,26 +45,30 @@ function useBlink(winner) {
   return on;
 }
 
-// The board holds a dropped link live for LIVE_GRACE_MS so a patchy hotspot
+// The board holds a dropped link live for a grace period so a patchy hotspot
 // doesn't flicker it between bright and dim — reproduced here because when the
-// board dims is one of the things worth watching. Scheduled off the remaining
-// grace rather than polled, so nothing ticks while the link is healthy.
+// board dims is one of the things worth watching. `boardLiveness` decides;
+// this only stamps the clock and schedules the one timer it asks for.
 function useBoardLive(connected, senderOnline) {
   const [live, setLive] = useState(false);
   const lastLive = useRef(0);
 
   useEffect(() => {
-    const now = Date.now();
-    if (connected && senderOnline) {
-      lastLive.current = now;
-      setLive(true);
-      return undefined;
-    }
-    if (!senderOnline || !liveWithGrace(false, now, lastLive.current)) {
-      setLive(false);
-      return undefined;
-    }
-    const id = setTimeout(() => setLive(false), LIVE_GRACE_MS - (now - lastLive.current));
+    const { live: next, dimAt } = boardLiveness({
+      connected,
+      senderOnline,
+      now: Date.now(),
+      lastLive: lastLive.current,
+    });
+    setLive(next);
+    // Stamped as the link goes rather than as it arrives, which is what makes
+    // the grace run from the drop. Cleanup is the only place that knows the
+    // link was up until now.
+    if (connected && senderOnline) return () => {
+      lastLive.current = Date.now();
+    };
+    if (dimAt === null) return undefined;
+    const id = setTimeout(() => setLive(false), dimAt - Date.now());
     return () => clearTimeout(id);
   }, [connected, senderOnline]);
 

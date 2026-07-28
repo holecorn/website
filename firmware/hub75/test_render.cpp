@@ -116,11 +116,29 @@ static double worstDuty = 0;
 // catch.
 static std::vector<std::string> scenes;
 
+// Escapes control characters as well as the two JSON specials, so an unprintable
+// byte in a label produces a parseable file rather than one that fails on the
+// Node side with a byte offset and no scene name.
+//
+// A byte >= 0x80 is passed through, which is fine for a whole UTF-8 name and
+// **not** fine for one copyLabel cut mid-character: that is invalid UTF-8, and
+// Node reads the file as UTF-8 and would substitute U+FFFD. So a non-ASCII scene
+// cannot be added here without carrying the label as bytes instead. The
+// mid-character cut is covered in src/panel.test.js instead.
 static std::string quoted(const char* s) {
   std::string out = "\"";
   for (int i = 0; s[i]; i++) {
-    if (s[i] == '"' || s[i] == '\\') out += '\\';
-    out += s[i];
+    const unsigned char c = static_cast<unsigned char>(s[i]);
+    if (c == '"' || c == '\\') {
+      out += '\\';
+      out += char(c);
+    } else if (c < 0x20) {
+      char esc[7];
+      snprintf(esc, sizeof esc, "\\u%04x", c);
+      out += esc;
+    } else {
+      out += char(c);
+    }
   }
   return out + "\"";
 }
@@ -185,10 +203,19 @@ int main() {
       makeState(17, 8, 7, "OMICRON & UPSILON", "EPSILON & MU");
   const BoardState won = makeState(21, 8, 9, "NEIL & PSI", "IOTA & ZETA", 'a');
   const BoardState big = makeState(88, 88, 99, "WWWWWWWWWW", "WWWWWWWWWW");
-  // None of the scenes above sets `first`, so without these two the underline —
-  // and which partner it picks — would go uncompared against src/panel.js.
+  // None of the scenes above sets `first`, so without these the underline — and
+  // which partner it picks — would go uncompared against src/panel.js. Both
+  // parities are needed: with only the odd round, hard-coding the partner to the
+  // second one passes.
   const BoardState ruledSingle = makeState(12, 7, 5, "Theta", "Nu", 0, 'a');
-  const BoardState ruledPair = makeState(9, 6, 5, "Nu & Tau", "Alpha & Phi", 0, 'b');
+  const BoardState ruledPairOdd = makeState(9, 6, 5, "Nu & Tau", "Alpha & Phi", 0, 'b');
+  const BoardState ruledPairEven = makeState(9, 6, 4, "Nu & Tau", "Alpha & Phi", 0, 'b');
+  // Out of range on every axis at once, target included — makeState's 21 is
+  // under the cap. Recorded as a scene and not merely rendered, because it is
+  // the only one that exercises the clamps: without it, deleting either the
+  // 0..99 score clamp or the "TO 99" cap in src/panel.js passes.
+  BoardState overflow = makeState(999, -5, 250, "0123456789ABCDEFGHIJKLMNOPQ", "X");
+  overflow.target = 250;
 
   shot("play", play, true, true, true);
   shot("early", early, true, true, true);
@@ -199,7 +226,10 @@ int main() {
   const Framebuffer winOff = shot("winner-off", won, true, true, false);
   shot("worst", big, true, true, true);
   shot("ruled-single", ruledSingle, true, true, true);
-  shot("ruled-pair", ruledPair, true, true, true);
+  shot("ruled-pair-odd", ruledPairOdd, true, true, true);
+  shot("ruled-pair-even", ruledPairEven, true, true, true);
+  // shot() asserts nothing is drawn off-panel, which is what this scene is for.
+  shot("overflow", overflow, true, true, true);
   writeScenes();
 
   printf("\nchecks\n");
@@ -213,10 +243,6 @@ int main() {
   check(winOff.lit() > 100, "winner blink blanked too much");
   check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");
 
-  Framebuffer bounds;
-  BoardState overflow = makeState(999, -5, 250, "0123456789ABCDEFGHIJKLMNOPQ", "X");
-  renderBoard(bounds, overflow, true, true, true);
-  check(bounds.outOfBounds == 0, "out-of-range score/round/name must stay on the panel");
 
   Rgb c;
   parseColor("#2f80ed", c);

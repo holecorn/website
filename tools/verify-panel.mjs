@@ -13,13 +13,15 @@
 
 import { chromium } from 'playwright';
 import { GLYPH_DIGIT_H } from '../src/panelGlyphs.js';
-import { PANEL_H, PANEL_W } from '../src/panel.js';
+import { DIGIT_Y, PANEL_H, PANEL_W } from '../src/panel.js';
 
 const BASE = 'http://localhost:4173/';
 // Refused fast rather than left to time out, so the board settles on "offline".
 const OFFLINE = 'broker=wss://127.0.0.1:1/mqtt&code=abc12';
-// The dash is segment g, the middle bar of a digit that starts at DIGIT_Y=10.
-const DASH_ROWS = [10 + Math.trunc(GLYPH_DIGIT_H / 2) - 1, 10 + Math.trunc(GLYPH_DIGIT_H / 2)];
+// The dash is segment g: the middle bar of a digit drawn at DIGIT_Y. Derived
+// rather than written out, so moving the digits doesn't leave this sampling a row
+// of unlit LEDs and calling it a pass.
+const DASH_ROW = DIGIT_Y + Math.trunc(GLYPH_DIGIT_H / 2) - 1;
 
 let failures = 0;
 const check = (label, cond, detail = '') => {
@@ -93,7 +95,7 @@ console.log('\nthe emulator draws the framebuffer onto the canvas');
   // neighbour's halo. Rows far from the dashes have no lit LED within reach, so
   // their centres are the unlit grey.
   const sampled = await page.evaluate(
-    ({ panelW, cell: c, dashRows, blankRow }) => {
+    ({ panelW, cell: c, dashRow, blankRow }) => {
       const canvas = document.querySelector('.panel-canvas');
       const ctx = canvas.getContext('2d');
       const dpr = canvas.width / (panelW * c);
@@ -107,9 +109,9 @@ console.log('\nthe emulator draws the framebuffer onto the canvas');
         return d[0] + d[1] + d[2];
       };
       const scan = (y) => Array.from({ length: panelW }, (_, x) => brightness(x, y));
-      return { dash: scan(dashRows[0]), other: scan(blankRow) };
+      return { dash: scan(dashRow), other: scan(blankRow) };
     },
-    { panelW: PANEL_W, cell, dashRows: DASH_ROWS, blankRow: 0 },
+    { panelW: PANEL_W, cell, dashRow: DASH_ROW, blankRow: 0 },
   );
 
   const floor = Math.max(...sampled.other);

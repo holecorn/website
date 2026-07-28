@@ -202,6 +202,16 @@ When a game is won, the winner's digits flash — hollowing out to a bright rim
 rather than blanking, so the score stays readable throughout. That's skipped for
 anyone who has asked for reduced motion.
 
+The display dims itself whenever the score might be stale, so a phone that has
+wandered out of signal shows as dim rather than as a confident wrong score. Both
+ends need internet; a phone hotspot is enough, though note ESP32-class hardware
+is 2.4GHz-only, so a hotspot serving one needs **Maximize Compatibility** on.
+
+Anyone who knows your broker details and game code can post to your scoreboard,
+so treat the display link as a shared secret — note it carries your broker
+**password** in the query string, so it ends up in browser history and in
+whatever you paste it into. Use a broker user you can revoke.
+
 ### Watching the LED panel
 
 Adding `&panel=1` to a display link opens the **panel emulator** instead: the
@@ -213,17 +223,7 @@ and the winner blink.
 It is small on purpose. The panel is 128x32 whatever you view it on, and being
 able to judge the real thing — whether the names are worth their nine characters,
 say — is the point of looking at it. Use `?display=1` for a scoreboard you
-actually want to read across a garden.
-
-The display dims itself whenever the score might be stale, so a phone that has
-wandered out of signal shows as dim rather than as a confident wrong score. Both
-ends need internet; a phone hotspot is enough, though note ESP32-class hardware
-is 2.4GHz-only, so a hotspot serving one needs **Maximize Compatibility** on.
-
-Anyone who knows your broker details and game code can post to your scoreboard,
-so treat the display link as a shared secret — note it carries your broker
-**password** in the query string, so it ends up in browser history and in
-whatever you paste it into. Use a broker user you can revoke.
+actually want to read across a garden. The emulator has no wake lock and no fullscreen tap, so a tablet left showing it will sleep.
 
 ### Hardware board
 

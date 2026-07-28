@@ -101,8 +101,7 @@ const panel = await import('../src/panel.js');
 const rgbAt = (buf, i) => `${buf[i * 3]},${buf[i * 3 + 1]},${buf[i * 3 + 2]}`;
 
 function firstDifference(a, b) {
-  if (a.length !== b.length) return 0;
-  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return i;
+  for (let i = 0; i < Math.min(a.length, b.length); i += 1) if (a[i] !== b[i]) return i;
   return -1;
 }
 
@@ -115,6 +114,12 @@ if (!ran['test_render.cpp']) {
     const header = `P6\n${panel.PANEL_W} ${panel.PANEL_H}\n255\n`;
     const problems = [];
 
+    // Otherwise an empty manifest reports "0 scenes identical" and passes, which
+    // is the one failure mode of a comparison that compares nothing.
+    if (scenes.length < 10) {
+      throw new Error(`only ${scenes.length} scenes in out/scenes.json — expected every shot()`);
+    }
+
     for (const scene of scenes) {
       const buf = readFileSync(resolve(dir, `${scene.name}.ppm`));
       if (buf.subarray(0, header.length).toString('ascii') !== header) {
@@ -126,6 +131,14 @@ if (!ran['test_render.cpp']) {
 
       if (fb.outOfBounds > 0) {
         problems.push(`${scene.name}: drew ${fb.outOfBounds} px outside the panel`);
+      }
+      // Reported separately from a pixel difference: a short PPM is a file-shape
+      // problem, and naming a coordinate would send you hunting in the renderer.
+      if (expected.length !== fb.data.length) {
+        problems.push(
+          `${scene.name}: PPM holds ${expected.length} bytes, framebuffer ${fb.data.length}`,
+        );
+        continue;
       }
       const at = firstDifference(expected, fb.data);
       if (at >= 0) {

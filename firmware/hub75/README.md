@@ -231,6 +231,14 @@ coordinate and both colours.
 The C++ is the source of truth for the scene list, deliberately: a table of
 scenes maintained in two languages is the drift the check exists to catch.
 
+**What it pins is `renderBoard`.** Scenes are recorded from an already-parsed
+`BoardState`, so the coercions ported from `parseBoardState` — the ones that turn
+raw JSON into that struct — are never fed raw JSON by it. `src/panel.test.js`
+covers that half against what `board_logic.h` does. The gap was measured, not
+assumed: before the `overflow` and `ruled-pair-even` scenes were added, deleting
+the 0..99 score clamp, the "TO 99" cap, or the doubles partner parity all passed
+the pixel check.
+
 Two things follow from matching C++ that look wrong in JavaScript:
 
 - Every division truncates. The layout constants depend on the remainder being

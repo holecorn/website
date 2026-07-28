@@ -55,8 +55,9 @@ project dependency. It starts and stops its own preview server.
   `src/main.jsx`. `src/ScoreboardSettings.jsx` is its settings UI on the setup
   screen.
 - `src/panel.js` — the HUB75 panel's framebuffer, a port of the firmware's
-  `render.h`. Pure and framework-free; held **pixel-identical** to the C++ by
-  `npm run test:firmware`. `src/panelGlyphs.js` beside it is generated.
+  `render.h`. Pure and framework-free; its `renderBoard` is held
+  **pixel-identical** to the C++ by `npm run test:firmware`, and the parse-side
+  coercions around it by `src/panel.test.js`. `src/panelGlyphs.js` is generated.
 - `src/panelPaint.js` — turns that framebuffer into LEDs on a canvas. No React,
   so a browser check can drive it directly.
 - `src/Panel.jsx` / `src/Panel.css` — the `?panel=1` emulator view: the same MQTT
@@ -388,6 +389,16 @@ project dependency. It starts and stops its own preview server.
 - **The panel blanks the winning pair instead**, because at 20px a 1px rim around
   a 2px stroke leaves nothing to read. That divergence is deliberate, not an
   oversight.
+- **The panel emulator deliberately has neither the wake lock nor the
+  fullscreen tap**, both of which `?display=1` has. It is a judging tool you look
+  at for a few rounds, and a 128x32 strip is not a scoreboard — so a tablet
+  showing it will sleep. Reach for `?display=1` for anything propped against a
+  fence. It also **holds a dropped link live for 30 seconds where the display
+  dims at once** (`Display.jsx`'s `stale`): the emulator mirrors the board's
+  `liveWithGrace`, and the display answers a different question. Both are
+  deliberate; `boardLiveness()` is the pure version, tested in `panel.test.js`
+  because the grace has to run from the *drop* and stamping it at connect made a
+  long session dim the instant the socket went.
 - **The display's wake lock is re-acquired, not requested once.** The browser
   drops it whenever the page is hidden, and the system can reclaim it (low
   battery). An outright refusal is not retried — it would only be refused again —
@@ -432,7 +443,8 @@ coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
 - **`src/panel.js` is a second implementation of `render.h`, and the only reason
   that is allowed is the pixel check.** It exists so the panel can be watched in
   a browser during a real game (`?panel=1`), which stills can't show. What keeps
-  it from becoming the Wokwi mistake is that it is not maintained by inspection:
+  it from becoming the Wokwi mistake is that `renderBoard` is not maintained by
+  inspection:
   `test_render.cpp` writes `out/scenes.json` describing every scene it dumped,
   and `tools/test-firmware.mjs` renders each through `src/panel.js` and compares
   framebuffers byte for byte. **Change `render.h` and the JS fails until it is
@@ -457,10 +469,11 @@ coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
   - The emulator exercises publish → retain → subscribe → this layout over a real
     broker, which the host suites can't. **It still says nothing about WiFi or
     PubSubClient**, so it does not close the gap above.
-  - **It ships to everyone**, not behind a lazy boundary: measured, the whole
-    emulator is 2.87 kB gzipped of the main chunk (79.82 → 82.69), against the
-    ~100 kB the mqtt chunk costs. A `lazy()` split would buy that back and give
-    every display a Suspense flash for it, so it wasn't worth it — but re-measure
+  - **It ships to everyone**, not behind a lazy boundary: measured, 2.87 kB
+    gzipped of the main chunk (79.82 → 82.69) plus 0.12 kB of CSS, against the
+    104 kB the mqtt chunk already costs `?panel=1` anyway. Splitting it would
+    touch only `?panel=1` — `Display` is a separate route and unaffected — so the
+    reason not to is simply that 3 kB doesn't pay for the boundary. Re-measure
     before adding panel-side features rather than assuming it stays small.
 
 The parts worth knowing before touching it:
