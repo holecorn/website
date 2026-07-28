@@ -18,8 +18,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -33,6 +33,10 @@ jobs:
       - run: npm install --no-save playwright
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      # Left on v3 while the others moved to the Node 24 runtime: this one is a
+      # composite action with no runtime of its own, so it was never part of the
+      # deprecation. v4 excludes dotfiles from the artifact, which buys nothing
+      # here and is a behaviour change for no reason.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -45,14 +49,14 @@ jobs:
   firmware:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
       # ArduinoJson is a vendored header rather than a dependency, so it is
       # gitignored and fetched on demand. Cached to keep a third party off the
       # critical path of a deploy.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: firmware/hub75/ArduinoJson.h
           key: arduinojson-v7.4.3
@@ -66,4 +70,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
