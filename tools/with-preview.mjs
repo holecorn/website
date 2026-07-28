@@ -13,7 +13,12 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = 4173;
-const CHECKS = ['verify-wakelock.mjs', 'verify-copy-link.mjs', 'verify-stats.mjs'];
+const CHECKS = [
+  'verify-wakelock.mjs',
+  'verify-copy-link.mjs',
+  'verify-stats.mjs',
+  'verify-positions.mjs',
+];
 
 const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT)], {
   cwd: join(here, '..'),

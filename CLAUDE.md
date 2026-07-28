@@ -498,6 +498,13 @@ lost acknowledgement, a refused subscription, a half-open socket — are ones a
 real broker will not reproduce on demand. `openScoreboardLink` takes an
 injectable `connect` for exactly this; production never passes it.
 
+`tools/verify-positions.mjs` covers the court and in-game stats panels, and the
+assertion it exists for is that **the court names the same thrower the scoring
+lanes do**. Both sides derive the parity correctly and are unit tested; nothing
+below `App.jsx` can catch it handing the wrong one to the wrong component, and
+crossing them over passes all 131 unit tests. Checked by inverting `activeIdx`,
+which fails that assertion and nothing else.
+
 `src/stats.test.js` builds its fixtures by playing rounds through the real
 scoring functions and archiving the result, rather than hand-writing record
 blobs, so a rules change that breaks attribution surfaces there instead of
