@@ -207,7 +207,7 @@ console.log('\nthe four-bagger badge survives a long name');
 {
   // The badge is the only place the count appears, and it lives in the one cell
   // that truncates.
-  const page = await open(PHONE, { names: ['Epsilon Jr.', 'Tau', 'Cat', 'Dan'] });
+  const page = await open(PHONE, { names: ['GammaDeltew Jr.', 'Tau', 'Cat', 'Dan'] });
   await playRound(page, ['hole', 'hole', 'hole', 'hole']);
   await page.getByRole('button', { name: 'Game stats' }).click();
   const badge = await page.evaluate(() => {
