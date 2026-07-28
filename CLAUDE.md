@@ -394,9 +394,12 @@ project dependency. It starts and stops its own preview server.
   fullscreen tap**, both of which `?display=1` has. It is a judging tool you look
   at for a few rounds, and a 128x32 strip is not a scoreboard — so a tablet
   showing it will sleep. Reach for `?display=1` for anything propped against a
-  fence. It also **holds a dropped link live for 30 seconds where the display
-  dims at once** (`Display.jsx`'s `stale`): the emulator mirrors the board's
-  `liveWithGrace`, and the display answers a different question. Both are
+  fence. It also **holds its own dropped link live for 30 seconds where the
+  display dims at once** (`Display.jsx`'s `stale`): the emulator mirrors the
+  board's `liveWithGrace`, and the display answers a different question. Note
+  *whose* link — a scorer that goes away publishes `online 0`, and `senderOnline`
+  is anded in **outside** the grace, so that dims both views immediately. The
+  grace covers the viewing device losing its network, nothing else. Both are
   deliberate; `boardLiveness()` is the pure version, tested in
   `panelRender.test.js` because the grace has to run from the *drop* — stamping it
   at connect made a long session dim the instant the socket went.
