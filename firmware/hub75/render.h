@@ -281,7 +281,7 @@ inline int writeAbbreviated(const char* label, int k, char* dst, int cap) {
 }
 
 // Each label shortens on its own. One prefix length shared across both teams
-// was tried and was wrong: it cut "AlphaBet" — which fits — to "Alph" because
+// was tried and was wrong: it cut "Lambda" — which fits — to "Lamb" because
 // the opposing label was long. Partners within a label do still share one, so
 // a shortened pair still looks deliberate.
 inline int fitLabel(const char* label, char* out, int cap) {
