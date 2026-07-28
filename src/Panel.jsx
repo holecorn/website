@@ -1,5 +1,5 @@
 // The HUB75 panel, emulated (`?panel=1`): the same MQTT subscription the display
-// view uses, drawn through src/panel.js — which is held pixel-identical to the
+// view uses, drawn through src/panelRender.js — which is held pixel-identical to the
 // firmware's render.h by `npm run test:firmware`. So this is what the board will
 // show, at the board's resolution, not an impression of it.
 //
@@ -22,7 +22,7 @@ import {
   boardState,
   createFramebuffer,
   renderBoard,
-} from './panel.js';
+} from './panelRender.js';
 import { paintPanel, panelCell } from './panelPaint.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import './Panel.css';

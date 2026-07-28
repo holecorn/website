@@ -4,9 +4,14 @@ Verification and preview scripts. Some run in CI; the rest exist because several
 decisions in `CLAUDE.md` were made from measurements rather than judgement, and
 those measurements should be reproducible.
 
-`test-firmware.mjs` needs only a C++17 compiler. Everything else here drives a
-browser and needs Playwright, which is deliberately **not** a project
-dependency:
+`test-firmware.mjs` needs only a C++17 compiler. Note that it **regenerates
+tracked files as part of the run** — it re-runs `generate_glyphs.mjs` to check
+those outputs are current, so a stale `firmware/hub75/glyphs.h` or
+`src/panelGlyphs.js` is left rewritten in your working tree along with the
+failure. That is the fix, so commit it.
+
+Everything else here drives a browser and needs Playwright, which is deliberately
+**not** a project dependency:
 
 ```bash
 npm install --no-save playwright
@@ -59,7 +64,7 @@ rendering aid with nothing to assert.
 
 | Script | |
 | --- | --- |
-| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, fails if `glyphs.h` or `src/panelGlyphs.js` no longer matches `src/segments.js`, and compares `src/panel.js` against the C++ framebuffers pixel for pixel. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
+| `test-firmware.mjs` | Compiles and runs both firmware host C++ suites, fails if `glyphs.h` or `src/panelGlyphs.js` no longer matches `src/segments.js`, and compares `src/panelRender.js` against the C++ framebuffers pixel for pixel. This is `npm run test:firmware`; CI runs it. Needs a C++17 compiler, not Playwright. |
 | `measure-digits.mjs` | Reports seven-segment digit height in **millimetres** across real device sizes. Needs `npm run dev`. |
 | `verify-copy-link.mjs` | Checks **Copy display link** puts the link on the clipboard, falls back to a manual-copy dialog when the Clipboard API is missing or refuses (plain http, denied permission), and that the **QR code** rasterises and decodes back to the display link. Needs `npm run preview`. |
 | `verify-positions.mjs` | Checks the court diagram and the in-game stats panel: that the court names the same thrower the scoring lanes do (two independent derivations that App.jsx could still cross over), that the phone toggles and the persistent wide-screen column are the same panels, that the rail runs court/stats/history, that the stats follow the live game round by round, and that the four-bagger badge isn't clipped by a long name. Needs `npm run preview`. |
@@ -87,8 +92,8 @@ matrix panels before one was chosen; the panel actually being built is
 `firmware/hub75/`, which has its own host renderer that compiles the firmware's
 own `render.h`. Prefer that for anything about the real board.
 
-Don't confuse these with `src/panel.js`, which is also JavaScript and is *not*
-exploratory: it is a port of `render.h` held pixel-identical to it by
+Don't confuse these with `src/panelRender.js`, which is also JavaScript and is
+*not* exploratory: it is a port of `render.h` held pixel-identical to it by
 `npm run test:firmware`, and is what `?panel=1` draws. These scripts approximate
 a panel that was never built; that one reproduces the one that was.
 

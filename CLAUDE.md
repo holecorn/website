@@ -19,7 +19,7 @@ npm run lint     # oxlint
 npm test         # vitest run
 npm run test:watch
 npm run test:browser  # Playwright checks against a preview build (CI runs these)
-npm run test:firmware # host C++ suites + the generated-glyph and panel.js drift checks (CI runs these)
+npm run test:firmware # host C++ suites + the glyph and panelRender.js drift checks
 ```
 
 `test:browser` needs `npm install --no-save playwright` first — it is not a
@@ -54,10 +54,11 @@ project dependency. It starts and stops its own preview server.
 - `src/Display.jsx` / `src/Display.css` — the `?display=1` view, routed in
   `src/main.jsx`. `src/ScoreboardSettings.jsx` is its settings UI on the setup
   screen.
-- `src/panel.js` — the HUB75 panel's framebuffer, a port of the firmware's
+- `src/panelRender.js` — the HUB75 panel's framebuffer, a port of the firmware's
   `render.h`. Pure and framework-free; its `renderBoard` is held
   **pixel-identical** to the C++ by `npm run test:firmware`, and the parse-side
-  coercions around it by `src/panel.test.js`. `src/panelGlyphs.js` is generated.
+  coercions around it by `src/panelRender.test.js`. `src/panelGlyphs.js` is
+  generated.
 - `src/panelPaint.js` — turns that framebuffer into LEDs on a canvas. No React,
   so a browser check can drive it directly.
 - `src/Panel.jsx` / `src/Panel.css` — the `?panel=1` emulator view: the same MQTT
@@ -396,9 +397,9 @@ project dependency. It starts and stops its own preview server.
   fence. It also **holds a dropped link live for 30 seconds where the display
   dims at once** (`Display.jsx`'s `stale`): the emulator mirrors the board's
   `liveWithGrace`, and the display answers a different question. Both are
-  deliberate; `boardLiveness()` is the pure version, tested in `panel.test.js`
-  because the grace has to run from the *drop* and stamping it at connect made a
-  long session dim the instant the socket went.
+  deliberate; `boardLiveness()` is the pure version, tested in
+  `panelRender.test.js` because the grace has to run from the *drop* — stamping it
+  at connect made a long session dim the instant the socket went.
 - **The display's wake lock is re-acquired, not requested once.** The browser
   drops it whenever the page is hidden, and the system can reclaim it (low
   battery). An outright refusal is not retried — it would only be refused again —
@@ -440,19 +441,19 @@ board is on the bench** — the host suites stop at parsing, layout and duty. Do
 reintroduce a second target to get coverage back: a divergent copy reads as
 coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
 
-- **`src/panel.js` is a second implementation of `render.h`, and the only reason
-  that is allowed is the pixel check.** It exists so the panel can be watched in
+- **`src/panelRender.js` is a second implementation of `render.h`, and the only
+  reason that is allowed is the pixel check.** It exists so the panel can be watched in
   a browser during a real game (`?panel=1`), which stills can't show. What keeps
   it from becoming the Wokwi mistake is that `renderBoard` is not maintained by
   inspection:
   `test_render.cpp` writes `out/scenes.json` describing every scene it dumped,
-  and `tools/test-firmware.mjs` renders each through `src/panel.js` and compares
-  framebuffers byte for byte. **Change `render.h` and the JS fails until it is
+  and `tools/test-firmware.mjs` renders each through `src/panelRender.js` and
+  compares framebuffers byte for byte. **Change `render.h` and the JS fails until it is
   changed to match** — so treat them as one thing in two languages, and don't
   "tidy" either alone. The scene list lives in the C++ on purpose; a scene table
   maintained in two languages is exactly the drift being guarded against.
-  - **Every division in `src/panel.js` truncates**, because these are `int`
-    expressions in C++. `scaled()` is the one that bites: at `LEVEL_STALE` the
+  - **Every division in `src/panelRender.js` truncates**, because these are
+    `int` expressions in C++. `scaled()` is the one that bites: at `LEVEL_STALE` the
     blue channel of `#2f80ed` is 55 truncated and 56 rounded, and that single
     pixel fails the check. Verified by mutation, so `idiv` is load-bearing rather
     than stylistic.
@@ -593,8 +594,8 @@ of reporting.
 
 `npm run test:firmware` compiles and runs both host C++ suites, checks that
 `glyphs.h` and `src/panelGlyphs.js` still match `src/segments.js`, and compares
-`src/panel.js` against the framebuffers `test_render.cpp` just produced. That
-last one is what makes a browser copy of `render.h` safe to have at all — see
+`src/panelRender.js` against the framebuffers `test_render.cpp` just produced.
+That last one is what makes a browser copy of `render.h` safe to have at all — see
 Firmware above. One assertion in `test_render.cpp`
 is not about rendering at all: `DUTY_CEILING` caps how much of the panel any
 scene may light, because the decision to run both panels through the

@@ -223,12 +223,13 @@ and the winner blink.
 It is small on purpose. The panel is 128x32 whatever you view it on, and being
 able to judge the real thing — whether the names are worth their nine characters,
 say — is the point of looking at it. Use `?display=1` for a scoreboard you
-actually want to read across a garden. The emulator has no wake lock and no fullscreen tap, so a tablet left showing it will sleep.
+actually want to read across a garden. The emulator has no wake lock and no
+fullscreen tap, so a tablet left showing it will sleep.
 
 ### Hardware board
 
-Two ESP32 firmware builds subscribe to the same topic, and neither holds any
-game rules — every message carries the whole state.
+The firmware subscribes to the same topic and holds no game rules of its own —
+every message carries the whole state.
 
 [`firmware/hub75/`](firmware/hub75/README.md) drives a 640 x 160 mm RGB LED
 panel showing the score in each team's colour, both names, the round, the

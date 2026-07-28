@@ -1,7 +1,7 @@
 // The panel emulator (`?panel=1`), driven through the built app.
 //
 // What the framebuffer contains is not checked here — `npm run test:firmware`
-// already holds src/panel.js pixel-identical to the firmware's render.h, which
+// already holds src/panelRender.js pixel-identical to the firmware's render.h, which
 // is a far stronger assertion than anything a browser could make. This covers
 // only the two things that check cannot see: that the querystring still routes
 // to the panel rather than falling through to the app, and that panelPaint.js
@@ -13,7 +13,7 @@
 
 import { chromium } from 'playwright';
 import { GLYPH_DIGIT_H } from '../src/panelGlyphs.js';
-import { DIGIT_Y, PANEL_H, PANEL_W } from '../src/panel.js';
+import { DIGIT_Y, PANEL_H, PANEL_W } from '../src/panelRender.js';
 
 const BASE = 'http://localhost:4173/';
 // Refused fast rather than left to time out, so the board settles on "offline".
@@ -129,11 +129,17 @@ console.log('\nthe emulator draws the framebuffer onto the canvas');
   for (let x = 0; x < lit.length; x++) if (lit[x] && !lit[x - 1]) runs++;
   check('four dashes are drawn', runs === 4, `${runs} runs, ${litCount} LEDs`);
 
-  check(
-    'and dimmed, because no scorer is connected',
-    (await page.locator('.panel-caption').innerText()).includes('offline'),
-    await page.locator('.panel-caption').innerText(),
-  );
+  // Polled rather than read once: with an unreachable broker the status cycles
+  // offline → connecting → error every RECONNECT_PERIOD, so a single read can
+  // land in one of the brief non-offline windows. The frame stays dimmed
+  // throughout either way — this is about the caption wording, not the pixels.
+  const caption = () => page.locator('.panel-caption').innerText();
+  let settled = await caption();
+  for (let attempt = 0; attempt < 20 && !settled.includes('offline'); attempt += 1) {
+    await page.waitForTimeout(250);
+    settled = await caption();
+  }
+  check('and dimmed, because no scorer is connected', settled.includes('offline'), settled);
   await page.close();
 }
 

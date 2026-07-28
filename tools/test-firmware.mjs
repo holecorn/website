@@ -54,7 +54,7 @@ step('ArduinoJson', () => {
 
 // Both outputs, because they come from one run of the generator: the firmware's
 // header and the emulator's tables. Checking only one would let the panel and
-// src/panel.js quantise the same polygon differently.
+// src/panelRender.js quantise the same polygon differently.
 const GENERATED = ['firmware/hub75/glyphs.h', 'src/panelGlyphs.js'];
 
 step('the generated glyph tables match src/segments.js', () => {
@@ -90,13 +90,13 @@ for (const suite of SUITES) {
   });
 }
 
-// src/panel.js draws the panel in the browser, which makes it a second copy of
+// src/panelRender.js draws the panel in the browser, which makes it a second copy of
 // render.h — the shape of thing that quietly drifts until it is lying. So it is
 // held to the framebuffer the firmware just produced, byte for byte, over every
 // scene test_render.cpp dumped. Reading the two files side by side is not a
 // substitute: the divergences that matter are single pixels from a truncating
 // division, and they are invisible to review.
-const panel = await import('../src/panel.js');
+const panel = await import('../src/panelRender.js');
 
 const rgbAt = (buf, i) => `${buf[i * 3]},${buf[i * 3 + 1]},${buf[i * 3 + 2]}`;
 
@@ -106,9 +106,9 @@ function firstDifference(a, b) {
 }
 
 if (!ran['test_render.cpp']) {
-  process.stdout.write('\n── src/panel.js matches render.h\n   SKIPPED: the render suite did not run\n');
+  process.stdout.write('\n── src/panelRender.js matches render.h\n   SKIPPED: the render suite did not run\n');
 } else {
-  step('src/panel.js matches render.h', () => {
+  step('src/panelRender.js matches render.h', () => {
     const dir = resolve(root, 'firmware/hub75/out');
     const scenes = JSON.parse(readFileSync(resolve(dir, 'scenes.json'), 'utf8'));
     const header = `P6\n${panel.PANEL_W} ${panel.PANEL_H}\n255\n`;
@@ -152,7 +152,7 @@ if (!ran['test_render.cpp']) {
 
     if (problems.length > 0) {
       throw new Error(
-        `src/panel.js has drifted from firmware/hub75/render.h:\n     ${problems.join('\n     ')}`,
+        `src/panelRender.js has drifted from firmware/hub75/render.h:\n     ${problems.join('\n     ')}`,
       );
     }
     process.stdout.write(`   ${scenes.length} scenes identical, pixel for pixel\n`);

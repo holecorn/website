@@ -109,7 +109,7 @@ static BoardState makeState(int a, int b, int round, const char* ta, const char*
 static const double DUTY_CEILING = 30.0;
 static double worstDuty = 0;
 
-// Every shot() is also described in out/scenes.json, so src/panel.js can be
+// Every shot() is also described in out/scenes.json, so src/panelRender.js can be
 // rendered against the same inputs and compared byte for byte — see
 // tools/test-firmware.mjs. Written from here rather than listed there because a
 // scene table maintained in two languages is exactly the drift this is meant to
@@ -124,7 +124,7 @@ static std::vector<std::string> scenes;
 // **not** fine for one copyLabel cut mid-character: that is invalid UTF-8, and
 // Node reads the file as UTF-8 and would substitute U+FFFD. So a non-ASCII scene
 // cannot be added here without carrying the label as bytes instead. The
-// mid-character cut is covered in src/panel.test.js instead.
+// mid-character cut is covered in src/panelRender.test.js instead.
 static std::string quoted(const char* s) {
   std::string out = "\"";
   for (int i = 0; s[i]; i++) {
@@ -204,7 +204,7 @@ int main() {
   const BoardState won = makeState(21, 8, 9, "NEIL & PSI", "IOTA & ZETA", 'a');
   const BoardState big = makeState(88, 88, 99, "WWWWWWWWWW", "WWWWWWWWWW");
   // None of the scenes above sets `first`, so without these the underline — and
-  // which partner it picks — would go uncompared against src/panel.js. Both
+  // which partner it picks — would go uncompared against src/panelRender.js. Both
   // parities are needed: with only the odd round, hard-coding the partner to the
   // second one passes.
   const BoardState ruledSingle = makeState(12, 7, 5, "Theta", "Nu", 0, 'a');
@@ -213,7 +213,7 @@ int main() {
   // Out of range on every axis at once, target included — makeState's 21 is
   // under the cap. Recorded as a scene and not merely rendered, because it is
   // the only one that exercises the clamps: without it, deleting either the
-  // 0..99 score clamp or the "TO 99" cap in src/panel.js passes.
+  // 0..99 score clamp or the "TO 99" cap in src/panelRender.js passes.
   BoardState overflow = makeState(999, -5, 250, "0123456789ABCDEFGHIJKLMNOPQ", "X");
   overflow.target = 250;
 

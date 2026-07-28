@@ -1,4 +1,4 @@
-// Covers the part of src/panel.js the firmware drift check structurally cannot.
+// Covers the part of src/panelRender.js the firmware drift check structurally cannot.
 //
 // `npm run test:firmware` compares framebuffers against render.h, which pins
 // `renderBoard` hard. But the scenes it compares are recorded from an
@@ -20,7 +20,7 @@ import {
   labelBytes,
   liveWithGrace,
   parseColor,
-} from './panel.js';
+} from './panelRender.js';
 
 const text = (bytes) => new TextDecoder().decode(bytes);
 

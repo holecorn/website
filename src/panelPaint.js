@@ -5,7 +5,7 @@
 // what a real module looks like with the power on, and the quantisation is the
 // thing worth seeing.
 
-import { PANEL_H, PANEL_W } from './panel.js';
+import { PANEL_H, PANEL_W } from './panelRender.js';
 
 const BOARD_BG = '#07090a';
 const UNLIT = '#15181b';

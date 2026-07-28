@@ -2,7 +2,7 @@
 // Source: src/segments.js and tools/panel-preview/font5x7.mjs.
 //
 // The firmware's glyphs.h comes out of the same run, so the emulator in
-// src/panel.js cannot draw a different digit from the panel.
+// src/panelRender.js cannot draw a different digit from the panel.
 
 export const GLYPH_DIGIT_W = 11;
 export const GLYPH_DIGIT_H = 20;

@@ -213,19 +213,19 @@ blank the winning pair without blanking the rest, and an out-of-range score,
 round or name must stay on the panel.
 
 Those are stills. To watch the panel follow a **live game**, add `&panel=1` to a
-display link and use the browser emulator — `src/panel.js`, which
+display link and use the browser emulator — `src/panelRender.js`, which
 `npm run test:firmware` holds pixel-identical to `render.h` over every scene
 `shot()` dumps. See "Emulated in the browser" below.
 
 ## Emulated in the browser
 
-`src/panel.js` is a JavaScript port of `render.h`, so the panel can be watched
-during a real game rather than only rendered as stills. That makes it a second
+`src/panelRender.js` is a JavaScript port of `render.h`, so the panel can be
+watched during a real game rather than only rendered as stills. That makes it a second
 implementation of working code, which is how the deleted `firmware/wokwi/` target
 started going wrong — so it is not maintained by inspection. `test_render.cpp`
 writes `out/scenes.json` describing every scene it dumped, and
-`tools/test-firmware.mjs` renders each one through `src/panel.js` and compares
-the framebuffers **byte for byte**. One differing pixel fails CI with the
+`tools/test-firmware.mjs` renders each one through `src/panelRender.js` and
+compares the framebuffers **byte for byte**. One differing pixel fails CI with the
 coordinate and both colours.
 
 The C++ is the source of truth for the scene list, deliberately: a table of
@@ -233,9 +233,10 @@ scenes maintained in two languages is the drift the check exists to catch.
 
 **What it pins is `renderBoard`.** Scenes are recorded from an already-parsed
 `BoardState`, so the coercions ported from `parseBoardState` — the ones that turn
-raw JSON into that struct — are never fed raw JSON by it. `src/panel.test.js`
-covers that half against what `board_logic.h` does. The gap was measured, not
-assumed: before the `overflow` and `ruled-pair-even` scenes were added, deleting
+raw JSON into that struct — are never fed raw JSON by it.
+`src/panelRender.test.js` covers that half against what `board_logic.h` does.
+The gap was measured, not assumed: before the `overflow` and `ruled-pair-even`
+scenes were added, deleting
 the 0..99 score clamp, the "TO 99" cap, or the doubles partner parity all passed
 the pixel check.
 
