@@ -43,8 +43,13 @@ async function playRound(page, aTiers = ['board', 'board', 'board', 'board']) {
   for (let i = 0; i < 4; i += 1) await lanes[i].locator(`.tier-${aTiers[i]}`).click();
   for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-board').click();
   await page.locator('.end-round').click();
-  // Let the round-commit callout clear so it can't swallow a later click.
-  await page.waitForTimeout(2600);
+  // Committed once the lanes have reset, which disables End round again until
+  // every bag of the next round is placed. This used to sleep 2.6s "so the
+  // callout can't swallow a later click" — `.callout` is `pointer-events: none`,
+  // so it never could, and the sleep was 2.6s per round of nothing.
+  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+    timeout: 5000,
+  });
 }
 
 const panel = (page) => ({
