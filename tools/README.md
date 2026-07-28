@@ -16,6 +16,36 @@ No browser download is required locally — the scripts drive your installed Chr
 via `channel: 'chrome'`, and fall back to Playwright's bundled Chromium when `CI`
 is set. Output goes to `tools/out/`, which is gitignored.
 
+## Running the workflow locally
+
+[`act`](https://github.com/nektos/act) runs `.github/workflows/deploy.yml` in
+Docker, which is worth it before changing the workflow itself:
+
+```bash
+brew install act
+act --list                                       # parse and show the job graph
+act push -j build --container-architecture linux/arm64
+act push -j firmware --container-architecture linux/arm64
+```
+
+**Use `linux/arm64` on Apple Silicon.** The default `linux/amd64` runs under QEMU
+and vitest segfaults there, which looks like a test failure and isn't one. The
+cost is that local runs no longer match the runners' architecture.
+
+Two jobs run usefully; the third can't:
+
+- `build` runs end to end, including `test:browser` against Playwright's **bundled
+  Chromium** with `CI` set. That is the branch the checks take on the runners and
+  not the one they take locally, so it is the part worth having.
+- `firmware` runs end to end. `actions/cache` can't reach a cache service and
+  warns rather than failing, which is what it does on a cache miss anyway.
+- `deploy` **cannot run**: `actions/deploy-pages` needs the Pages API, an OIDC
+  id-token and the `github-pages` environment. Only a push tests that.
+
+Also note `act` skips `actions/checkout` by default, so its green tick means
+nothing — pass `--no-skip-checkout` to actually exercise it, and expect it to fail
+on any commit you haven't pushed, because it fetches the SHA from the remote.
+
 ## What runs automatically
 
 `npm run test:browser` starts a preview server, runs the hermetic checks against

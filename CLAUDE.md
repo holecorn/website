@@ -549,6 +549,12 @@ manual for a while and drifted twice — a fixture that claimed to be "exactly
 what `scoreboardPayload()` produces" but was missing a field, and two characters
 `FONT_CHARS` advertised with blank glyphs behind them.
 
+**The browser checks take a different branch on the runners than they do locally**
+— `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so
+passing locally is not evidence they pass in CI. `act` covers that gap for the
+`build` and `firmware` jobs; the `deploy` job can't run locally at all. See
+`tools/README.md`.
+
 CI runs `npm test`, the build and `npm run test:browser` in one job, and
 `npm run test:firmware` in a parallel one. All of them gate the deploy —
 including the firmware, even though it doesn't ship with the app, because the
