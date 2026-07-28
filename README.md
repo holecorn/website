@@ -145,6 +145,23 @@ Each row also has a **×** to delete that match — handy for a game that was
 mis-scored, or for clearing out test games. Deleting is immediate, with an
 **Undo** offered at the top of the screen until you leave it.
 
+### Form, before a game starts
+
+Once the names are in, a **Form** panel appears on the setup screen — below
+**Start game**, so it never gets between you and the game — listing everyone about
+to play with their won–lost record, their last five results as dots, their PPR and
+their hole rate. Above it, if these two sides have finished a match before, is the
+record between them: in doubles that's this pair against that pair, not four
+separate rivalries.
+
+Anyone the history has never seen says **first game** rather than showing a row of
+zeroes, and if nobody in the lineup has played before the panel doesn't appear at
+all. It uses the same name matching as the stats screen, so a typo makes someone a
+newcomer. A genuinely dismal run still gets its numbers — a PPR of 0.0 means every
+bag went on the floor, and it says so.
+
+If you have the external scoreboard running, it shows this too — see below.
+
 ### Keeping the history
 
 There's no account and no server, so the history lives in the browser on the
@@ -246,6 +263,29 @@ screen there's a **Panel:** button that cycles them without leaving the game.
 It's remembered per browser and survives **New game**, and because it's held on
 the broker rather than sent with each score, a panel that reboots comes back on
 the layout you chose.
+
+### Form on the board
+
+Before the first bag is thrown there's no score worth a scoreboard, so the board
+and the display show the **Form** table instead — the same rosters and records as
+the setup screen. It appears on its own once the names are in and disappears the
+moment the first bag lands, with no button to press; it also overrides whichever
+score layout you picked, and gives it straight back afterwards.
+
+The two screens deliberately differ in what they can fit. The tablet display shows
+the record, the last five and PPR, sized to fill the screen — on a 13" iPad in
+landscape that's around 108px of text using 85% of the height and the full width,
+with room for a nine-character name even once records reach double figures. Anything
+longer ellipsises rather than shrinking everything else. The LED panel shows the same, but its rows are
+5x7 text — 35 mm tall, so it reads from a few metres rather than the ~11 m the
+score does. That's the right trade for something you look at while standing around,
+but don't expect to read it from across the court. Names are cut to **eight
+characters** there when records are short, dropping to 8 or 6 as the won-lost
+figures grow into two and three digits — the number columns take what they need and
+the name gets the rest.
+
+Doubles fills the panel exactly — four rows is all 32 pixels of height — so there's
+no heading on it. Singles centres its two rows.
 
 ### Hardware board
 

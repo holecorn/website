@@ -64,10 +64,11 @@ on any commit you haven't pushed, because it fetches the SHA from the remote.
 the built app, and stops the server. CI runs it after the build.
 
 Only checks that need **nothing but the app** are in there. `verify-winner-flash`
-is deliberately excluded because it drives the display through a real MQTT
-broker, and a deploy should not fail because someone else's server is down — run
-it by hand after changing the flash. Everything under `panel-preview/` is a
-rendering aid with nothing to assert.
+and `verify-form-screen` are deliberately excluded because they drive the display
+through a real MQTT broker, and a deploy should not fail because someone else's
+server is down — run them by hand after changing the flash or the pre-game form
+screen. Everything under `panel-preview/` is a rendering aid with nothing to
+assert.
 
 | Script | |
 | --- | --- |
@@ -79,6 +80,7 @@ rendering aid with nothing to assert.
 | `verify-panel.mjs` | Checks the `?panel=1` LED-panel emulator: that the querystring still routes there rather than falling through to the scoring app, and that `panelPaint.js` actually puts the framebuffer's light on the canvas — sampled at LED centres, against the no-state screen, which needs no broker. What the framebuffer *contains* is not checked here; `npm run test:firmware` pins that against the firmware far more tightly. Needs `npm run preview`. |
 | `verify-wakelock.mjs` | Drives a fake `navigator.wakeLock` to check the display re-acquires the lock after the system reclaims it, and degrades to a slow retry rather than spinning. Needs `npm run preview`. |
 | `verify-winner-flash.mjs` | Checks the winner's digits alternate solid/hollow, that only the winning side is affected, and that the flash is skipped under reduced motion. **Manual** — needs `npm run dev` and a reachable MQTT broker. |
+| `verify-form-screen.mjs` | Drives the pre-game form screen end to end: a retained lineup puts both `?display=1` and `?panel=1` on it, it overrides the chosen score layout rather than combining with it, clearing the topic puts both back on the score, and a display opened afterwards recovers the retained roster. The clear is the one this exists for — skipped, it would strand a board on a form screen for a whole game. It also checks a 0.0 average is shown while a newcomer's is blank, and that records never wrap — for which it **forces the grid narrower than its numeric columns**, because Chrome cannot reach that state through the viewport and the natural-viewport assertions pass with or without the fix. **Manual** — needs `npm run dev` and a reachable MQTT broker. |
 | `with-preview.mjs` | Runs the hermetic checks against a preview build, starting and stopping the server. This is `npm run test:browser`. |
 | `panel-preview/layouts.mjs` | Renders what a HUB75 LED panel would show, at three module counts. |
 | `panel-preview/states.mjs` | The same, for every board state: start, waiting, stale, wash, winner flash, and a `WASH` callout. |

@@ -57,7 +57,7 @@ Spending it means giving up the names, which is the `score` layout below.
 The `full` layout; `score` drops the names for taller digits — see Two layouts.
 
 ```
-   NU/TAU      V      ALPHA/PHI
+   RHO/TAU      V      ALPHA/PHI
                               ---    <- rule: who throws, and which partner
      17         R9          20
                TO 21
@@ -97,7 +97,7 @@ one.
 ```
   FRONT   640 x 160 mm active
  +-----------------------+-----------------------+
- |      NU/TAU     V    |    ALPHA/PHI          |  160 mm
+ |      RHO/TAU     V    |    ALPHA/PHI          |  160 mm
  |        17      R9     |       20              |
  |               TO 21   |                       |
  +-----------------------+-----------------------+
@@ -282,6 +282,59 @@ against no names rather than against a bare score.
 `parseLayout` in `board_logic.h` ignores an id it doesn't know and leaves the
 board on what it was already drawing — an app newer than the firmware must not be
 able to blank it or drop it to a layout nobody chose.
+
+### And a third screen that is not a layout
+
+Before the first bag there is no score, so a retained roster on
+`holecorn/<code>/lineup` puts the board on a **form** screen instead: one row per
+player with their record, PPR and last five results as pips.
+
+```
+NEIL       6-4 7.2  o#o##      <- # a win, o a loss, newest right
+RHO        2-2 7.3   #ooo
+SIGMA      4-6 6.0  #o#oo
+TAU        2-2 7.3   o##o
+```
+
+It is **not** an entry in `PANEL_LAYOUT_IDS`, and that is the point. A layout is a
+preference the scorer sets and keeps; this is a phase of the game. So
+`renderBoard` takes an optional `const LineupState*` and draws form whenever the
+count is non-zero — winning over both score layouts and over the no-state dashes,
+which is safe because the app only publishes it while no bag has been thrown. An
+empty payload clears the topic and is the only route back; `parseLineup` reports
+that as `count = 0` rather than refusing it as malformed.
+
+| | value |
+| --- | --- |
+| rows | 4 (`FORM_ROW_H` = 8, so a doubles roster is the whole panel) |
+| name | **11 characters** for an ordinary record, 8 at `99-99`, 6 at `120-87` |
+| worst-case duty | **28.5%**, against `DUTY_CEILING`'s 30% |
+
+Three things worth knowing before changing it:
+
+- **The number columns are sized to the lineup on screen**, not to the worst case any
+  lineup could hold, and the name takes the remainder — so a roster of `6-4` records
+  gets 11 name characters where a fixed layout gave 8. A record past 99 is real (about
+  100 matches) and widens the column back down to 6 characters rather than lying about
+  the number. `formLayout()` does it; `test_render.cpp` asserts the gap between name and
+  record is empty on every row of both the `99-99` and the `120-87` scene.
+- **A loss is a single pixel, a win a 3x3 block.** Not a dim block: on a real panel
+  an unlit-but-not-off LED is indistinguishable from off.
+- **The rate column is empty only for a 0-0 record**, never for a rate of 0.0 —
+  that is a real average, and blanking it reads as missing data rather than a bad
+  run. `form-zero-rate` in `test_render.cpp` pins it.
+- **28.5% leaves almost nothing under the ceiling.** The power case still holds —
+  roughly 1.4 A for both panels at full brightness against a bank that folds back at
+  3 A — but a fifth row, bigger pips or another column would breach it. Read Power
+  below before assuming there is room.
+
+Because the form screen has no layout id, the coverage check in
+`tools/test-firmware.mjs` cannot see it through `PANEL_LAYOUTS`, so it separately
+refuses to pass unless some scene carries a lineup.
+
+At 5 mm pitch the 5x7 font is **35 mm tall** — this screen reads from a few metres,
+not the ~11 m the score does. That is the trade it makes deliberately: it is what
+you read standing around before a game.
 
 **A new layout is bounded by `DUTY_CEILING`, not by taste.** `test_render.cpp`
 maxes the lit fraction over every scene and fails above 30%, because feeding both

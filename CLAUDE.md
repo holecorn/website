@@ -38,6 +38,8 @@ project dependency. It starts and stops its own preview server.
 - `src/stats.js` — career stats over archived matches. Pure, like `scoring.js`;
   tested in `src/stats.test.js`.
 - `src/Stats.jsx` / `src/Stats.css` — the career stats screen.
+- `src/Lineup.jsx` / `src/Lineup.css` — the setup screen's pre-game form panel.
+  Draws only; `lineupStats()` and `sideRecord()` in `stats.js` derive it.
 - `src/GameStats.jsx` / `src/GameStats.css` — the in-game stats panel. Draws only;
   `gameStats()` in `stats.js` derives it.
 - `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects.
@@ -311,6 +313,36 @@ project dependency. It starts and stops its own preview server.
   a match both devices hold wins, so an import can't rewrite local history.
   `validRecord` gates every entry because the file came from a picker and could
   be anything — it checks exactly the fields `stats.js` reads without checking.
+- **The pre-game form panel goes *below* `Start game`, and that is measured, not
+  taste.** The setup screen already overflows every phone: with default state,
+  `Start game`'s bottom edge sits **55px below the fold** on a 393x852 iPhone in
+  singles and 135px in doubles, and 166/288px on a 375x667 SE. Putting the panel
+  under the names — the obvious spot, next to what you just typed — would push the
+  one action you take every single game another 132px (singles) or 221px (doubles)
+  further down. Below it costs nothing above the fold and is where you are already
+  scrolling while you wait. `verify-stats.mjs` asserts `Start game` does not move,
+  measured against the same page with the panel `display:none`; inverting the
+  placement fails that and nothing else.
+- **`played` is not `matches > 0` for the sake of it.** It distinguishes a genuine
+  zero from no history, which is what lets both the panel and the board say "first
+  game" rather than reporting somebody as 0% of everything. `lineupPayload` uses the
+  same flag to publish nothing at all when *nobody* in the roster has played.
+- **`sideRecord` exists because `headToHead` cannot answer the doubles question.**
+  H2H credits partners individually, so a doubles matchup reads as four cross-pairs
+  when what is actually argued about is whether this pair beats that pair. Sides are
+  matched as unordered name *sets*, so the same people count whichever team letter
+  and whichever slot order they held at the time — and a *different* pairing of the
+  same four people is deliberately a different matchup.
+- **`gameStarted` lives in `scoring.js`, not `App.jsx`.** The scoreboard needs it
+  too: the form screen is published while it is false, so "the game has begun" has
+  to mean one thing to the screen and the board.
+- **The archive is held in `App.jsx` state now, not only inside `Stats`.** The form
+  panel and the scoreboard publisher both read it and both live above that screen.
+  `archiveMatch`/`dropMatch` return the saved list, so the effect sets state from
+  what it just wrote rather than re-reading. `Stats` still owns its own copy while
+  open — it deletes, restores and imports — and `App` re-reads on the way back;
+  without that a deleted match keeps appearing in the form panel until a reload,
+  which is what `verify-stats.mjs`'s deletion context covers.
 - **Export/import is the only route off a device** until there's a backend, so
   `verify-stats.mjs` drives the whole round trip rather than just asserting a
   file appears. The unexported count is measured against the newest exported
@@ -476,6 +508,161 @@ project dependency. It starts and stops its own preview server.
   `ScoreboardSettings.jsx`) because the link embeds the broker password — don't
   swap it for a QR web service, and don't move it off-device. The browser check
   in `tools/verify-copy-link.mjs` decodes the rendered QR to prove it scans.
+- **The pre-game form screen is chosen by a retained topic being *present*, not by
+  a layout id.** `holecorn/<code>/lineup` carries the roster while `gameStarted` is
+  false and is published **empty** — which deletes the retained message — the moment
+  a bag is thrown. That presence is the whole trigger: no `mode` field, no screen
+  name, no third entry in `PANEL_LAYOUTS`.
+  - **`form` deliberately is not a layout id.** A layout is a preference the scorer
+    sets with the Panel button and keeps; this is a phase of the game. Adding it to
+    `PANEL_LAYOUTS` would put it in that button's cycle and let it be chosen
+    mid-game, and driving `/layout` from the screen instead would overwrite the
+    score layout the scorer picked. So `renderBoard` takes an optional lineup and
+    the lineup wins over both score layouts *and* over the no-state dashes — safe
+    because it only ever exists before the first bag, when the score is 0–0.
+  - **Publishing the clear can never be skipped as "nothing to send".** An empty
+    retained payload is the only route back to the score, and `scoreboardLink.js`
+    re-asserts it on every connect — including a null — because a retained roster
+    from an earlier session would otherwise strand the board on a form screen for
+    the whole game while the score moved underneath it. That is why `lineupSet` is
+    tracked separately from the value, and why `pendingLineupRef` holds `{ value }`
+    rather than the payload: a computed null is an instruction, not an absence.
+  - **Undoing the only round does not bring it back**, because `undoRound` restores
+    that round's bags to the lanes and a thrown bag can never return to `unthrown`.
+    `New game` is the route back. That is the right answer — you undo to correct a
+    round, not to go back to standing around — and `scoreboard.test.js` pins it.
+  - **Colours and the layout are not repeated in the lineup payload**; names are.
+    The board already has the colours from the score message and two copies could
+    disagree, but the score payload carries *joined team labels* and these rows are
+    per player, so splitting them would break for anyone with " & " in their name.
+  - **PPR travels as tenths** so the firmware needs no float formatter; 12.0 (four
+    bags in the hole every round) is the widest it gets, which is what makes the
+    column four characters. Form travels as a `"LWLWW"` string rather than a
+    bitmask: the same bytes, and neither end has to agree which bit is oldest.
+  - **`parseLineup` refuses a row count it cannot halve.** `render.h` splits rows
+    into teams by halving the count, so 2 or 4 and nothing else — a length like 3
+    would draw somebody in the opposing colour rather than fail.
+  - **The lineup is now the largest message the board receives**, so it and not the
+    score is what bounds `MQTT_BUFFER`. Measured by `test_board_logic.cpp`: worst
+    UTF-8 packet ~423 bytes against the score's ~379 and a 512-byte buffer, so no
+    change was needed there — but that is the number to check before adding a field.
+  - **The panel's number columns are sized to the lineup in front of them, not to the
+    worst case any lineup could hold.** A fixed worst case spent 5 characters on the
+    record even when every row read `6-4`; measured, adapting gives an ordinary roster
+    **11** name characters where fixed gave 8, `99-99` gives 8, and a three-digit
+    `120-87` gives 6. `formLayout()` computes it in both languages and
+    `test_render.cpp` asserts the ordering (narrower record buys characters, wider
+    costs them) plus an empty gap between name and record on every row of both the
+    `99-99` and `120-87` scenes — the drawn pixels, not the arithmetic.
+  - **A record can exceed 99, and the clamp is 999 for that reason.** At 99 the board
+    silently drew `99` while the stats screen and the phone's Form panel showed the
+    true figure — wrong rather than truncated, and reachable at about **100 matches in
+    either column**, which in doubles arrives at the rate you play rather than the rate
+    you win. The bound now sits where `formatRecord` and its buffer sit, and the
+    display needed nothing at all: its columns are `max-content`, so it showed the
+    truth the moment the payload stopped lying. Worst-case packet went 415 -> 423
+    bytes of the 512 buffer.
+  - **A loss pip is a single pixel, not a dim block.** On a real panel an
+    unlit-but-not-off LED is indistinguishable from off, so a loss has to be drawn
+    as *something* rather than as a darker something.
+  - **The empty rate column keys off the 0-0 *record*, never off the rate.** A PPR
+    of 0.0 is a real average — every bag on the floor — and blanking it reads as
+    missing data rather than a bad run. A newcomer is 0-0 by construction, which is
+    what tells the two apart without a `played` field on the wire. Gating on
+    `ppr > 0` shipped once and made the board disagree with the phone, which shows
+    0.0; `form-zero-rate` in `test_render.cpp` and one assertion each in
+    `verify-stats.mjs` and `verify-form-screen.mjs` cover the three surfaces.
+  - **`form-worst` measures 28.5% duty against `DUTY_CEILING`'s 30%** — the densest
+    screen the panel has, against the full layout's 19.8% and the score layout's
+    23.6%. It passes, and the power case still holds (~1.4 A for both panels at full
+    brightness against a bank that folds back at 3 A), but **the ceiling is now
+    nearly spent**: a fifth row, larger pips or a denser column set would breach it,
+    and that check is the only thing standing between a layout change and browning
+    out the board.
+  - **The display and the panel deliberately show different amounts**, the same way
+    the winner flash and the dim grace already diverge. A tablet has room for the
+    rates; a 128x32 strip has four rows of 5x7 and nothing else. Don't unify them.
+  - **The display's form table is sized by measurement, and every dimension in it is
+    `em`** so one `font-size` scales the whole thing and its natural size is a fixed
+    multiple of that font — **11.86x wide and 8.40x tall** for four short names. That
+    is what makes the fit solvable instead of guessed. `min(7.5vw, 10vh)` follows the
+    `.seg-digit` idiom for the same reason: four rows run out of height on a landscape
+    screen and four columns run out of width on a portrait one, so a single `vmin`
+    term obeys the tighter everywhere and left **46% of the height** unused on an
+    iPad. Crossover is 4:3 exactly — an iPad in landscape, where both bind at once.
+    Measured after: 84% of the height in landscape, 97% of the width in portrait, at
+    56-108px against the 41-59px a `vmin` term gave.
+    - **Read the *intrinsic* size, never a rendered one.** `.display` is a flex
+      container and bounds the table at `vw - 4vmin` whatever `max-width` says, so a
+      rendered width is the clamped figure. Deriving the multiple that way gave 9.9x
+      instead of 11.86x and squeezed "Sigma" to two characters — measure with
+      `width: max-content` on a viewport larger than the table wants.
+    - **Portrait is width-bound and stays that way**, so it keeps air above and below.
+      Spreading the rows to fill it would push the eye further along each row for no
+      gain; a bigger font would truncate names instead.
+    - **The table spans the width** (`width: 100%`) rather than sitting centred at its
+      natural size — measured, a short-name roster is 8.51em against ~11.5em available on
+      an iPad, so a third of the screen was margin. This costs no characters, which
+      growing the font would.
+    - **The name track is `1fr` and the numeric ones `max-content`, and that is a bug
+      fix rather than a preference.** The name is the only clipped cell
+      (`overflow: hidden` + ellipsis), and asking the grid for the `max-content` of a
+      clipped element made **Safari on iPad carry the portrait track width back into
+      landscape**: a 7-character name that loaded whole came back as "Bern...", with the
+      table still at full width and only the track too narrow. A `1fr` track is computed
+      from available space, so nothing content-derived can go stale; the numeric cells
+      are `nowrap` and never clipped, so measuring them is safe.
+      The cost is that the slack all lands in one gap beside the name.
+      `justify-content: space-between` over content-sized tracks spread it more evenly
+      and is what this rules out — don't put it back without re-testing rotation on a
+      real iPad.
+    - **`em` on `.form-table` itself was *suspected* of that and was not the cause.**
+      `em` there does resolve against the `font-size` the same rule declares, and pinning
+      a cap derived from the portrait font reproduced the symptom — but replacing it with
+      `--form-size` did not fix anything on the device. The custom property stays because
+      the dependency is real and pointless, not because it worked. Worth remembering as a
+      plausible-and-wrong diagnosis that a Chrome-only reproduction appeared to confirm.
+      **Descendants may use `em` freely** — they refer to a parent's already-resolved
+      font-size — so don't purge it from the file over this.
+    - **The width cap on the table has to clear the widest iPad.** In landscape the
+      available width is `8.76em x aspect`, so an iPad mini at 1.52 wants 13.34em —
+      a 12em cap was tried and silently cost the 11" iPad in landscape 4% of its width.
+      13.5em is inert on every iPad and bites past about 1.54:1, so a 16:9 monitor gets
+      13.5em of the 15.6em it could take. That is on purpose: without a cap the gaps
+      keep growing until the row reads as four unrelated things.
+    - **Font size trades directly against name characters**, because the name column
+      gets `available - k x font`. So the size cannot be chosen alone, and the bound
+      that settles it is that **the panel draws 8 characters** — a tablet truncating
+      at 8 or fewer would be worse than the LED strip. `8vw/10.5vh` gives 9 with a
+      two-digit record either side; `8.25vw/11vh` gives exactly 8 and 11vh is the
+      ceiling, since 12vh overflows in landscape.
+    - **A two-digit record is the case that matters, and it arrives with use.** The
+      W–L column sizes to its widest row, so `12–10` is meaningfully wider than `6–4`
+      and steals from the name — this shipped truncating names to **one character**
+      once records reached double figures, while every check written against `6–4`
+      passed. The condensed numerals and the 0.5em column gap are what bought it
+      back: measured, 1 character to 9 in the worst case, 12 at single digits.
+    - **`verify-form-screen.mjs` asserts the size and the characters together**, not
+      merely that nothing overflows — the `verify-lanes.mjs` lesson, that a layout
+      which silently shrinks passes every overflow check while being useless. Both
+      assertions fail on the pre-squish spacing and on the old `vmin` sizing
+      respectively; the overflow ones pass throughout.
+  - **`white-space: nowrap` on the display's numeric cells is load-bearing**, and it
+    is the rule `Lineup.css` and `GameStats.css` already carry on their table cells —
+    not carrying it across to the grid is how `12–10` came to split after the en
+    dash on a 13" iPad. With long names the grid sits **exactly at its 92vw cap**
+    (measured: 949px of 949 on a 1032x1376 iPad), so the shortfall has to come from
+    somewhere; only the name may give, and it ellipsises. **Chrome cannot reproduce
+    this**, which is worth knowing before trusting a green run: the font is
+    `vmin`-based and the width budget `vw`-based, so in portrait they scale together
+    and in landscape the budget wins — Chrome always takes the whole shortfall from
+    the name. `verify-form-screen.mjs` therefore forces the grid narrower than its
+    numeric columns, which reproduces the state in any engine; that assertion fails
+    with 2 lines when the `nowrap` is removed and the natural-viewport ones do not.
+  - **The form screen has no layout id, so the layout-coverage check in
+    `test-firmware.mjs` cannot see it** — hence the separate assertion that some
+    scene carries a lineup. Without it the whole screen would be unpinned second
+    implementation, which is the one thing `src/panelRender.js` is not allowed to be.
 - ESP32-class hardware is 2.4GHz-only; iPhone hotspots default to 5GHz, so
   **Maximize Compatibility** has to be on. Expect this to be the first thing that
   goes wrong when the hardware board arrives.
@@ -615,6 +802,23 @@ The parts worth knowing before touching it:
   field nothing renders should fail rather than quietly ship.
 - **Free Wokwi projects are public** — no real broker credentials in one.
 
+## Fixture names
+
+**Every player name in a fixture is a Greek letter — Rho, Tau, Sigma, Phi and so on —
+and the only real name is Neil, which is deliberate.** This is a public repo, so the
+people this group actually plays with must not be in it. Greek rather than the NATO
+alphabet because some fixtures need lengths and shapes NATO cannot supply: three-letter
+names (`Rho`, `Tau`, `Phi`), and two names **sharing an initial** for the `fitLabel`
+test that a doubles pair does not collapse to `O/O` — `Omega`/`Omicron` are the only
+pair here that do, so that fixture is not interchangeable with its neighbours.
+
+A few fixtures depend on exact character counts and will fail if a name is swapped for
+one of a different length — the `fitLabel` block in `test_render.cpp` pins the shortening
+rule by literal expected string, and the rotation check in `verify-form-screen.mjs` wants
+a **7-character** name. Long-name fixtures use slices of a synthetic string
+(`AlphaBetaGammaDe...`) rather than a plausible name, so the length is self-evident and
+nobody has to wonder whether it is somebody real.
+
 ## Testing
 
 `src/scoring.js` is pure and fully testable; the suite is the safety net for the
@@ -676,8 +880,15 @@ CI runs `npm test`, the build and `npm run test:browser` in one job, and
 `npm run test:firmware` in a parallel one. All of them gate the deploy —
 including the firmware, even though it doesn't ship with the app, because the
 two share a contract and nothing else notices when it breaks.
-`verify-winner-flash` is deliberately **not** in that set: it needs a real
-broker, and a deploy should not fail because a third party is down.
+`verify-winner-flash` and `verify-form-screen` are deliberately **not** in that
+set: they need a real broker, and a deploy should not fail because a third party is
+down. `verify-form-screen` covers the one thing nothing hermetic can — publish →
+retain → subscribe → override the chosen layout → clear → back to the score, on
+both `?display=1` and `?panel=1`, plus a display opened late recovering the
+retained roster. Everything either side of that is covered without a broker: the
+payload and the clear in `scoreboard.test.js`, the retain-and-re-assert behaviour
+against a fake client in `scoreboardLink.test.js`, and the drawing itself by the
+pixel check.
 
 ## Deployment
 
