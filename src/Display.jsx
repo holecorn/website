@@ -174,7 +174,7 @@ export default function Display() {
   });
 
   useWakeLock();
-  const { payload, status, error, senderOnline } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, lineup } = useScoreboardDisplay(config);
   const hollow = useWinnerFlash(payload?.winner ?? null);
 
   if (!configComplete(config)) {
@@ -195,6 +195,31 @@ export default function Display() {
   const winnerLabel = payload?.winner
     ? (payload.winner === 'a' ? payload.teamA : payload.teamB)
     : '';
+  const statusText =
+    status === 'connected'
+      ? senderOnline
+        ? 'live'
+        : 'waiting for the scorer'
+      : status === 'connecting'
+        ? 'connecting…'
+        : (error ?? status);
+
+  // A retained lineup means the game has not begun, so there is no score worth
+  // the whole screen. Unlike the panel — which has 128x32 and four rows of 5x7 to
+  // spend — a tablet can show the rates as well, so it does. The two diverging is
+  // deliberate, the same as the winner flash and the dim grace.
+  if (lineup) {
+    return (
+      <div
+        className={`display display-form${stale ? ' is-stale' : ''}`}
+        onClick={toggleFullscreen}
+        title="Tap for fullscreen"
+      >
+        <FormTable lineup={lineup} colorA={colorA} colorB={colorB} />
+        <p className="display-status">{statusText}</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -247,15 +272,61 @@ export default function Display() {
         </div>
       )}
 
-      <p className="display-status">
-        {status === 'connected'
-          ? senderOnline
-            ? 'live'
-            : 'waiting for the scorer'
-          : status === 'connecting'
-            ? 'connecting…'
-            : (error ?? status)}
-      </p>
+      <p className="display-status">{statusText}</p>
+    </div>
+  );
+}
+
+// The pre-game roster. Rows arrive in lane order — team A's slots then team B's —
+// so which half a row is in is the team it belongs to; usableLineup refuses a
+// count that cannot be halved, which is what makes that safe here too.
+function FormTable({ lineup, colorA, colorB }) {
+  const rows = lineup.rows;
+  const half = rows.length / 2;
+  return (
+    <div className="form-table">
+      <p className="form-title">Form</p>
+      <div className="form-head" aria-hidden="true">
+        <span />
+        <span>W–L</span>
+        <span>Last 5</span>
+        <span>PPR</span>
+      </div>
+      {rows.map((row, i) => {
+        const color = i < half ? colorA : colorB;
+        const form = typeof row.f === 'string' ? row.f : '';
+        const played = (row.w ?? 0) + (row.l ?? 0) > 0;
+        return (
+          <div className="form-row" key={i}>
+            <span className="form-name" style={{ color }}>
+              {row.n}
+            </span>
+            <span className="form-record">
+              {row.w ?? 0}–{row.l ?? 0}
+            </span>
+            <span className="form-pips">
+              {/* Spoken rather than shown: a row of shapes reads as nothing. */}
+              <span className="form-spoken">
+                {played
+                  ? Array.from(form, (c) => (c === 'W' ? 'won' : 'lost')).join(', ')
+                  : 'no matches yet'}
+              </span>
+              {Array.from(form, (c, j) => (
+                <span
+                  key={j}
+                  className={`form-pip${c === 'W' ? ' is-win' : ''}`}
+                  style={c === 'W' ? { background: color } : undefined}
+                  aria-hidden="true"
+                />
+              ))}
+            </span>
+            {/* Tenths on the wire, so the board needs no float formatter. Empty
+                only for a newcomer — a 0.0 average is a real one and has to show,
+                or it reads as missing data. */}
+            <span className="form-ppr">{played ? (row.p / 10).toFixed(1) : ''}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

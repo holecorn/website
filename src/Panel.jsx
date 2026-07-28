@@ -7,7 +7,7 @@
 // view for that. This one is 128x32 because the panel is, which is the whole
 // point of looking at it.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   LAYOUT_LABELS,
   configComplete,
@@ -22,6 +22,7 @@ import {
   boardLiveness,
   boardState,
   createFramebuffer,
+  lineupState,
   renderBoard,
 } from './panelRender.js';
 import { paintPanel, panelCell } from './panelPaint.js';
@@ -102,9 +103,12 @@ export default function Panel() {
     return merged;
   });
 
-  const { payload, status, error, senderOnline, layout } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, layout, lineup } = useScoreboardDisplay(config);
   const blinkOn = useBlink(payload?.winner ?? null);
   const live = useBoardLive(status === 'connected', senderOnline);
+  // Coerced through the same function the pixel check drives, so what is drawn
+  // here is what parseLineup would have made of the message.
+  const drawn = useMemo(() => lineupState(lineup), [lineup]);
 
   const frameRef = useRef(null);
   const canvasRef = useRef(null);
@@ -113,9 +117,9 @@ export default function Panel() {
   useEffect(() => {
     if (!canvasRef.current) return;
     const fb = createFramebuffer();
-    renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout);
+    renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn);
     paintPanel(canvasRef.current, fb, cell);
-  }, [payload, live, blinkOn, cell, layout]);
+  }, [payload, live, blinkOn, cell, layout, drawn]);
 
   if (!configComplete(config)) {
     return (
@@ -139,15 +143,20 @@ export default function Panel() {
           style={{ width: PANEL_W * cell, height: PANEL_H * cell }}
           role="img"
           aria-label={
-            payload
-              ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
-                `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
-              : 'Panel showing no score yet'
+            drawn
+              ? `Panel showing pre-game form for ${drawn.count} players`
+              : payload
+                ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                  `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
+                : 'Panel showing no score yet'
           }
         />
       </div>
       <p className="panel-caption">
-        {PANEL_W}x{PANEL_H} · {PANEL_MM} · {LAYOUT_LABELS[layout] ?? layout} ·{' '}
+        {PANEL_W}x{PANEL_H} · {PANEL_MM} ·{' '}
+        {/* The form screen overrides the layout, so naming the layout while it is
+            up would describe something not on screen. */}
+        {drawn ? 'Pre-game form' : (LAYOUT_LABELS[layout] ?? layout)} ·{' '}
         {status === 'connected'
           ? live
             ? 'live'

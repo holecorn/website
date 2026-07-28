@@ -142,6 +142,167 @@
   color: var(--text);
 }
 
+/* Pre-game form. A tablet has room the 128x32 panel does not, so this shows the
+   rates as well as the record — see the note in Display.jsx. */
+.display-form {
+  align-items: center;
+}
+
+.form-table {
+  /* One number scales the whole table — the font, the gaps and the width cap — so its
+     natural size stays a fixed multiple of the text and the fit below is solvable
+     rather than guessed at. Held in a custom property rather than read back as `em`
+     because `em` on *this* element resolves against the `font-size` it declares two
+     lines down; a custom property has nothing to resolve against. Descendants use `em`
+     freely — they refer to a parent's font-size, which is already resolved. */
+  --form-size: min(8vw, 10.5vh);
+  display: grid;
+  /* The name track is `1fr` and the numeric ones `max-content`. That split is the fix
+     for a rotation bug, not a preference: the name is the only cell that is clipped
+     (`overflow: hidden` + ellipsis), and asking the grid for the `max-content` of a
+     clipped element made Safari on iPad carry the *portrait* track width back into
+     landscape — a 7-character name that loaded whole came back as "Bern...", with the
+     table still at full width and only the track too narrow. A `1fr` track is computed
+     from the space available rather than from content, so there is nothing
+     content-derived to go stale. The numeric cells are `nowrap` and never clipped, so
+     measuring them is safe. */
+  grid-template-columns: minmax(0, 1fr) max-content max-content max-content;
+  align-items: baseline;
+  gap: calc(0.3 * var(--form-size)) calc(0.5 * var(--form-size));
+  /* Spans the width rather than sitting centred at its natural size — measured, a
+     short-name roster is 8.51em against ~11.5em available on an iPad, so a third of the
+     screen was margin. The slack lands in the name column, which is the price of that
+     column not being content-sized; `justify-content: space-between` over content-sized
+     tracks spread it more evenly but is what the rotation bug above rules out.
+     The second cap keeps the spread proportional to the text — on a screen far wider
+     than a tablet the gaps would otherwise grow until the row reads as four unrelated
+     things. It is 13.5 times the font, which has to clear the widest iPad: available
+     width in landscape works out at `8.76em x aspect`, so the mini at 1.52 wants
+     13.34em. It bites past about 1.54:1, so a 16:9 monitor gets 13.5em of the 15.6em
+     it could take, deliberately.
+     Off `--form-size` rather than `13.5em`: identical number, but `em` would make this
+     element's cap depend on the `font-size` it declares itself. That was *suspected* of
+     the rotation bug and was not the cause — the track sizing above was — so this is
+     tidiness, kept because the dependency is real and pointless, not because it fixed
+     anything.
+     A 12em cap was tried earlier and silently cost the 11" iPad in landscape 4% of its
+     width; `verify-form-screen.mjs` asserts the reach, which is what caught it. */
+  width: 100%;
+  max-width: min(92vw, calc(13.5 * var(--form-size)));
+  /* `min()` of a width term and a height term, like `.seg-digit` — and for the same
+     reason: four rows run out of height on a landscape screen while four columns run
+     out of width on a portrait one, so a single `vmin` term has to obey the tighter of
+     the two everywhere and leaves a third of the screen empty. Crossover is
+     10/7.5 = **4:3 exactly**, which is an iPad in landscape: both terms bind at once
+     there, so it is the best-filled case rather than an awkward one.
+     Derived by measurement, not taste. Everything above scales with this, so the name
+     column gets `available - k x font` — meaning **font size trades directly against
+     characters**, and both were asked for.
+     Measured worst case (a two-digit record either side, `12-10`), the longest name
+     that renders whole: 8 chars at `8.25vw/11vh`, 9 at `8vw/10.5vh`, 10 at
+     `7.5vw/10vh`. 11vh is the ceiling — 12vh overflows the viewport in landscape.
+     `8vw/10.5vh` is the pick because **the panel draws 8 characters**, so a tablet
+     that truncated at 8 or fewer would be worse than the LED strip; 9 keeps one
+     character of headroom over it. That lands at 83-108px with 85% of the height
+     filled in landscape.
+     **Measure, don't nudge.** `.display` is a flex container and bounds the table at
+     `vw - 4vmin` whatever `max-width` says, so reading a rendered width gives the
+     clamped figure and not the intrinsic one. An earlier version of this comment was
+     derived that way and squeezed "Sigma" down to two characters. */
+  font-size: var(--form-size);
+  font-variant-numeric: tabular-nums;
+}
+
+/* `contents` so each row's four spans become grid cells and every row shares one
+   set of column widths — the whole point of a table here. */
+.form-head,
+.form-row {
+  display: contents;
+}
+
+.form-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  font-size: 0.42em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b7885;
+}
+
+.form-head > span {
+  font-size: 0.28em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7885;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.form-name {
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Condensed numerals, the same face as the names. Not decoration: San Francisco's
+   digits are wide enough that a two-digit record either side — "12–10", which this
+   group will reach — took the name column down to a single character. Measured on a
+   13" iPad, the longest name that renders whole went from 1 character to 10.
+   Bebas has the digits, the hyphen, the en dash and the full stop, so nothing here
+   falls back to another face mid-number. */
+.form-record,
+.form-ppr {
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+}
+
+/* `nowrap` is load-bearing, not tidiness — the same rule Lineup.css and
+   GameStats.css put on their table cells. With long names the grid is pinned at
+   its max-width and something has to give: the en dash in "12–10" is a legal break
+   point, so a browser that takes the shortfall from these columns rather than from
+   the name splits the record across two lines. Only the name may give, and it
+   ellipsises. */
+.form-record,
+.form-ppr {
+  color: #cfd8e3;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Five slots wide whatever a row holds, so the newest result lands in the same
+   column on every row even for a player with fewer than five matches. */
+.form-pips {
+  display: flex;
+  align-items: center;
+  gap: 0.18em;
+  justify-content: flex-end;
+  min-width: calc(5 * 0.4em + 4 * 0.18em);
+}
+
+/* Spoken, not shown: a row of dots says nothing aloud. */
+.form-spoken {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.form-pip {
+  width: 0.4em;
+  height: 0.4em;
+  border-radius: 50%;
+  background: #232a31;
+}
+
+.display.is-stale .form-table {
+  opacity: 0.45;
+}
+
 @media (orientation: portrait) {
   .display {
     flex-direction: column;
