@@ -56,6 +56,10 @@ function ratio(n, d) {
   return d > 0 ? n / d : 0;
 }
 
+// How much of the result list a form line shows. The list itself stays internal:
+// it grows with every match played and nothing reads more than its tail.
+export const FORM_LENGTH = 5;
+
 function trailingWins(results) {
   let n = 0;
   for (let i = results.length - 1; i >= 0 && results[i]; i -= 1) n += 1;
@@ -136,6 +140,8 @@ function derive({ results, ...p }) {
     winPct: ratio(p.wins, p.matches),
     currentStreak: trailingWins(results),
     longestStreak: longestWins(results),
+    // Newest last, so a form line reads left to right in play order.
+    form: results.slice(-FORM_LENGTH),
   };
 }
 
@@ -203,6 +209,67 @@ export function gameStats(game) {
     });
   }
   return rows;
+}
+
+// The players about to play, with what their history says about them.
+//
+// Rows are per team and slot, in lane order, the way `gameStats` returns them —
+// but the numbers are folded by name out of `playerStats`, because a career is
+// the point. Two slots carrying the same name therefore show the same career
+// twice, which is what name-folding means and is already true of the career
+// screen.
+//
+// `played` distinguishes a genuine zero from no history at all, so a first-timer
+// can be said to be a first-timer instead of being reported as 0% of everything.
+export function lineupStats(matches, game) {
+  const career = new Map(playerStats(matches).map((p) => [nameKey(p.name), p]));
+  const rows = [];
+  for (const team of TEAMS) {
+    rosterFor(game, team).forEach((name, slot) => {
+      const trimmed = String(name ?? '').trim();
+      const found = career.get(nameKey(trimmed));
+      rows.push({
+        team,
+        slot,
+        ...(found ?? derive(blank(trimmed))),
+        name: trimmed,
+        played: Boolean(found),
+      });
+    });
+  }
+  return rows;
+}
+
+const NO_SIDE = '[]';
+
+// One side of a matchup as a name set, so the same people count as the same side
+// whichever team letter they held at the time and whichever order they were
+// entered in.
+function sideKey(match, team) {
+  const names = rosterFor(match, team).map(nameKey).filter(Boolean);
+  return JSON.stringify([...new Set(names)].sort());
+}
+
+// How this exact matchup has gone before, from the current lineup's point of
+// view — `{ a, b }` wins, or null if these two sides have never finished a match.
+//
+// `headToHead` cannot answer this in doubles: it credits partners individually,
+// so it reports four cross-pairs where the question actually being asked is
+// whether this pair beats that pair. In singles the two agree by construction.
+export function sideRecord(matches, game) {
+  const here = { a: sideKey(game, 'a'), b: sideKey(game, 'b') };
+  // Nothing to report for an unnamed side, or for a lineup that has the same
+  // people on both sides of the court.
+  if (here.a === NO_SIDE || here.b === NO_SIDE || here.a === here.b) return null;
+
+  const won = { a: 0, b: 0 };
+  for (const match of matches) {
+    if (!match.winner) continue;
+    const was = { a: sideKey(match, 'a'), b: sideKey(match, 'b') };
+    if (was.a === here.a && was.b === here.b) won[match.winner] += 1;
+    else if (was.a === here.b && was.b === here.a) won[match.winner === 'a' ? 'b' : 'a'] += 1;
+  }
+  return won.a + won.b === 0 ? null : won;
 }
 
 // Win counts between every pair who have faced each other. Doubles credits both

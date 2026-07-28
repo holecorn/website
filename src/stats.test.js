@@ -14,6 +14,8 @@ import {
   rosterFor,
   playerStats,
   headToHead,
+  lineupStats,
+  sideRecord,
   summary,
   matchRounds,
   matchDuration,
@@ -242,6 +244,165 @@ describe('headToHead', () => {
     // One win each: Neil won the first, Sigma the second from the other side.
     expect(pair.aWins).toBe(1);
     expect(pair.bWins).toBe(1);
+  });
+});
+
+// A four-bagger win and a whitewash loss, so a result is unambiguous.
+const SWEEP = [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]];
+
+describe('form', () => {
+  it('reads oldest first and keeps only the tail', () => {
+    // Seven matches, alternating who wins, so the cut is visible: Neil wins the
+    // odd-numbered ones.
+    const matches = Array.from({ length: 7 }, (_, i) =>
+      i % 2 === 0
+        ? singles('Neil', 'Sigma', SWEEP, { id: `m${i}`, endedAt: i + 1 })
+        : singles('Sigma', 'Neil', SWEEP, { id: `m${i}`, endedAt: i + 1 }),
+    );
+    const neil = find(playerStats(matches), 'Neil');
+    expect(neil.matches).toBe(7);
+    // Results are W L W L W L W; the last five are W L W L W.
+    expect(neil.form).toEqual([true, false, true, false, true]);
+  });
+
+  it('is shorter than the window for someone with fewer matches', () => {
+    const neil = find(playerStats([singles('Neil', 'Sigma', SWEEP)]), 'Neil');
+    expect(neil.form).toEqual([true]);
+  });
+});
+
+describe('lineupStats', () => {
+  const played = singles('Neil', 'Sigma', SWEEP);
+  const game = (over) => ({ ...newGame(), players: { a: ['Neil', 'P2'], b: ['Sigma', 'P2'] }, ...over });
+
+  it('returns one row per slot in lane order, not one per player with history', () => {
+    const rows = lineupStats([played], game());
+    expect(rows.map((r) => `${r.team}${r.slot}`)).toEqual(['a0', 'b0']);
+    expect(rows.map((r) => r.name)).toEqual(['Neil', 'Sigma']);
+  });
+
+  it('carries the career numbers, folded by name', () => {
+    const [neil] = lineupStats([played], game());
+    expect(neil.wins).toBe(1);
+    expect(neil.losses).toBe(0);
+    expect(neil.ppr).toBeCloseTo(12);
+    expect(neil.played).toBe(true);
+  });
+
+  it('counts a match played from the other side of the court', () => {
+    const flipped = singles('Sigma', 'Neil', SWEEP, { id: 'm2', endedAt: 2 });
+    const [neil] = lineupStats([played, flipped], game());
+    // Won the first, lost the second — name-folded across both team letters.
+    expect([neil.wins, neil.losses]).toEqual([1, 1]);
+  });
+
+  // `played` is the difference between a genuine zero and no history at all, and
+  // it is what lets both screens say "first game" instead of reporting 0% of
+  // everything.
+  it('marks a name with no history rather than reporting zeroes as fact', () => {
+    const rows = lineupStats([played], game({ players: { a: ['Neil', 'P2'], b: ['Psi', 'P2'] } }));
+    expect(rows[1].played).toBe(false);
+    expect(rows[1].name).toBe('Psi');
+    expect(rows[1].matches).toBe(0);
+    expect(rows[1].form).toEqual([]);
+  });
+
+  it('gives four rows in doubles, team A first', () => {
+    const rows = lineupStats([], {
+      ...newGame(),
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+    });
+    expect(rows.map((r) => r.name)).toEqual(['Rho', 'Tau', 'Phi', 'Chi']);
+    expect(rows.map((r) => r.team)).toEqual(['a', 'a', 'b', 'b']);
+  });
+
+  it('reports the same career twice when two slots share a name', () => {
+    const rows = lineupStats([played], game({ players: { a: ['Neil', 'P2'], b: ['neil ', 'P2'] } }));
+    // Inherent to folding by name, and already true of the career screen — worth
+    // pinning so it is a known consequence rather than a surprise.
+    expect(rows[0].wins).toBe(rows[1].wins);
+  });
+});
+
+describe('sideRecord', () => {
+  const game = (over) => ({ ...newGame(), players: { a: ['Neil', 'P2'], b: ['Sigma', 'P2'] }, ...over });
+
+  it('is null when these two have never finished a match', () => {
+    expect(sideRecord([], game())).toBeNull();
+  });
+
+  it('counts wins from the current lineup point of view, whichever side they were', () => {
+    const first = singles('Neil', 'Sigma', SWEEP, { id: 'm1', endedAt: 1 });
+    // Same two people, sides swapped, so Sigma wins this one.
+    const second = singles('Sigma', 'Neil', SWEEP, { id: 'm2', endedAt: 2 });
+    expect(sideRecord([first, second], game())).toEqual({ a: 1, b: 1 });
+    // Asking from the other side reports the mirror, not the same object.
+    expect(sideRecord([first, second], game({ players: { a: ['Sigma', 'P2'], b: ['Neil', 'P2'] } })))
+      .toEqual({ a: 1, b: 1 });
+  });
+
+  it('is asymmetric when one side keeps winning', () => {
+    const matches = [1, 2, 3].map((n) =>
+      singles('Neil', 'Sigma', SWEEP, { id: `m${n}`, endedAt: n }),
+    );
+    expect(sideRecord(matches, game())).toEqual({ a: 3, b: 0 });
+  });
+
+  // The whole reason this exists rather than filtering headToHead: in doubles the
+  // question is whether *this pair* beats *that pair*, and headToHead credits
+  // partners individually across four cross-pairs.
+  it('matches a doubles pairing regardless of partner order', () => {
+    const m = match({
+      id: 'd1',
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+      rounds: SWEEP,
+      endedAt: 1,
+    });
+    const asPlayed = { ...newGame(), mode: 'doubles', players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] } };
+    const reordered = { ...newGame(), mode: 'doubles', players: { a: ['Tau', 'Rho'], b: ['Chi', 'Phi'] } };
+    expect(sideRecord([m], asPlayed)).toEqual({ a: 1, b: 0 });
+    expect(sideRecord([m], reordered)).toEqual({ a: 1, b: 0 });
+  });
+
+  it('does not count a different pairing of the same people', () => {
+    const m = match({
+      id: 'd1',
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+      rounds: SWEEP,
+      endedAt: 1,
+    });
+    const repartnered = { ...newGame(), mode: 'doubles', players: { a: ['Rho', 'Phi'], b: ['Tau', 'Chi'] } };
+    expect(sideRecord([m], repartnered)).toBeNull();
+  });
+
+  it('ignores a singles game between people who have only met in doubles', () => {
+    const m = match({
+      id: 'd1',
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+      rounds: SWEEP,
+      endedAt: 1,
+    });
+    const asSingles = { ...newGame(), players: { a: ['Rho', 'X'], b: ['Phi', 'Y'] } };
+    expect(sideRecord([m], asSingles)).toBeNull();
+  });
+
+  it('is null when the same person is on both sides', () => {
+    const m = singles('Neil', 'Sigma', SWEEP);
+    expect(sideRecord([m], game({ players: { a: ['Neil', 'P2'], b: ['Neil', 'P2'] } }))).toBeNull();
+  });
+
+  it('is null for a blank side', () => {
+    const m = singles('Neil', 'Sigma', SWEEP);
+    expect(sideRecord([m], game({ players: { a: ['Neil', 'P2'], b: ['  ', 'P2'] } }))).toBeNull();
+  });
+
+  it('ignores an unfinished match', () => {
+    const m = { ...singles('Neil', 'Sigma', SWEEP), winner: null };
+    expect(sideRecord([m], game())).toBeNull();
   });
 });
 

@@ -205,6 +205,16 @@ export function undoRound(game) {
   return { ...next, winner: checkWinner(next) };
 }
 
+// Whether a bag has been thrown yet. Lives here rather than in App.jsx because
+// the scoreboard needs it too: the pre-game form screen is published while this
+// is false, so "the game has begun" has to mean the same thing to both.
+export function gameStarted(game) {
+  return (
+    game.rounds.length > 0 ||
+    [...game.current.a, ...game.current.b].some((tier) => tier !== 'unthrown')
+  );
+}
+
 // How many bags across both teams are still unthrown this round.
 export function unthrownCount(game) {
   const count = (positions) => positions.filter((t) => t === 'unthrown').length;
