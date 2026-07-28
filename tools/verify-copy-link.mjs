@@ -19,8 +19,8 @@ const check = (label, cond, detail = '') => {
 
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
 
-const open = async ({ clipboard }) => {
-  const context = await browser.newContext();
+const open = async ({ clipboard, viewport }) => {
+  const context = await browser.newContext(viewport ? { viewport } : {});
   if (clipboard === 'granted') {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: URL });
   }
@@ -125,6 +125,40 @@ console.log('shows a QR code that decodes to the display link');
     check('QR decodes to the display link', decoded?.data === LINK, decoded?.data ?? 'no decode');
   }
   await page.context().close();
+}
+
+console.log('\nthe actions row wraps without one control going ragged');
+{
+  // Narrow enough that every label has to break. `Open display` is an anchor
+  // styled as a button, and only `button` centres its text by default, so this
+  // is where the two diverge.
+  const page = await open({ clipboard: 'granted', viewport: { width: 320, height: 900 } });
+  await page.waitForSelector('.sb-actions a');
+  const controls = await page.evaluate(() =>
+    [...document.querySelectorAll('.sb-actions button, .sb-actions a')].map((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return {
+        label: el.textContent.trim(),
+        align: getComputedStyle(el).textAlign,
+        lines: range.getClientRects().length,
+      };
+    }),
+  );
+  // Without this the check is vacuous: widening the row later would make every
+  // label fit on one line and the alignment stop mattering, and it would still
+  // pass. Same trap as the lane cap in verify-lanes.
+  check(
+    'the labels really are wrapping at this width',
+    controls.length > 0 && controls.every((c) => c.lines > 1),
+    controls.map((c) => `${c.label}=${c.lines}`).join(' '),
+  );
+  check(
+    'buttons and the link agree on alignment',
+    new Set(controls.map((c) => c.align)).size === 1,
+    controls.map((c) => `${c.label}=${c.align}`).join(' '),
+  );
+  await page.close();
 }
 
 await browser.close();

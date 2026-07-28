@@ -204,6 +204,10 @@
   color: var(--text);
   font-size: 14px;
   text-decoration: none;
+  /* Explicit because `Open display` is an anchor styled as a button, and only
+     `button` centres its text by default — so on a narrow phone, where all three
+     labels wrap, that one alone came out ragged. */
+  text-align: center;
 }
 
 .sb-actions button:disabled {
