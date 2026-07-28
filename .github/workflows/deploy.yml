@@ -33,11 +33,15 @@ jobs:
       - run: npm install --no-save playwright
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
-      # Left on v3 while the others moved to the Node 24 runtime: this one is a
-      # composite action with no runtime of its own, so it was never part of the
-      # deprecation. v4 excludes dotfiles from the artifact, which buys nothing
-      # here and is a behaviour change for no reason.
-      - uses: actions/upload-pages-artifact@v3
+      # v5 rather than v3 or v4: this is a composite action, so it has no runtime
+      # of its own, but it *calls* actions/upload-artifact — v3 and v4 both pin a
+      # v4.x of that, which is node20, and the run annotates the Node 20
+      # deprecation because of it. Only v5 (upload-artifact v7, node24) clears it.
+      #
+      # v5 excludes dotfiles from the artifact unless include-hidden-files is set.
+      # Checked rather than assumed: dist/ has none, and CNAME is not one, so the
+      # custom domain is unaffected.
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
