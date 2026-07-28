@@ -39,9 +39,13 @@ cost is that local runs no longer match the runners' architecture.
 
 Two jobs run usefully; the third can't:
 
-- `build` runs end to end, including `test:browser` against Playwright's **bundled
-  Chromium** with `CI` set. That is the branch the checks take on the runners and
-  not the one they take locally, so it is the part worth having.
+- `build` runs everything that matters, including `test:browser` against
+  Playwright's **bundled Chromium** with `CI` set. That is the branch the checks
+  take on the runners and not the one they take locally, so it is the part worth
+  having. **It still ends red**, because the final `upload-pages-artifact` step
+  fails with `Unable to get the ACTIONS_RUNTIME_TOKEN env variable` — act has no
+  artifact service, and every version of `upload-artifact` authenticates against
+  one. Read the step results rather than the job's exit code.
 - `firmware` runs end to end. `actions/cache` can't reach a cache service and
   warns rather than failing, which is what it does on a cache miss anyway.
 - `deploy` **cannot run**: `actions/deploy-pages` needs the Pages API, an OIDC
