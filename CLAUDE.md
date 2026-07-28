@@ -103,6 +103,13 @@ project dependency. It starts and stops its own preview server.
     a field, and why **swapping ends also changes who throws first**: slot 0
     throws even rounds, so the two are the same fact and cannot be set
     independently.
+  - **The court is `aria-hidden` and the arrangement is spoken in prose instead.**
+    Everything the drawing says — who is up, which box, which board they're aiming
+    at, who throws first — is position, colour, border style and a pseudo-element
+    dot, none of which survives being read aloud, and four names read in DOM order
+    are worse than nothing. So `spoken()` builds a sentence and the drawing is
+    hidden. `verify-positions.mjs` asserts the sentence names the same pair the
+    lit boxes do, so it can't drift into describing a court nobody is looking at.
   - **Positions are deliberately absent from the scoreboard payload.** A public
     board shows the score; the byte budget is tight and the firmware pins the
     contract. `scoreboard.test.js`'s `toEqual` is what keeps it out.

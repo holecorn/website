@@ -68,6 +68,14 @@ console.log('the court names the same thrower as the scoring lanes');
       JSON.stringify(throwing) === JSON.stringify([...laneNames].map((s) => s.trim()).sort()),
       `court ${throwing} vs lanes ${laneNames}`,
     );
+    // The drawing is aria-hidden, so the prose is the only version of this a
+    // screen reader gets. It has to name the same two people.
+    const spoken = (await page.locator('.positions .visually-hidden').innerText()).trim();
+    check(
+      `round ${round}: the spoken summary names the same pair`,
+      throwing.every((name) => spoken.includes(name)),
+      spoken,
+    );
     if (round < 4) await playRound(page);
   }
   await page.close();
