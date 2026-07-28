@@ -403,6 +403,19 @@ project dependency. It starts and stops its own preview server.
   deliberate; `boardLiveness()` is the pure version, tested in
   `panelRender.test.js` because the grace has to run from the *drop* — stamping it
   at connect made a long session dim the instant the socket went.
+- **The grace runs from when the drop is *detected*, and the two ends detect at
+  very different speeds.** Nothing can start the clock earlier, but it means the
+  emulator can take twice as long as the board to admit a dead link, so don't
+  read a slow dim as a bug. mqtt.js times out at 1.5x keepalive counted from the
+  last packet *received*, in ticks of keepalive/2 (`KeepaliveManager`), and the
+  default keepalive is 60s and is not set explicitly — so detection lands
+  **30-90s** after the network dies, depending where in the ping cycle it fell,
+  and the panel dims 30s later. PubSubClient 2.8 defaults `MQTT_KEEPALIVE` to
+  15s, so the board notices in 15-30s and dims at 45-60s. Passing
+  `keepalive: 15` in `openScoreboardLink` would align them, but that is the
+  shared transport, so it changes `?display=1` too — deliberately left alone.
+  **Chrome also throttles `setTimeout` in a hidden tab**, so a backgrounded
+  emulator can hold the last frame past its own grace until you look at it.
 - **The display's wake lock is re-acquired, not requested once.** The browser
   drops it whenever the page is hidden, and the system can reclaim it (low
   battery). An outright refusal is not retried — it would only be refused again —
