@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, setBag, endRound, setFirst } from './scoring.js';
+import { newGame, setBag, endRound, setFirst, undoRound } from './scoring.js';
 import {
   LAYOUT_LABELS,
   REORDER_WINDOW,
@@ -8,6 +8,8 @@ import {
   configFromSearch,
   displayUrl,
   layoutTopic,
+  lineupPayload,
+  lineupTopic,
   loadScoreboardConfig,
   normalizeCode,
   normalizeLayout,
@@ -15,7 +17,9 @@ import {
   scoreboardPayload,
   segmentDigits,
   stateTopic,
+  usableLineup,
 } from './scoreboard.js';
+import { matchRecord } from './archive.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
 
 const throwAll = (game, team, tiers) =>
@@ -216,5 +220,143 @@ describe('panel layout', () => {
 
   it('labels every layout, so the UI cannot show a bare id', () => {
     for (const id of PANEL_LAYOUTS) expect(LAYOUT_LABELS[id]).toBeTruthy();
+  });
+});
+
+describe('the pre-game lineup', () => {
+  // Built by playing the rounds, like stats.test.js, so a rules change surfaces
+  // here rather than agreeing with a stale blob.
+  const won = (a, b, id, endedAt) => {
+    let game = { ...newGame(21), id, startedAt: 1, players: { a: [a, 'P2'], b: [b, 'P2'] } };
+    for (let r = 0; r < 2; r++) {
+      game = endRound(
+        throwAll(throwAll(game, 'a', Array(4).fill('hole')), 'b', Array(4).fill('floor')),
+      );
+    }
+    return matchRecord(game, endedAt);
+  };
+  const archive = [won('Neil', 'Sigma', 'm1', 1)];
+  const setup = () => ({ ...newGame(21), players: { a: ['Neil', 'P2'], b: ['Sigma', 'P2'] } });
+
+  it('has its own retained topic, not a field in the score payload', () => {
+    expect(lineupTopic('K3PQM')).toBe('holecorn/k3pqm/lineup');
+    expect(lineupTopic(' k3 pqm ')).toBe(lineupTopic('k3pqm'));
+    expect(scoreboardPayload(newGame())).not.toHaveProperty('rows');
+  });
+
+  it('carries per-player rows in lane order and nothing else', () => {
+    // toEqual, not toMatchObject: the board's buffer is the reason this topic
+    // exists, so a field nothing renders has to fail here rather than ship.
+    expect(lineupPayload(setup(), archive)).toEqual({
+      rows: [
+        { n: 'Neil', w: 1, l: 0, p: 120, f: 'W' },
+        { n: 'Sigma', w: 0, l: 1, p: 0, f: 'L' },
+      ],
+    });
+  });
+
+  // Colours are already on the score topic and two copies could disagree; the
+  // layout is a separate fact again.
+  it('repeats neither the colours nor the layout', () => {
+    const [row] = lineupPayload(setup(), archive).rows;
+    expect(Object.keys(row).sort()).toEqual(['f', 'l', 'n', 'p', 'w']);
+    expect(lineupPayload(setup(), archive)).not.toHaveProperty('layout');
+  });
+
+  // Null is the instruction to clear the retained message, which is the only way
+  // the board leaves the form screen.
+  it('is null once a bag has been thrown', () => {
+    const started = throwAll(setup(), 'a', ['hole', 'unthrown', 'unthrown', 'unthrown']);
+    expect(lineupPayload(started, archive)).toBeNull();
+  });
+
+  it('is null once a round has been committed', () => {
+    let game = setup();
+    game = endRound(throwAll(throwAll(game, 'a', Array(4).fill('floor')), 'b', Array(4).fill('floor')));
+    expect(lineupPayload(game, archive)).toBeNull();
+  });
+
+  // Undoing the only round does *not* bring the form screen back, because
+  // undoRound restores that round's bags to the lanes and a thrown bag can never
+  // return to unthrown. Only New game does, which is the right answer: you undo to
+  // correct a round, not to go back to standing around.
+  it('stays cleared after the only round is undone', () => {
+    let game = setup();
+    game = endRound(throwAll(throwAll(game, 'a', Array(4).fill('floor')), 'b', Array(4).fill('floor')));
+    const undone = undoRound(game);
+    expect(undone.rounds).toHaveLength(0);
+    expect(lineupPayload(undone, archive)).toBeNull();
+    // New game is the route back.
+    expect(lineupPayload({ ...newGame(21), players: game.players }, archive)).not.toBeNull();
+  });
+
+  it('is null when nobody in the roster has played before', () => {
+    expect(lineupPayload(setup(), [])).toBeNull();
+    const strangers = { ...setup(), players: { a: ['Psi', 'P2'], b: ['Eta', 'P2'] } };
+    expect(lineupPayload(strangers, archive)).toBeNull();
+  });
+
+  it('still publishes when only one of them has played', () => {
+    const mixed = { ...setup(), players: { a: ['Neil', 'P2'], b: ['Psi', 'P2'] } };
+    expect(lineupPayload(mixed, archive).rows[1]).toEqual({ n: 'Psi', w: 0, l: 0, p: 0, f: '' });
+  });
+
+  it('sends four rows in doubles, team A first', () => {
+    const doubles = {
+      ...setup(),
+      mode: 'doubles',
+      players: { a: ['Neil', 'Rho'], b: ['Sigma', 'Tau'] },
+    };
+    const rows = lineupPayload(doubles, archive).rows;
+    expect(rows).toHaveLength(4);
+    expect(rows.map((r) => r.n)).toEqual(['Neil', 'Rho', 'Sigma', 'Tau']);
+  });
+
+  // PPR travels as tenths so the firmware needs no float formatter. Four bags in
+  // the hole every round is 12.0, which is the widest it can be.
+  it('sends PPR as tenths, and the maximum needs four characters', () => {
+    const [neil] = lineupPayload(setup(), archive).rows;
+    expect(neil.p).toBe(120);
+    expect((neil.p / 10).toFixed(1)).toBe('12.0');
+  });
+
+  // The cap that moved. At 99 the board drew "99" while the stats screen and the phone's
+  // own Form panel showed the true figure — wrong rather than truncated, and reachable at
+  // about 100 matches in either column. Both consumers size the record column to what
+  // arrives, so three digits cost nothing until someone earns them.
+  it('publishes a record past 99 rather than clamping it to 99', () => {
+    const many = Array.from({ length: 120 }, (_, i) => won('Neil', 'Sigma', `m${i}`, i + 1));
+    const rows = lineupPayload(setup(), many).rows;
+    expect(rows[0].w).toBe(120);
+    expect(rows[1].l).toBe(120);
+    // Still bounded, because formatRecord writes into a fixed buffer.
+    expect(lineupPayload(setup(), many).rows.every((r) => r.w <= 999 && r.l <= 999)).toBe(true);
+  });
+
+  it('caps the form string at what the panel draws', () => {
+    const many = Array.from({ length: 8 }, (_, i) => won('Neil', 'Sigma', `m${i}`, i + 1));
+    const [neil] = lineupPayload(setup(), many).rows;
+    expect(neil.f).toBe('WWWWW');
+  });
+
+  describe('usableLineup', () => {
+    it('accepts a singles and a doubles roster', () => {
+      expect(usableLineup({ rows: [{}, {}] })).toBe(true);
+      expect(usableLineup({ rows: [{}, {}, {}, {}] })).toBe(true);
+    });
+
+    // The board splits rows into teams by halving the count, so a length it
+    // cannot halve would put somebody in the wrong colour rather than fail.
+    it('refuses a count that cannot be split into two sides', () => {
+      for (const rows of [[], [{}], [{}, {}, {}], [{}, {}, {}, {}, {}]]) {
+        expect(usableLineup({ rows })).toBe(false);
+      }
+    });
+
+    it('refuses anything that is not a roster', () => {
+      for (const bad of [null, undefined, 'rows', 3, {}, { rows: 'two' }]) {
+        expect(usableLineup(bad)).toBe(false);
+      }
+    });
   });
 });
