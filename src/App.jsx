@@ -27,7 +27,6 @@ import {
   clampTarget,
   newGame,
   setBag,
-  setFirst,
   throwFirst,
   swapEnds,
   setStartSide,
@@ -108,8 +107,6 @@ function reducer(game, action) {
   switch (action.type) {
     case 'set':
       return setBag(game, action.team, action.index, action.tier);
-    case 'setFirst':
-      return setFirst(game, action.team);
     case 'throwFirst':
       return throwFirst(game, action.team, action.slot);
     case 'setStartSide':
@@ -157,7 +154,6 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showPositions, setShowPositions] = useState(false);
   const [showGameStats, setShowGameStats] = useState(false);
-  const [editingTeams, setEditingTeams] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [callout, setCallout] = useState(null);
   const [fourBagger, setFourBagger] = useState(null);
@@ -168,7 +164,6 @@ export default function App() {
   // the scoreboard publisher both read it and both live above that screen.
   const [matches, setMatches] = useState(loadArchive);
   const confirmDialog = useRef(null);
-  const editDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
   const archivedId = useRef(null);
 
@@ -263,13 +258,6 @@ export default function App() {
     if (confirm && !dialog.open) dialog.showModal();
     if (!confirm && dialog.open) dialog.close();
   }, [confirm]);
-
-  useEffect(() => {
-    const dialog = editDialog.current;
-    if (!dialog) return;
-    if (editingTeams && !dialog.open) dialog.showModal();
-    if (!editingTeams && dialog.open) dialog.close();
-  }, [editingTeams]);
 
   // Must stay identical to the wide tier's query in App.css: this decides whether
   // the rail's panels render at all, and that file decides where they go. The
@@ -436,8 +424,6 @@ export default function App() {
           color={colors.a}
           winner={game.winner === 'a'}
           first={game.nextFirst === 'a'}
-          onEdit={() => setEditingTeams(true)}
-          onSetFirst={() => dispatch({ type: 'setFirst', team: 'a' })}
         />
         <div className="center-readout">
           <span className="center-cap">logged</span>
@@ -455,8 +441,6 @@ export default function App() {
           color={colors.b}
           winner={game.winner === 'b'}
           first={game.nextFirst === 'b'}
-          onEdit={() => setEditingTeams(true)}
-          onSetFirst={() => dispatch({ type: 'setFirst', team: 'b' })}
         />
       </header>
 
@@ -564,23 +548,6 @@ export default function App() {
       </div>
 
       <Footer />
-
-      <dialog
-        ref={editDialog}
-        className="modal"
-        onClose={() => setEditingTeams(false)}
-        onClick={(e) => {
-          if (e.target === editDialog.current) setEditingTeams(false);
-        }}
-      >
-        <p className="modal-title">Teams</p>
-        <TeamsFields game={game} dispatch={dispatch} />
-        <div className="confirm-actions">
-          <button className="confirm-primary" onClick={() => setEditingTeams(false)}>
-            Done
-          </button>
-        </div>
-      </dialog>
 
       <dialog
         ref={confirmDialog}
@@ -748,7 +715,11 @@ function Confetti({ count, colors }) {
   );
 }
 
-function TeamScore({ players, activeIdx, score, color, winner, first, onEdit, onSetFirst }) {
+// Reports, never sets. Nothing about who the teams are or who leads can be
+// changed once a game is under way — the play screen deals only with scoring — so
+// the bag is an indicator here and the name is text. Both are still needed:
+// after round one the bag follows whoever scored last.
+function TeamScore({ players, activeIdx, score, color, winner, first }) {
   return (
     <div className={`team-score${winner ? ' is-winner' : ''}`}>
       <div className="names">
@@ -758,20 +729,21 @@ function TeamScore({ players, activeIdx, score, color, winner, first, onEdit, on
           return (
             <div className={`name-row${benched ? ' benched' : ''}`} key={i}>
               {active ? (
-                <button
+                <span
                   className={`first-bag${first ? ' is-first' : ''}`}
                   style={first ? { background: color, borderColor: color } : undefined}
-                  onClick={onSetFirst}
-                  aria-label={`${name} throws first`}
-                  aria-pressed={first}
+                  aria-hidden="true"
                   title="Throws first"
                 />
               ) : (
                 <span className="first-bag-spacer" aria-hidden="true" />
               )}
-              <button className="team-name" style={{ color }} onClick={onEdit}>
+              <span className="team-name" style={{ color }}>
                 {name}
-              </button>
+              </span>
+              {/* The bag is shape and colour only, so the fact it carries has to
+                  be said as well. */}
+              {active && first && <span className="visually-hidden">throws first</span>}
             </div>
           );
         })}

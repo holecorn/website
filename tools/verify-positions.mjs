@@ -135,6 +135,50 @@ console.log('\nthe name fields set the arrangement and the court reports it');
   await page.close();
 }
 
+console.log('\nthe play screen deals only with scoring');
+{
+  // Once a round is committed, nothing about who the teams are may change: names
+  // and slot order are what `throwerFor` and the career stats attribute rounds by,
+  // and the board is told the colours. So the play screen has no route to any of
+  // it — asserted as the absence of controls, which nothing in the components
+  // themselves would notice regressing.
+  const page = await open(WIDE);
+  await playRound(page);
+  const header = page.locator('.scoreboard');
+  check('no name fields anywhere', (await page.locator('.team-name-input').count()) === 0);
+  check('no colour swatches', (await page.locator('.swatch').count()) === 0);
+  check('no board chips', (await page.locator('.end-chip').count()) === 0);
+  check('no court mirror', (await page.locator('.positions .swap-sides').count()) === 0);
+  check(
+    'the team names are text, not buttons',
+    (await header.locator('button.team-name').count()) === 0 &&
+      (await header.locator('.team-name').count()) > 0,
+  );
+  check(
+    'the first-thrower bag is an indicator, not a button',
+    (await header.locator('button.first-bag').count()) === 0 &&
+      (await header.locator('.first-bag').count()) > 0,
+  );
+  // Every control on the screen, so a new one has to be added to this list
+  // deliberately rather than slipping in. Visible only — the confirm dialog sits
+  // in the DOM closed, and its buttons belong to it rather than to this screen.
+  const controls = await page.evaluate(() =>
+    [...document.querySelectorAll('.app button')]
+      .filter((b) => b.checkVisibility())
+      .map((b) => b.textContent.trim())
+      .filter(Boolean),
+  );
+  check(
+    'and the buttons that remain are all scoring or navigation',
+    controls.every((t) => /End round|bags still to place|Undo round|New game|Panel/.test(t)),
+    controls.join(' | '),
+  );
+  // The bag carries its meaning by shape and colour, so it has to be spoken too.
+  const spoken = await page.locator('.scoreboard .visually-hidden').allInnerTexts();
+  check('with the fact it carries said in words', spoken.join().includes('throws first'), spoken.join(', '));
+  await page.close();
+}
+
 console.log('\nevery control is a real button, with nothing hidden to stand in for it');
 {
   // What the drawing used to need: it was aria-hidden with a parallel set of

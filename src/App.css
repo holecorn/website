@@ -480,13 +480,12 @@
   opacity: 0.4;
 }
 
+/* Text, not a button: the play screen deals only with scoring, so who the teams
+   are is fixed once a game starts. */
 .team-name {
   min-width: 0;
-  background: transparent;
-  border: none;
-  font: 600 15px system-ui, sans-serif;
   padding: 2px 4px;
-  cursor: pointer;
+  font: 600 15px system-ui, sans-serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
