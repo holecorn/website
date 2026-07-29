@@ -7,6 +7,7 @@
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <esp_random.h>
 
 #include "render.h"
 
@@ -48,6 +49,11 @@ const uint32_t WIFI_RETRY_INTERVAL = 10000;
 const uint32_t RENDER_INTERVAL = 100;
 const uint32_t WINNER_BLINK = 500;
 
+// The wordmark at power-on. Nothing waits for it — WiFi and MQTT connect underneath —
+// so it costs only the seconds the board would otherwise spend on the no-state dashes.
+// Mirrored in src/panelRender.js for the emulator.
+const uint32_t SPLASH_MS = 2500;
+
 // Evening play, so this is deliberately low. Raise it for daylight; measured
 // duty is ~12% (see README), so the headroom is in the supply, not here.
 const uint8_t PANEL_BRIGHTNESS = 40;
@@ -75,6 +81,8 @@ uint32_t lastWifiAttempt = 0;
 uint32_t lastRender = 0;
 uint32_t lastLive = 0;
 bool wifiWasUp = false;
+uint32_t splashUntil = 0;
+Rgb splashA, splashB;
 
 // --------------------------------------------------------------- display ----
 
@@ -85,6 +93,29 @@ struct PanelCanvas {
     panel->drawPixelRGB888(x, y, r, g, b);
   }
 };
+
+// The app's four team colours (PALETTE in src/App.jsx), which the splash draws two of.
+const Rgb SPLASH_PALETTE[] = {
+    {0x2f, 0x80, 0xed}, {0xeb, 0x57, 0x57}, {0x27, 0xae, 0x60}, {0xf2, 0xc9, 0x4c}};
+const uint8_t SPLASH_PALETTE_N = sizeof SPLASH_PALETTE / sizeof SPLASH_PALETTE[0];
+
+// esp_random() rather than random(), which is seeded identically every boot and would
+// show the same pair every time. The second index steps past the first over the
+// remaining colours, so it cannot repeat it and needs no retry.
+void pickSplashColors() {
+  const uint8_t i = esp_random() % SPLASH_PALETTE_N;
+  const uint8_t j = (i + 1 + esp_random() % (SPLASH_PALETTE_N - 1)) % SPLASH_PALETTE_N;
+  splashA = SPLASH_PALETTE[i];
+  splashB = SPLASH_PALETTE[j];
+}
+
+// Indexes SPLASH_CONNECT: no wifi, wifi but no broker, subscribed. Only the splash
+// shows this — once a score is up, a dropped link is already said by the whole panel
+// dimming, so a corner dot would be repeating it.
+int connectState() {
+  if (WiFi.status() != WL_CONNECTED) return 0;
+  return client.connected() ? 2 : 1;
+}
 
 void render() {
   // The grace period covers a dropped socket, not a phone that said goodbye:
@@ -97,6 +128,15 @@ void render() {
 
   panel->fillScreen(0);
   PanelCanvas canvas;
+
+  // After the liveness bookkeeping above, not before it: a link that came up during
+  // the splash and dropped straight after would otherwise have no stamp to run its
+  // grace period from, and the board would dim the instant the splash cleared.
+  if (millis() < splashUntil) {
+    drawSplash(canvas, splashA, splashB, connectState());
+    return;
+  }
+
   renderBoard(canvas, state, haveState, live, blinkOn, layout, &lineup);
 }
 
@@ -217,6 +257,9 @@ void setup() {
   panel->begin();
   panel->setBrightness8(PANEL_BRIGHTNESS);
   panel->clearScreen();
+
+  pickSplashColors();
+  splashUntil = millis() + SPLASH_MS;
   render();
 
   snprintf(stateTopic, sizeof stateTopic, "holecorn/%s/state", GAME_CODE);

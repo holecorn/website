@@ -59,8 +59,8 @@ project dependency. It starts and stops its own preview server.
 - `src/panelRender.js` — the HUB75 panel's framebuffer and its layouts, a port
   of the firmware's `render.h`. Pure and framework-free; its `renderBoard` is held
   **pixel-identical** to the C++ by `npm run test:firmware`, and the parse-side
-  coercions around it by `src/panelRender.test.js`. `src/panelGlyphs.js` is
-  generated.
+  coercions around it by `src/panelRender.test.js`. `src/panelGlyphs.js` and
+  `src/panelLogo.js` are generated.
 - `src/panelPaint.js` — turns that framebuffer into LEDs on a canvas. No React,
   so a browser check can drive it directly.
 - `src/Panel.jsx` / `src/Panel.css` — the `?panel=1` emulator view: the same MQTT
@@ -724,6 +724,90 @@ project dependency. It starts and stops its own preview server.
     `test-firmware.mjs` cannot see it** — hence the separate assertion that some
     scene carries a lineup. Without it the whole screen would be unpinned second
     implementation, which is the one thing `src/panelRender.js` is not allowed to be.
+- **The splash is a fourth screen and the second with no layout id**, so it has its own
+  standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
+  from `public/logo.svg` and is painted in **two of the four team colours, picked at
+  random each boot**, with a 2x2 connect indicator in the corner. 24.5% duty against the
+  30% ceiling. The parts that are easy to undo:
+  - **The mark is re-spaced for the panel and is not the app's geometry.** Fitted as
+    authored it used 82 of 128 columns and the letters came out at 10px, where Bebas
+    Neue's condensed R and N run into themselves. `generate_logo.mjs` eases the tilt to 8°,
+    widens `letter-spacing` to 14 and fits to the mark's own bounds. Three traps in that,
+    all hit once: SVG counts `letter-spacing` after the final glyph and `text-anchor`
+    centres the padded width, so widening it walks the glyphs left inside a fixed box (the
+    H ended up on the frame); `getBBox()` on a `<text>` returns the em box, so padding its
+    *height* costs a fifth of the scale; and a wider box exceeds the 128 units the source
+    puts between the two groups, so they collide unless the second group's offset is
+    derived from the box extent.
+  - **It carries 4-bit coverage, not a 1-bit mask**, because antialiasing is the only
+    thing a 128x32 panel can do about a diagonal, and an 8° tilt is all diagonals.
+    `COVERAGE_FLOOR` is load-bearing twice: below ~40% an edge pixel is indistinguishable
+    from off at `PANEL_BRIGHTNESS` 40, *and* keeping the fainter ones puts the lit count at
+    34.6%, over the ceiling. With the floor the mark is **fewer** lit pixels than a hard
+    mask (24.5% vs 27.2%) because the dropped pixels are the ones a hard threshold was
+    promoting to full brightness. The generator emits the floor it applied as
+    `LOGO_MIN_LEVEL` and the test asserts against that, not against the fraction — which is
+    how a quantisation landing at 39.7% got caught.
+  - **The lit-pixel duty metric and current diverge by ~1.7x**, measured over every scene:
+    `form-worst` is 28.5% lit but 16.6% per-channel, because these colours are never white.
+    So `DUTY_CEILING` is conservative, and an antialiased screen can breach it while drawing
+    less current than one that passes. Don't redefine the metric to make a screen fit — the
+    splash respects the check as written. If it is ever revisited, that is its own change.
+  - **The chalk filter is off and that is not a loss at this size.** A 1-2px stroke has no
+    interior for a dither pattern, so `feTurbulence` only erodes and wobbles the strokes,
+    fighting the antialiasing. Checked at 3x dot size, not assumed.
+  - **`drawSplash` takes its two colours as arguments and picks nothing.** `render.h`
+    has to give the same frame for the same inputs or the pixel check cannot hold it, so
+    the randomness lives in `sketch.ino` (`esp_random()`, because `random()` is seeded
+    identically every boot and would show the same pair every time) and in `Panel.jsx`
+    for the emulator. The picker cannot repeat a colour: the second index steps past the
+    first over the remaining ones rather than being redrawn.
+  - **`PALETTE` lives in `scoring.js`**, not `App.jsx`, because the splash reads it too
+    and a constant exported from a component file trips the fast-refresh lint.
+  - **The chalk tint rounds where every other division in `panelRender.js` truncates.**
+    It is matching `Logo.jsx`'s `Math.round`, not an `int` division; `+ 50` before
+    `/ 100` in the C++ is what keeps the two byte-identical.
+  - **The liveness bookkeeping in `render()` runs before the splash returns.** Skipping
+    it leaves `lastLive` at 0 for a link that came up during the splash and dropped
+    straight after, so the board would dim the instant the splash cleared instead of
+    holding its grace period.
+  - **The connect indicator is splash-only.** Once a score is up, the whole panel
+    dimming already says the link went, so a corner dot repeats it — and `full` has no
+    corner to spare, its name row spans the width.
+  - **`generate_logo.mjs` needs a browser, so its staleness check doesn't regenerate.**
+    The SVG is set in Bebas Neue and drawn through `feTurbulence`, which is also why the
+    masks are baked rather than drawn on the board. The glyph tables are checked by
+    regenerating and diffing; CI's firmware job has no browser, so instead the generator
+    stamps a hash of `public/logo.svg` plus the font into both outputs and
+    `test-firmware.mjs` compares it. An edited logo with stale masks fails; a browser
+    update that rasterises differently does not, which is deliberate — the baked asset
+    is what ships.
+  - **The tilt is 8° in both now, but `letter-spacing` is 14 on the panel and 7 in the
+    app.** The spacing is a pixel-crowding fix that only the panel needs; at the size the
+    app draws the mark it would visibly change its proportions. So don't "finish the job"
+    by matching it.
+  - **The generator pins the scale it measures text at**, and that is not tidiness. Glyph
+    metrics are hinted against the device size, so `getExtentOfChar` returns slightly
+    different advances when the *source* viewBox changes — which fed through the box widths
+    into the raster and moved the panel's output by 33 lit pixels when the app's mark was
+    re-tilted, even though the generator fits to the mark's own bounds either way.
+    Measured, not theorised: 1061 lit against 1094. `MEASURE_VIEWBOX` makes it independent.
+  - **The generator substitutes by pattern and checks the pattern *matched*, not that the
+    text changed.** Both halves matter: string-matching `rotate(15)` silently stopped
+    applying the moment the app adopted 8°, and a change-detecting guard fails exactly when
+    the two agree — which is now the normal case.
+  - **Two coverage maps, one per word, split by dominant channel** — not by distance to
+    the two hexes the SVG hardcodes, which filed a third of HOLE under CORN because a dim
+    antialiased blue is nearer `#f18686` than `#69a4f2` in plain RGB. The overlap where
+    the boxes cross goes to CORN, the order the SVG paints them in.
+  - **`verify-panel.mjs` installs a fake clock for the splash block** so the 2.5 s
+    cannot expire between loading the page and reading the canvas; the score block waits
+    it out on the *real* clock, because its caption poll needs the reconnect timers to
+    fire. The pixel check proves the frame is right — only a browser can see whether
+    `Panel.jsx` shows it at all and then gets out of the way.
+  - **Measured cost: +1.72 kB gzipped** of the main chunk (85.66 → 87.38) and 4 kB of
+    flash, on top of what the emulator already costs. Coverage is 0.82 kB of that over a
+    1-bit mask. Re-measure rather than assuming.
 - ESP32-class hardware is 2.4GHz-only; iPhone hotspots default to 5GHz, so
   **Maximize Compatibility** has to be on. Expect this to be the first thing that
   goes wrong when the hardware board arrives.

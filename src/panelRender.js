@@ -22,6 +22,7 @@ import {
   GLYPH_MASK,
   GLYPH_SMALL,
 } from './panelGlyphs.js';
+import { LOGO_CORN, LOGO_H, LOGO_HOLE, LOGO_LEVELS, LOGO_W } from './panelLogo.js';
 
 // Truncating, because every one of these is an `int` division in render.h and
 // the layout constants depend on the remainder being thrown away. Rounding
@@ -65,6 +66,21 @@ const FORM_PIPS_X = PANEL_W - FORM_PIPS_W;
 // sized per lineup by formLayout, not fixed — see render.h for why.
 const FORM_WL_MAX = 7;
 const FORM_PPR_MAX = 4;
+
+// How long the board shows the wordmark at power-on. Mirrored in sketch.ino, the
+// same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
+export const SPLASH_MS = 2500;
+
+export const SPLASH_DOT = 2;
+const SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
+const SPLASH_DOT_Y = 0;
+const SPLASH_CONNECT = [
+  { r: 0xeb, g: 0x57, b: 0x57 },
+  { r: 0xf2, g: 0xc9, b: 0x4c },
+  { r: 0x27, g: 0xae, b: 0x60 },
+];
+export const SPLASH_CONNECT_STATES = SPLASH_CONNECT.length;
+const CHALK_PCT = 28;
 
 export const LINEUP_MAX = 4;
 const LINEUP_NAME_MAX = 49;
@@ -525,6 +541,38 @@ function drawForm(fb, s, l, level) {
       drawTextRight(fb, formatTenths(r.ppr), f.pprRight, y, grey, f.pprChars);
     }
     drawPips(fb, r.form, y, color, grey);
+  }
+}
+
+// Rounds where every other division here truncates, matching render.h's one
+// deliberate exception: this is Logo.jsx's Math.round mix, not an int division.
+const chalked = (v) => v + idiv((255 - v) * CHALK_PCT + 50, 100);
+const chalk = (c) => ({ r: chalked(c.r), g: chalked(c.g), b: chalked(c.b) });
+
+const logoLevel = (row, x) => (row[x >> 1] >> ((x & 1) * 4)) & 0x0f;
+
+const covered = (c, level) => ({
+  r: idiv(c.r * level, LOGO_LEVELS),
+  g: idiv(c.g * level, LOGO_LEVELS),
+  b: idiv(c.b * level, LOGO_LEVELS),
+});
+
+export function drawSplash(fb, colorA, colorB, connect) {
+  const hole = chalk(colorA);
+  const corn = chalk(colorB);
+  for (let y = 0; y < LOGO_H; y += 1) {
+    for (let x = 0; x < LOGO_W; x += 1) {
+      const cornLevel = logoLevel(LOGO_CORN[y], x);
+      if (cornLevel > 0) {
+        px(fb, x, y, covered(corn, cornLevel));
+        continue;
+      }
+      const holeLevel = logoLevel(LOGO_HOLE[y], x);
+      if (holeLevel > 0) px(fb, x, y, covered(hole, holeLevel));
+    }
+  }
+  if (connect >= 0 && connect < SPLASH_CONNECT.length) {
+    drawBlock(fb, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, SPLASH_CONNECT[connect]);
   }
 }
 

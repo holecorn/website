@@ -15,7 +15,7 @@
 
 import { chromium } from 'playwright';
 import { GLYPH_SMALL } from '../src/panelGlyphs.js';
-import { DIGIT_Y, PANEL_H, PANEL_W } from '../src/panelRender.js';
+import { DIGIT_Y, PANEL_H, PANEL_W, SPLASH_DOT, SPLASH_MS } from '../src/panelRender.js';
 
 const BASE = 'http://localhost:4173/';
 // Refused fast rather than left to time out, so the board settles on "offline".
@@ -42,6 +42,31 @@ const appeared = (page, selector) =>
     () => false,
   );
 
+// Sampled at LED centres, where the dot's own opaque fill wins over any neighbour's
+// halo, so a row with nothing on it reads as the unlit grey.
+const scanRows = (page, cell, rows) =>
+  page.evaluate(
+    ({ panelW, cell: c, rows: want }) => {
+      const canvas = document.querySelector('.panel-canvas');
+      const ctx = canvas.getContext('2d');
+      const dpr = canvas.width / (panelW * c);
+      const brightness = (x, y) => {
+        const d = ctx.getImageData(
+          Math.floor((x * c + c / 2) * dpr),
+          Math.floor((y * c + c / 2) * dpr),
+          1,
+          1,
+        ).data;
+        return d[0] + d[1] + d[2];
+      };
+      return want.map((y) => Array.from({ length: panelW }, (_, x) => brightness(x, y)));
+    },
+    { panelW: PANEL_W, cell, rows },
+  );
+
+const cellSize = (page) =>
+  page.locator('.panel-canvas').evaluate((c) => c.getBoundingClientRect().width / 128);
+
 console.log('?panel=1 routes to the panel, not the app');
 {
   const page = await browser.newPage({ viewport: { width: 430, height: 500 } });
@@ -55,6 +80,52 @@ console.log('?panel=1 routes to the panel, not the app');
     // beside the board, which reads as a broken layout rather than a hint.
     const width = await page.locator('.panel').evaluate((e) => e.getBoundingClientRect().width);
     check('the board fills the viewport', width === 430, `${width}px of 430`);
+  }
+  await page.close();
+}
+
+// The pixel check proves drawSplash draws the wordmark; it cannot see whether Panel.jsx
+// ever puts it on screen, or that it gets out of the way again. Both halves matter: a
+// splash that never cleared would hide the score for the whole game.
+//
+// The clock is installed so the 2.5s cannot expire between loading the page and reading
+// the canvas — the assertion would otherwise pass or fail on how warm the preview
+// server is. Nothing in this block depends on a timer firing.
+console.log('\nthe splash is shown at startup, then clears');
+{
+  const page = await browser.newPage({ viewport: { width: 1000, height: 400 } });
+  await page.clock.install();
+  await page.goto(`${BASE}?panel=1&${OFFLINE}`);
+  if (!(await appeared(page, '.panel-canvas'))) {
+    check('the canvas is on the page', false, 'nothing else in this block can run');
+  } else {
+    const cell = await cellSize(page);
+    // The middle row carries the wordmark and nothing else does at startup; row 0 holds
+    // only the connect indicator, in the last SPLASH_DOT columns.
+    const [middle, top] = await scanRows(page, cell, [Math.trunc(PANEL_H / 2), 0]);
+    const floor = Math.min(...top);
+    const dot = top.slice(PANEL_W - SPLASH_DOT).filter((v) => v > floor).length;
+
+    check('the caption says it is starting up', (await page.locator('.panel-caption').innerText()).includes('Starting up'));
+    check(
+      'the wordmark is lit across the middle of the panel',
+      middle.filter((v) => v > floor).length > 20,
+      `${middle.filter((v) => v > floor).length} LEDs`,
+    );
+    check('the connect indicator is lit in the corner', dot === SPLASH_DOT, `${dot} of ${SPLASH_DOT} LEDs`);
+
+    await page.clock.runFor(SPLASH_MS + 100);
+    const [middleAfter, topAfter] = await scanRows(page, cell, [Math.trunc(PANEL_H / 2), 0]);
+    const floorAfter = Math.min(...topAfter);
+    check(
+      'the splash clears and the wordmark goes with it',
+      middleAfter.filter((v) => v > floorAfter).length === 0,
+      `${middleAfter.filter((v) => v > floorAfter).length} LEDs still lit`,
+    );
+    check(
+      'and the indicator is not left behind on the score screen',
+      topAfter.slice(PANEL_W - SPLASH_DOT).every((v) => v <= floorAfter),
+    );
   }
   await page.close();
 }
@@ -93,37 +164,24 @@ console.log('\nthe emulator draws the framebuffer onto the canvas');
     `${geometry.pixelWidth} device px`,
   );
 
-  // Sampled at LED centres, where the dot's own opaque fill wins over any
-  // neighbour's halo. Rows far from the dashes have no lit LED within reach, so
-  // their centres are the unlit grey.
-  const sampled = await page.evaluate(
-    ({ panelW, cell: c, dashRow, blankRow }) => {
-      const canvas = document.querySelector('.panel-canvas');
-      const ctx = canvas.getContext('2d');
-      const dpr = canvas.width / (panelW * c);
-      const brightness = (x, y) => {
-        const d = ctx.getImageData(
-          Math.floor((x * c + c / 2) * dpr),
-          Math.floor((y * c + c / 2) * dpr),
-          1,
-          1,
-        ).data;
-        return d[0] + d[1] + d[2];
-      };
-      const scan = (y) => Array.from({ length: panelW }, (_, x) => brightness(x, y));
-      return { dash: scan(dashRow), other: scan(blankRow) };
-    },
-    { panelW: PANEL_W, cell, dashRow: DASH_ROW, blankRow: 0 },
+  // The splash owns the panel for its first seconds, so waiting it out is what makes
+  // the dashes the frame being sampled. Real time here, not a fake clock: the caption
+  // poll below needs the reconnect timers to fire.
+  await page.waitForFunction(
+    () => !document.querySelector('.panel-caption').innerText.includes('Starting up'),
+    null,
+    { timeout: SPLASH_MS + 5000 },
   );
 
-  const floor = Math.max(...sampled.other);
-  const lit = sampled.dash.map((v) => v > floor);
+  const [dash, other] = await scanRows(page, cell, [DASH_ROW, 0]);
+  const floor = Math.max(...other);
+  const lit = dash.map((v) => v > floor);
   const litCount = lit.filter(Boolean).length;
 
   check(
     'the dash row is brighter than a row with nothing on it',
-    Math.max(...sampled.dash) > floor,
-    `dash ${Math.max(...sampled.dash)} vs blank ${floor}`,
+    Math.max(...dash) > floor,
+    `dash ${Math.max(...dash)} vs blank ${floor}`,
   );
 
   // Four dashes — two scores of two digits — so four runs of lit LEDs.

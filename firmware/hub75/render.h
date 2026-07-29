@@ -6,6 +6,7 @@
 
 #include "board_logic.h"
 #include "glyphs.h"
+#include "logo.h"
 
 static const int PANEL_W = 128;
 static const int PANEL_H = 32;
@@ -117,6 +118,37 @@ static const int FORM_PIPS_X = PANEL_W - FORM_PIPS_W;
 // parseLineup permit. A real PPR caps at 12.0 — four bags in the hole every round.
 static const int FORM_WL_MAX = 7;
 static const int FORM_PPR_MAX = 4;
+
+// ---------------------------------------------------- splash layout geometry --
+//
+// The wordmark, shown while the board comes up. The masks in logo.h are the panel's
+// full size, so there is no placement to do.
+//
+// Not an entry in PANEL_LAYOUTS, for the reason the form screen is not one either: a
+// layout is a preference the scorer sets with the Panel button and keeps, and this is
+// the first few seconds of a boot. Nothing on the wire selects it.
+static const int SPLASH_DOT = 2;
+static const int SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
+static const int SPLASH_DOT_Y = 0;
+
+// No wifi yet, wifi but no broker, subscribed. Three of the app's own team colours,
+// which means a randomly coloured wordmark can share a hue with the indicator — it
+// stays readable because of where it is, not what colour it is.
+static const int SPLASH_CONNECT_STATES = 3;
+static const Rgb SPLASH_CONNECT[SPLASH_CONNECT_STATES] = {
+    {0xeb, 0x57, 0x57}, {0xf2, 0xc9, 0x4c}, {0x27, 0xae, 0x60}};
+
+// Logo.jsx tints the wordmark toward white so it reads as chalk rather than as two
+// coloured outlines, and a random pair needs that as much as the default one does.
+// Rounded rather than truncated, which is the one division in here that does not
+// follow the int-truncation rule — it is matching the browser's Math.round.
+static const int CHALK_PCT = 28;
+
+inline uint8_t chalked(uint8_t v) {
+  return uint8_t(v + ((255 - v) * CHALK_PCT + 50) / 100);
+}
+
+inline Rgb chalk(Rgb c) { return Rgb{chalked(c.r), chalked(c.g), chalked(c.b)}; }
 
 // The number columns are sized to **this lineup**, not to the worst case any lineup
 // could hold, and the name takes whatever is left. Sizing for the worst case spent 5
@@ -501,6 +533,50 @@ void drawForm(Canvas& c, const BoardState& s, const LineupState& l, uint8_t leve
     }
 
     drawPips(c, r.form, y, color, grey);
+  }
+}
+
+// Two pixels to a byte, low nibble first, so a row reads left to right.
+inline uint8_t logoLevel(const uint8_t* row, int x) {
+  return (row[x >> 1] >> ((x & 1) * 4)) & 0x0f;
+}
+
+// Coverage, so the tilted strokes are antialiased rather than staircased — which is the
+// one thing a 128x32 panel can do about a diagonal. Truncating like everything else here
+// except chalk(), and mirrored by idiv in src/panelRender.js.
+inline Rgb covered(Rgb c, uint8_t level) {
+  return Rgb{uint8_t(c.r * level / LOGO_LEVELS), uint8_t(c.g * level / LOGO_LEVELS),
+             uint8_t(c.b * level / LOGO_LEVELS)};
+}
+
+// The two words are painted from separate coverage maps, so which colour each takes is
+// decided here rather than baked into the asset. CORN is tested first because it owns
+// the overlap where the two boxes cross, which is the order the SVG paints them in.
+//
+// `connect` indexes SPLASH_CONNECT, or is out of range for no indicator at all. The
+// colours are arguments and the randomness lives in the sketch: this file
+// host-compiles and the pixel check needs the same inputs to give the same frame.
+template <typename Canvas>
+void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect) {
+  const Rgb hole = chalk(colorA);
+  const Rgb corn = chalk(colorB);
+  for (int y = 0; y < LOGO_H; y++) {
+    for (int x = 0; x < LOGO_W; x++) {
+      const uint8_t cornLevel = logoLevel(LOGO_CORN[y], x);
+      if (cornLevel > 0) {
+        const Rgb p = covered(corn, cornLevel);
+        c.px(x, y, p.r, p.g, p.b);
+        continue;
+      }
+      const uint8_t holeLevel = logoLevel(LOGO_HOLE[y], x);
+      if (holeLevel > 0) {
+        const Rgb p = covered(hole, holeLevel);
+        c.px(x, y, p.r, p.g, p.b);
+      }
+    }
+  }
+  if (connect >= 0 && connect < SPLASH_CONNECT_STATES) {
+    drawBlock(c, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, SPLASH_CONNECT[connect]);
   }
 }
 

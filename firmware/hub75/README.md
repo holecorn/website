@@ -54,7 +54,8 @@ Spending it means giving up the names, which is the `score` layout below.
 
 ## What it shows
 
-The `full` layout; `score` drops the names for taller digits — see Two layouts.
+At power-on, the wordmark for 2.5 s — see the fourth screen below. Then the `full`
+layout; `score` drops the names for taller digits — see Two layouts.
 
 ```
    RHO/TAU      V      ALPHA/PHI
@@ -331,6 +332,119 @@ Three things worth knowing before changing it:
 Because the form screen has no layout id, the coverage check in
 `tools/test-firmware.mjs` cannot see it through `PANEL_LAYOUTS`, so it separately
 refuses to pass unless some scene carries a lineup.
+
+### And a fourth: the wordmark at power-on
+
+For `SPLASH_MS` (2.5 s) after `panel->begin()` the board shows the Holecorn
+wordmark, in **two of the app's four team colours picked at random each boot**, with
+a 2x2 connect indicator in the top-right corner: red for no WiFi, amber for WiFi but
+no broker, green once subscribed.
+
+| | value |
+| --- | --- |
+| duty | **24.5%**, against `DUTY_CEILING`'s 30% |
+| flash | 4 kB of coverage maps, 2 kB per word |
+| brightnesses | 18 on screen, faintest 96 of 242 |
+| mark | 111 x 28 px of the 128 x 32, against 82 px wide as the app once authored it |
+| indicator | 4 px, and it covers none of the mark — asserted, not assumed |
+
+- **Nothing waits for it.** `loop()` owns connection, so WiFi and MQTT come up
+  underneath the splash and it costs nothing: without it the board spends those same
+  seconds on the no-state dashes. The one ordering that matters is inside `render()` —
+  the liveness bookkeeping runs *before* the splash returns, or a link that came up
+  during the splash and dropped straight after would have no stamp to run its grace
+  period from and the board would dim the moment the splash cleared.
+- **It is not a layout id either**, for the form screen's reason: a layout is a
+  preference the scorer keeps, and this is the first few seconds of a boot. Nothing on
+  the wire selects it, so `tools/test-firmware.mjs` has a second standalone assertion
+  that some scene carries a splash.
+- **The two colours are arguments to `drawSplash`, not chosen inside it.** `render.h`
+  host-compiles and the pixel check needs the same inputs to produce the same frame, so
+  the randomness lives in `sketch.ino` — `esp_random()`, not `random()`, which is seeded
+  identically every boot and would show the same pair every time. The second index steps
+  past the first over the remaining colours, so it cannot repeat it without a retry loop.
+- **The indicator is only on the splash.** Once a score is up, a dropped link is
+  already said by the whole panel dimming, so a corner dot would be repeating it. The
+  four pixels would fit the `score` layout's margins but not `full`, whose name row
+  spans the whole width.
+- **The panel's tilt is now the app's too.** It started as a panel-only change: the mark
+  was drawn at 15°, a rotated box is far taller than its content, and on 32 rows that
+  height is what caps the scale — fitting the mark as authored left 39 of 128 columns
+  unused and the letters at 10 px, where Bebas Neue's condensed R and N run into
+  themselves. 8° fixed that, and the app then adopted it so the two match; easing the
+  tilt also gave the setup screen **13 px** of height back, because the app's viewBox is
+  proportioned to the mark. `src/Logo.test.js` pins the tilt and the box together, since
+  a shallower tilt with the old viewBox would spend the saving on empty space.
+- **What still differs is `letter-spacing`: 14 here against the app's 7.** That one is a
+  pixel-crowding fix and only the panel needs it — at the size the app draws the mark
+  there is nothing to fix, and 14 would visibly change its proportions. The generator
+  also fits to the mark's own bounds rather than the authored viewBox. Letters clear
+  their boxes by **5-6 px on both sides**, measured off the rendered pixels.
+- **It carries 4-bit coverage, not a 1-bit mask, and that is what makes an 8° tilt
+  work.** Antialiasing is the only thing a 128x32 panel can do about a diagonal. It also
+  costs nothing: with the floor below, the mark is *fewer* lit pixels than the hard-masked
+  version was (24.5% against 27.2%) because the pixels the floor drops are the ones a hard
+  threshold was promoting to full brightness.
+- **`COVERAGE_FLOOR` is load-bearing twice over.** Below ~40% an edge pixel is
+  indistinguishable from off at `PANEL_BRIGHTNESS` 40 — the loss-pip lesson — and keeping
+  the fainter ones puts the lit count at **34.6%**, over the ceiling. The generator emits
+  the floor it actually applied as `LOGO_MIN_LEVEL` and `test_render.cpp` asserts against
+  that rather than re-deriving the fraction, which is how a quantisation rounding at 39.7%
+  was caught.
+- **The chalk grain is off, and at this size that is not a loss.** A 1-2 px stroke has no
+  interior for a dither pattern to live in, so all `feTurbulence` does is erode and wobble
+  the strokes — it fights the antialiasing rather than adding texture. Rendered at three
+  times the dot size before deciding.
+- **It happens to help the power bank start.** The no-state screen is 1.4% duty and
+  banks cut out below roughly 50-100 mA (see Power); the splash is 24.5%, so the board
+  draws several times as much for the first seconds — which is when the bank decides
+  whether to stay awake. That is a side effect, not the reason, and it does nothing
+  for the idle screen afterwards.
+- **Worth knowing if `DUTY_CEILING` is ever revisited:** measured across every scene, the
+  lit-pixel count and a per-channel current proxy diverge by about 1.7x, because these
+  colours are never white and a blue pixel lights mostly one LED of three. `form-worst` is
+  28.5% lit but 16.6% per-channel. The ceiling is therefore conservative, which is the
+  right direction for it — but it means an antialiased screen can breach it while drawing
+  *less* current than one that passes. This splash respects the check as written rather
+  than arguing with it; changing the metric would be its own change, on its own merits.
+
+### The logo is generated too
+
+`logo.h` and `src/panelLogo.js` come from one run of `generate_logo.mjs`, which
+rasterises `public/logo.svg` in a headless browser:
+
+```bash
+npm install --no-save playwright
+node firmware/hub75/generate_logo.mjs
+```
+
+A browser is unavoidable here — the SVG is set in Bebas Neue and drawn through
+`feTurbulence` and `feDisplacementMap`, none of which exists on an ESP32. That is also
+why the result is baked rather than drawn on the board. The chalk filter is switched
+off first: at 5 mm pitch its grain quantises to scattered single pixels, which reads as
+a fault rather than as texture.
+
+Two coverage maps come out, one per word — 4 bits per pixel, two pixels to a byte, low
+nibble first — which is what lets the splash both recolour and antialias them. Which word
+a pixel belongs to is decided by the **dominant channel**, not by distance to the two
+hexes the SVG hardcodes: a dim antialiased blue is nearer `#f18686` than `#69a4f2` in
+plain RGB, which quietly filed a third of HOLE under CORN. Where the two boxes cross, the
+pixel goes to CORN, matching the order the SVG paints them in.
+
+The geometry constants at the top of the generator (`ANGLE`, `LETTER_SPACING`, `BOX_PAD`,
+`BOX_GAP`, `COVERAGE_FLOOR`) are the panel's, not the app's, and each has a comment saying
+what it costs. Two of them are coupled: widening the spacing makes each box wider than the
+128 units the source puts between the two groups, so `BOX_GAP` is applied to a group offset
+derived from the box extent rather than to the authored positions. Without that the boxes
+overlap in the middle.
+
+**The staleness check works differently from the glyph one.** `glyphs.h` is checked by
+regenerating and diffing, which needs no browser; this cannot be, because CI's firmware
+job has none. So the generator records a hash of the SVG and the font, and
+`tools/test-firmware.mjs` compares that. What it catches is an edited logo with stale
+masks committed. What it *cannot* catch is the rasteriser changing under a browser
+update — tolerable, because the baked asset is what ships: the panel shows what was
+generated, not what Chrome would draw today.
 
 At 5 mm pitch the 5x7 font is **35 mm tall** — this screen reads from a few metres,
 not the ~11 m the score does. That is the trade it makes deliberately: it is what

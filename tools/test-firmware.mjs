@@ -13,6 +13,7 @@
 // geometry silently stops matching the panel until someone re-runs the
 // generator.
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -69,6 +70,35 @@ step('the generated glyph tables match src/segments.js', () => {
     );
   }
   process.stdout.write(`   ${GENERATED.join(', ')} up to date\n`);
+});
+
+// The logo masks cannot be checked the same way. Regenerating them needs a browser —
+// the SVG is set in Bebas Neue and drawn through two filter primitives — and this job
+// has none, so the generator records a hash of its sources and this compares that.
+//
+// What it catches is an edited logo or font with stale masks still committed. What it
+// cannot catch is the rasteriser itself changing under a browser update, which would
+// make a re-run produce different masks from the same sources. That is tolerable
+// because the baked asset is what ships: the panel shows what was generated, not what
+// Chrome would draw today.
+step('the generated logo masks match public/logo.svg', () => {
+  const sha = createHash('sha256')
+    .update(readFileSync(resolve(root, 'public/logo.svg')))
+    .update(readFileSync(resolve(root, 'public/fonts/BebasNeue-Regular.ttf')))
+    .digest('hex');
+  const header = readFileSync(resolve(root, 'firmware/hub75/logo.h'), 'utf8');
+  const js = readFileSync(resolve(root, 'src/panelLogo.js'), 'utf8');
+  const stale = [
+    ['firmware/hub75/logo.h', header],
+    ['src/panelLogo.js', js],
+  ].filter(([, text]) => !text.includes(sha));
+  if (stale.length > 0) {
+    throw new Error(
+      `${stale.map(([f]) => f).join(' and ')} were generated from a different logo.\n` +
+        '   Run: npm install --no-save playwright && node firmware/hub75/generate_logo.mjs',
+    );
+  }
+  process.stdout.write(`   logo.h and src/panelLogo.js built from ${sha.slice(0, 12)}\n`);
 });
 
 const SUITES = [
@@ -133,6 +163,10 @@ if (!ran['test_render.cpp']) {
     if (!scenes.some((s) => s.lineup)) {
       throw new Error('no scenes carry a lineup — the form screen is unpinned');
     }
+    // Same again for the splash, which has no layout id either — a boot selects it.
+    if (!scenes.some((s) => s.splash !== null)) {
+      throw new Error('no scenes carry a splash — the splash screen is unpinned');
+    }
 
     for (const scene of scenes) {
       const buf = readFileSync(resolve(dir, `${scene.name}.ppm`));
@@ -141,17 +175,24 @@ if (!ran['test_render.cpp']) {
       }
       const expected = buf.subarray(header.length);
       const fb = panel.createFramebuffer();
-      panel.renderBoard(
-        fb,
-        panel.boardState(scene),
-        scene.haveState,
-        scene.live,
-        scene.blinkOn,
-        scene.layout,
-        // Through lineupState() rather than handed over raw, so the JS coercions
-        // are compared against parseLineup's and not bypassed.
-        scene.lineup ? panel.lineupState(scene.lineup) : null,
-      );
+      const state = panel.boardState(scene);
+      if (scene.splash !== null) {
+        // The splash carries its colour pair in the state's two colours, so it needs
+        // no fields of its own beyond which indicator state was drawn.
+        panel.drawSplash(fb, state.colorA, state.colorB, scene.splash);
+      } else {
+        panel.renderBoard(
+          fb,
+          state,
+          scene.haveState,
+          scene.live,
+          scene.blinkOn,
+          scene.layout,
+          // Through lineupState() rather than handed over raw, so the JS coercions
+          // are compared against parseLineup's and not bypassed.
+          scene.lineup ? panel.lineupState(scene.lineup) : null,
+        );
+      }
 
       if (fb.outOfBounds > 0) {
         problems.push(`${scene.name}: drew ${fb.outOfBounds} px outside the panel`);

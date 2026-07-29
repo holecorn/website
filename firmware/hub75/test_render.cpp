@@ -78,6 +78,33 @@ struct Framebuffer {
     return n;
   }
 
+  // How many different brightnesses are on screen, counted on the strongest channel of
+  // each lit pixel. Two means every pixel is either off or full — which is what the
+  // splash looked like before it carried coverage, and is indistinguishable from it by
+  // any count of lit pixels.
+  int intensities() const {
+    bool seen[256] = {false};
+    for (int i = 0; i < PANEL_W * PANEL_H; i++) {
+      const uint8_t* p = px_ + i * 3;
+      const uint8_t top = p[0] > p[1] ? (p[0] > p[2] ? p[0] : p[2]) : (p[1] > p[2] ? p[1] : p[2]);
+      if (top > 0) seen[top] = true;
+    }
+    int n = 0;
+    for (int v = 1; v < 256; v++) if (seen[v]) n++;
+    return n;
+  }
+
+  // The faintest lit pixel, again on its strongest channel. 0 when nothing is lit.
+  int faintest() const {
+    int min = 256;
+    for (int i = 0; i < PANEL_W * PANEL_H; i++) {
+      const uint8_t* p = px_ + i * 3;
+      const uint8_t top = p[0] > p[1] ? (p[0] > p[2] ? p[0] : p[2]) : (p[1] > p[2] ? p[1] : p[2]);
+      if (top > 0 && top < min) min = top;
+    }
+    return min == 256 ? 0 : min;
+  }
+
   void write(const std::string& name) const {
     FILE* f = fopen(("out/" + name + ".ppm").c_str(), "wb");
     if (!f) {
@@ -194,8 +221,12 @@ static std::string lineupJson(const LineupState* l) {
   return out + "]}";
 }
 
+// `splash` is null for an ordinary scene and the indicator state for a splash one,
+// which is what tells tools/test-firmware.mjs which renderer to replay it through.
+// The two colours ride in colorA/colorB, so a splash scene needs no other new field.
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
-                   bool blinkOn, PanelLayout layout, const LineupState* lineup) {
+                   bool blinkOn, PanelLayout layout, const LineupState* lineup,
+                   const int* splash = nullptr) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
       "{\"name\":" + quoted(name.c_str()) +
@@ -206,7 +237,8 @@ static void record(const std::string& name, const BoardState& s, bool haveState,
       ",\"first\":" + teamJson(s.first) + ",\"teamA\":" + quoted(s.teamA) +
       ",\"teamB\":" + quoted(s.teamB) + ",\"colorA\":" + colorJson(s.colorA) +
       ",\"colorB\":" + colorJson(s.colorB) + ",\"haveState\":" + flag(haveState) +
-      ",\"live\":" + flag(live) + ",\"blinkOn\":" + flag(blinkOn) + "}");
+      ",\"live\":" + flag(live) + ",\"blinkOn\":" + flag(blinkOn) +
+      ",\"splash\":" + (splash ? std::to_string(*splash) : "null") + "}");
 }
 
 static void writeScenes() {
@@ -230,6 +262,26 @@ static Framebuffer shot(const std::string& name, const BoardState& s, bool haveS
   renderBoard(fb, s, haveState, live, blinkOn, layout, lineup);
   fb.write(name);
   record(name, s, haveState, live, blinkOn, layout, lineup);
+  check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
+  const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
+  if (duty > worstDuty) worstDuty = duty;
+  printf("  %-14s %4d lit  (%4.1f%% duty)\n", name.c_str(), fb.lit(), duty);
+  return fb;
+}
+
+// The splash has no layout id and no board state, so it needs its own shot(). The
+// colour pair is an argument here for the same reason it is one in drawSplash: the
+// sketch picks it at random and this check needs the same inputs twice.
+static Framebuffer splashShot(const std::string& name, const char* hexA, const char* hexB,
+                              int connect) {
+  BoardState s = makeState(0, 0, 0, "", "");
+  parseColor(hexA, s.colorA);
+  parseColor(hexB, s.colorB);
+
+  Framebuffer fb;
+  drawSplash(fb, s.colorA, s.colorB, connect);
+  fb.write(name);
+  record(name, s, false, true, true, PANEL_FULL, nullptr, &connect);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -358,6 +410,18 @@ int main() {
 
   const Framebuffer formZ = shot("form-zero-rate", play, true, true, true, PANEL_FULL, &formZero);
   const Framebuffer formB = shot("form-big-record", play, true, true, true, PANEL_FULL, &formBig);
+
+  // The splash. Like the form screen it has no layout id, so tools/test-firmware.mjs
+  // has a separate assertion that some scene carries one. Two colour pairs because
+  // the pair is random at run time and one pair cannot show that the two words take
+  // different masks; three indicator states plus none because the out-of-range branch
+  // is what the sketch uses before it knows anything.
+  const Framebuffer splashDefault = splashShot("splash-blue-red", "#2f80ed", "#eb5757", 2);
+  const Framebuffer splashSwapped = splashShot("splash-red-blue", "#eb5757", "#2f80ed", 2);
+  const Framebuffer splashNoWifi = splashShot("splash-no-wifi", "#27ae60", "#f2c94c", 0);
+  splashShot("splash-wifi-only", "#f2c94c", "#27ae60", 1);
+  const Framebuffer splashBare = splashShot("splash-no-dot", "#2f80ed", "#eb5757", -1);
+
   writeScenes();
 
   printf("\nchecks\n");
@@ -370,6 +434,43 @@ int main() {
   // stops being readable for half of every beat.
   check(winOff.lit() > 100, "winner blink blanked too much");
   check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");
+
+  // The splash. logo.h is generated from public/logo.svg by a browser, so the thing
+  // worth asserting here is that what came out is usable at all — an empty mask would
+  // otherwise ship as a black screen for the first few seconds and read as a dead board.
+  check(LOGO_W == PANEL_W && LOGO_H == PANEL_H, "the logo masks must be panel-sized");
+  check(splashDefault.lit() > 100, "the splash must draw the wordmark, not nothing");
+  // Swapping the pair has to change the frame, which is what proves the two words are
+  // separate masks. A generator that put every pixel in one of them would pass every
+  // other check here while making the second colour inert.
+  check(memcmp(splashDefault.px_, splashSwapped.px_, sizeof splashDefault.px_) != 0,
+        "the two words must take their colours independently");
+  check(splashNoWifi.lit() == splashDefault.lit(),
+        "the indicator state must not change how much is lit");
+  // Exactly the dot's worth of extra pixels: both that it is drawn and that it lands
+  // on empty panel rather than over the mark.
+  check(splashDefault.lit() == splashBare.lit() + SPLASH_DOT * SPLASH_DOT,
+        "the indicator must add its own pixels and cover none of the wordmark");
+  check(splashDefault.litRow(SPLASH_DOT_Y, SPLASH_DOT_X, PANEL_W),
+        "the indicator must be drawn where the constants put it");
+  check(!splashBare.litRow(SPLASH_DOT_Y, SPLASH_DOT_X, PANEL_W),
+        "an out-of-range connect state must draw no indicator");
+
+  // The wordmark is antialiased, which no count of lit pixels can see: a hard-masked
+  // asset would satisfy every check above. Its whole purpose is the tilted strokes, and
+  // it is the reason the mark fits under DUTY_CEILING at this size at all.
+  printf("  splash: %d brightnesses, faintest %d, %d lit\n", splashBare.intensities(),
+         splashBare.faintest(), splashBare.lit());
+  check(splashBare.intensities() > 8, "the splash must carry coverage, not an on/off mask");
+  // Asserted on the asset rather than on this frame, so it does not depend on which
+  // colours the scene happened to use. Below ~40% an edge pixel is invisible at
+  // PANEL_BRIGHTNESS 40, and keeping the fainter ones put the lit count over the
+  // ceiling — measured, 34.6% with no floor. So the bound is load-bearing twice over.
+  check(LOGO_MIN_LEVEL * 5 >= LOGO_LEVELS * 2,
+        "the coverage floor must keep every splash pixel above ~40% brightness");
+  // uint8_t arithmetic, so an unclamped mix would wrap a bright channel to nearly black.
+  check(chalked(255) == 255, "the chalk tint must not overflow a full channel");
+  check(chalked(0) > 0, "the chalk tint must lift a dark channel");
 
   // PANEL_SCORE exists to buy digit height by giving up the names, so the thing
   // worth asserting is that it actually does. Anything less and the layout is a

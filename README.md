@@ -287,6 +287,26 @@ the name gets the rest.
 Doubles fills the panel exactly — four rows is all 32 pixels of height — so there's
 no heading on it. Singles centres its two rows.
 
+### The wordmark at switch-on
+
+For a couple of seconds after the board is powered up it shows the Holecorn logo,
+in **two of the four team colours picked at random** — so it's a different pair each
+time — with a small square in the top-right corner saying how far it has got:
+**red** for no WiFi yet, **amber** for WiFi but no broker, **green** once it's
+listening. Nothing is waiting for the logo; the board connects behind it, and
+without it those seconds would be spent showing four dashes.
+
+It's the app's own wordmark, and the app now shares its tilt: the mark was drawn leaning
+15° and the panel needed 8° to fit 32 rows at a legible size, so the setup screen adopted
+that too — which also gave it 13px of height back, since a tilted box is much taller than
+what's inside it. What the panel does differently is spread the letters further apart,
+which it needs and the app doesn't, and smooth the diagonals with part-brightness LEDs so
+they don't read as staircases. The chalk texture is left off — at 5 mm pitch a stroke is
+one or two LEDs wide, with no room inside it for a texture to show.
+
+The panel emulator shows it too, so you can see it without the hardware: open a
+display link with `&panel=1` and reload.
+
 ### Hardware board
 
 The firmware subscribes to the same topic and holds no game rules of its own —

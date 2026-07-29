@@ -18,13 +18,17 @@ import {
 import {
   PANEL_H,
   PANEL_W,
+  SPLASH_MS,
   WINNER_BLINK,
   boardLiveness,
   boardState,
   createFramebuffer,
+  drawSplash,
   lineupState,
+  parseColor,
   renderBoard,
 } from './panelRender.js';
+import { PALETTE } from './scoring.js';
 import { paintPanel, panelCell } from './panelPaint.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import './Panel.css';
@@ -77,6 +81,28 @@ function useBoardLive(connected, senderOnline) {
   return live;
 }
 
+// Two different team colours, the way sketch.ino picks them at power-on. The second
+// index steps past the first rather than being redrawn, so it cannot repeat it.
+function splashPair() {
+  const i = Math.floor(Math.random() * PALETTE.length);
+  const j = (i + 1 + Math.floor(Math.random() * (PALETTE.length - 1))) % PALETTE.length;
+  return [parseColor(PALETTE[i].value), parseColor(PALETTE[j].value)];
+}
+
+// The board shows the wordmark while WiFi and MQTT come up, so the emulator does too —
+// it is the only way to see the splash without the hardware. The indicator reads the
+// same three-step progress the board's does; a browser has no WiFi state of its own,
+// so a connecting socket stands in for the middle one.
+function useSplash(status) {
+  const [showing, setShowing] = useState(true);
+  useEffect(() => {
+    const id = setTimeout(() => setShowing(false), SPLASH_MS);
+    return () => clearTimeout(id);
+  }, []);
+  const connect = status === 'connected' ? 2 : status === 'connecting' ? 1 : 0;
+  return { showing, connect };
+}
+
 function useCell(ref) {
   const [cell, setCell] = useState(4);
   useEffect(() => {
@@ -110,6 +136,9 @@ export default function Panel() {
   // here is what parseLineup would have made of the message.
   const drawn = useMemo(() => lineupState(lineup), [lineup]);
 
+  const splash = useSplash(status);
+  const [splashColors] = useState(splashPair);
+
   const frameRef = useRef(null);
   const canvasRef = useRef(null);
   const cell = useCell(frameRef);
@@ -117,9 +146,13 @@ export default function Panel() {
   useEffect(() => {
     if (!canvasRef.current) return;
     const fb = createFramebuffer();
-    renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn);
+    if (splash.showing) {
+      drawSplash(fb, splashColors[0], splashColors[1], splash.connect);
+    } else {
+      renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn);
+    }
     paintPanel(canvasRef.current, fb, cell);
-  }, [payload, live, blinkOn, cell, layout, drawn]);
+  }, [payload, live, blinkOn, cell, layout, drawn, splash, splashColors]);
 
   if (!configComplete(config)) {
     return (
@@ -143,12 +176,14 @@ export default function Panel() {
           style={{ width: PANEL_W * cell, height: PANEL_H * cell }}
           role="img"
           aria-label={
-            drawn
-              ? `Panel showing pre-game form for ${drawn.count} players`
-              : payload
-                ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
-                  `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
-                : 'Panel showing no score yet'
+            splash.showing
+              ? 'Panel showing the Holecorn logo while it starts up'
+              : drawn
+                ? `Panel showing pre-game form for ${drawn.count} players`
+                : payload
+                  ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                    `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
+                  : 'Panel showing no score yet'
           }
         />
       </div>
@@ -156,7 +191,12 @@ export default function Panel() {
         {PANEL_W}x{PANEL_H} · {PANEL_MM} ·{' '}
         {/* The form screen overrides the layout, so naming the layout while it is
             up would describe something not on screen. */}
-        {drawn ? 'Pre-game form' : (LAYOUT_LABELS[layout] ?? layout)} ·{' '}
+        {splash.showing
+          ? 'Starting up'
+          : drawn
+            ? 'Pre-game form'
+            : (LAYOUT_LABELS[layout] ?? layout)}{' '}
+        ·{' '}
         {status === 'connected'
           ? live
             ? 'live'
