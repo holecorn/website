@@ -23,6 +23,7 @@ import { useScoreboardPublisher } from './useScoreboard.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
 import {
   MAX_TARGET,
+  PALETTE,
   clampTarget,
   newGame,
   setBag,
@@ -43,13 +44,6 @@ import {
 import './App.css';
 
 const STORAGE_KEY = 'holecorn.game.v3';
-
-const PALETTE = [
-  { name: 'blue', value: '#2f80ed' },
-  { name: 'red', value: '#eb5757' },
-  { name: 'green', value: '#27ae60' },
-  { name: 'yellow', value: '#f2c94c' },
-];
 
 // A match needs an identity before it can be archived. It lives here rather
 // than in scoring.js, which stays pure — an id is not a scoring concern — and

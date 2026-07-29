@@ -44,6 +44,16 @@ export function roundNets(a, b) {
   return { a: 0, b: 0 };
 }
 
+// The colours a team can take. Here rather than in App.jsx because the panel
+// emulator's splash picks two of them and the setup screen offers all four, so it is
+// game data with two readers rather than one screen's list.
+export const PALETTE = [
+  { name: 'blue', value: '#2f80ed' },
+  { name: 'red', value: '#eb5757' },
+  { name: 'green', value: '#27ae60' },
+  { name: 'yellow', value: '#f2c94c' },
+];
+
 export function newGame(target = DEFAULT_TARGET) {
   return {
     // Two player slots per team; singles uses only the first. In doubles the
