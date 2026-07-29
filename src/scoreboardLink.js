@@ -2,8 +2,12 @@
 //
 // The app is served over HTTPS, which cannot reach a device on the local
 // network (mixed content blocks http:// and ws:// to a LAN address), and iOS
-// has no Web Bluetooth, Web Serial or WebUSB. So both ends meet at a hosted
-// broker instead: the browser over WSS, firmware over MQTTS on the same topic.
+// has no Web Bluetooth, Web Serial or WebUSB. So both ends meet at a broker
+// instead: the browser over WSS, firmware over MQTT(S) on the same topic.
+//
+// That broker does not have to be a hosted one — it has to be reachable over
+// WSS with a certificate the phone trusts, which a broker on the LAN can be.
+// See docs/OFFLINE-SCOREBOARD.md before concluding this needs the internet.
 
 import { layoutTopic, lineupTopic, onlineTopic, stateTopic } from './scoreboard.js';
 

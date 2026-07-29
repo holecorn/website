@@ -423,11 +423,22 @@ project dependency. It starts and stops its own preview server.
 
 ## External scoreboard
 
-- **Why a cloud broker and not the LAN.** An HTTPS page cannot reach `http://`
-  or `ws://` on a private address (mixed content), and iOS has no Web Bluetooth,
-  Web Serial or WebUSB. So a hosted MQTT broker is the only transport that works
-  from `holecorn.com` on an iPhone. Don't "simplify" this to a direct local
-  connection — it will work in dev on localhost and fail in production.
+- **Why a broker and not a direct connection to the board.** An HTTPS page cannot
+  reach `http://` or `ws://` on a private address (mixed content), and iOS has no
+  Web Bluetooth, Web Serial or WebUSB. So both ends meet at a broker over WSS.
+  Don't "simplify" this to a plain local connection — it will work in dev and fail
+  in production, because `localhost` is the one LAN address a browser calls secure.
+- **The broker does not have to be a hosted one, and the plan is that it won't
+  be.** What the transport needs is WSS with a certificate the phone already
+  trusts, which a broker on the LAN can have — a travel router holding a Let's
+  Encrypt cert for a name that resolves to its own LAN address. That is the route
+  to playing with no signal and no third party, and the reasoning that rules out
+  the obvious alternatives (an iPhone hotspot, a Pi, an ESP32 terminating TLS) is
+  in `docs/OFFLINE-SCOREBOARD.md`. **The one thing not to undo: the app's origin
+  must stay `holecorn.com`.** Serving the app from the board over `http://` is far
+  less work and costs the career archive — a different origin is a different
+  `localStorage`, and with no secure context there is no install, so no ITP
+  exemption and no wake lock.
 - **Messages are whole-state and retained, never deltas.** That plus a monotonic
   `v` stamp is what lets a display reboot, reconnect or join late and recover
   with no resync protocol. Keep it that way; it's why the display has no logic.
