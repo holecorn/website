@@ -77,18 +77,58 @@
   gap: 14px;
 }
 
+/* The colours sit beside the names rather than under them, which is what keeps
+   this card to one row per player. */
 .team-field {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
 }
 
+/* One grid for both players rather than a flex row each, so the board chips share
+   a column and come out the same width whichever label is longer — which is what
+   stops the two names sitting at different offsets. */
+.field-rows {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Bag, name, board — the row that makes the arrangement adjustable where the
+   players are listed. `contents` is what puts its three children in the grid
+   above while keeping a row element to hang tests and state off, the same trick
+   .side-rail uses. Deliberately not called .name-row: the play screen's header
+   already owns that class further down this file, and at equal specificity it
+   would win on source order. */
+.field-row {
+  display: contents;
+}
+
+/* The bag is the play screen's glyph reused, so only its target needs growing:
+   13px is far short of a thumb. The height is bounded, not chosen — the rows sit
+   40px apart, measured, so anything over 39px lets a doubles pair's two bags
+   overlap and the lower one wins the hit test, silently naming the wrong player.
+   Sideways it stops short of the input, which needs its own edge to place a caret. */
+.field-row .first-bag::before {
+  content: '';
+  position: absolute;
+  inset: -13px -10px;
+}
+
+.field-row .first-bag {
+  position: relative;
+}
+
 .team-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   text-align: center;
   background: transparent;
@@ -96,6 +136,26 @@
   border-bottom: 1px solid var(--border);
   font: 700 18px system-ui, sans-serif;
   padding: 4px;
+}
+
+/* States the board and swaps the pair on press. Deliberately not an up/down
+   arrow: the form lists the start board first and the court draws it last, so a
+   direction would point the wrong way on one of the two. */
+.end-chip {
+  position: relative;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.end-chip.at-start {
+  color: var(--text);
+  border-color: var(--muted);
 }
 
 .team-name-input:focus {
@@ -411,10 +471,13 @@
   white-space: nowrap;
 }
 
+/* 2x2 rather than a strip: beside the names it has to fit the height of two
+   player rows (80px), and four stacked circles need 98px. */
 .swatches {
-  display: flex;
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, 20px);
   gap: 6px;
-  margin: 6px 0 4px;
 }
 
 .swatch {

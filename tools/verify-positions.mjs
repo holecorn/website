@@ -21,7 +21,10 @@ const check = (label, cond, detail = '') => {
 
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
 
-async function open(viewport, { mode = 'Doubles', names = ['Rho', 'Tau', 'Cat', 'Dan'] } = {}) {
+async function open(
+  viewport,
+  { mode = 'Doubles', names = ['Rho', 'Tau', 'Cat', 'Dan'], start = true } = {},
+) {
   const page = await browser.newPage({ viewport });
   page.on('pageerror', (e) => {
     console.log('  PAGE ERROR', e.message);
@@ -32,7 +35,7 @@ async function open(viewport, { mode = 'Doubles', names = ['Rho', 'Tau', 'Cat', 
   await page.getByRole('button', { name: mode }).click();
   const inputs = page.locator('.team-name-input');
   for (const [i, name] of names.entries()) await inputs.nth(i).fill(name);
-  await page.getByRole('button', { name: 'Start game' }).click();
+  if (start) await page.getByRole('button', { name: 'Start game' }).click();
   return page;
 }
 
@@ -83,6 +86,82 @@ console.log('the court names the same thrower as the scoring lanes');
     );
     if (round < 4) await playRound(page);
   }
+  await page.close();
+}
+
+console.log('\nthe name fields set the arrangement and the court reports it');
+{
+  // The controls and the drawing are in different panels now, so nothing below
+  // App.jsx can catch a handler wired to the wrong player: a bag pointed at the
+  // partner of the row it sits on passes every unit test.
+  const page = await open(WIDE, { start: false });
+  const court = page.locator('.positions');
+  const row = (name) =>
+    page.locator('.field-row').filter({ has: page.locator(`.team-name-input[value="${name}"]`) });
+  const marked = async () => (await court.locator('.pitch-box.is-first').innerText()).trim();
+  const nearNames = () =>
+    court.locator('.court-end.at-near .pitch-box:not(.is-empty)').allInnerTexts();
+
+  for (const name of ['Dan', 'Rho', 'Tau', 'Cat']) {
+    await row(name).locator('.first-bag').click();
+    check(`${name}'s bag gives them the opening throw`, (await marked()) === name, await marked());
+  }
+  check('and only one box carries it', (await court.locator('.pitch-box.is-first').count()) === 1);
+
+  // The chip swaps the pair without touching who leads, which is the whole
+  // reason it exists as well as the bag.
+  await row('Rho').locator('.first-bag').click();
+  const before = await marked();
+  await row('Cat').locator('.end-chip').click();
+  check('the chip moves that pair', (await nearNames()).join().includes('Dan'), (await nearNames()).join(', '));
+  check('and leaves the lead alone', (await marked()) === before, `${before} -> ${await marked()}`);
+
+  // Mirroring is the court's own control, and the only one left in the drawing.
+  const sidesBefore = (await nearNames()).join(', ');
+  await court.locator('.swap-sides').click();
+  check(
+    'the board mirrors the court',
+    (await nearNames()).join(', ') !== sidesBefore,
+    `${sidesBefore} -> ${(await nearNames()).join(', ')}`,
+  );
+
+  // A chip rearranges slots, so it has to survive Start game rather than only
+  // showing on the setup screen.
+  await row('Tau').locator('.first-bag').click();
+  await page.getByRole('button', { name: 'Start game' }).click();
+  const lanes = (await page.locator('.lanes-team').allInnerTexts()).map((s) => s.trim());
+  check('the chosen player is up in the scoring lanes', lanes.includes('Tau'), lanes.join(', '));
+  check('the court on the play screen agrees', (await marked()) === 'Tau');
+  await page.close();
+}
+
+console.log('\nevery control is a real button, with nothing hidden to stand in for it');
+{
+  // What the drawing used to need: it was aria-hidden with a parallel set of
+  // focus-revealed buttons, because a focusable button in a hidden subtree has no
+  // accessible name. The controls left the drawing, so all of that should be gone.
+  const page = await open(WIDE, { start: false });
+  const a11y = await page.evaluate(() => ({
+    courtHidden: document.querySelector('.court').hasAttribute('aria-hidden'),
+    boxesHidden: [...document.querySelectorAll('.pitch-box')].every((e) =>
+      e.hasAttribute('aria-hidden'),
+    ),
+    unnamed: [...document.querySelectorAll('.teams-fields button, .positions button')].filter(
+      (b) => !(b.getAttribute('aria-label') || b.textContent).trim(),
+    ).length,
+    unfocusable: [...document.querySelectorAll('.teams-fields button, .positions button')].filter(
+      (b) => b.tabIndex < 0,
+    ).length,
+  }));
+  check('the boxes are hidden, not the whole court', !a11y.courtHidden && a11y.boxesHidden);
+  check('every control has an accessible name', a11y.unnamed === 0, `${a11y.unnamed} without one`);
+  check('and none is skipped by the keyboard', a11y.unfocusable === 0);
+  check('with no hidden stand-ins left over', (await page.locator('.first-pick').count()) === 0);
+  // The prose is now the only thing that speaks the arrangement, so it has to
+  // keep naming the player the bags mark.
+  const spoken = (await page.locator('.positions .visually-hidden').innerText()).trim();
+  const first = (await page.locator('.pitch-box.is-first').innerText()).trim();
+  check(`the spoken summary names ${first} as first`, spoken.includes(`${first} throws first`), spoken);
   await page.close();
 }
 

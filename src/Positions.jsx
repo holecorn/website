@@ -1,16 +1,19 @@
 // Top-down view of the court: two boards, each flanked by its two pitcher's
-// boxes. Read-only during play; the setup screen passes the handlers that make
-// the arrangement adjustable.
+// boxes. It shows who is standing where and nothing else — who throws first and
+// which partner is at which board are set on the name fields, where the players
+// are already listed in board order. The one exception is the starting board's
+// swap control, because which side of the court a team takes isn't a property of
+// a name and so has nowhere to live in the form.
 
 import { courtPositions, otherSide } from './scoring.js';
 import './Positions.css';
 
 const END_NAME = ['starting', 'far'];
 
-// The diagram states everything through colour, border style and position, none
-// of which survives being read aloud, so the panel carries the arrangement in
-// prose as well and hides the drawing from assistive tech. Reading four names in
-// DOM order would be worse than useless.
+// The boxes state everything through colour, border style and position, none of
+// which survives being read aloud, so the panel carries the arrangement in prose
+// as well and hides the drawing from assistive tech. Reading four names in DOM
+// order would be worse than useless.
 function spoken({ ends, throwingEnd, first }) {
   const at = (end) => ['left', 'right'].map((side) => ({ side, ...ends[end].boxes[side] }));
   const up = at(throwingEnd).filter((box) => box.name);
@@ -32,6 +35,8 @@ function spoken({ ends, throwingEnd, first }) {
 }
 
 function Box({ occupant, color, throwing, first }) {
+  // aria-hidden sits on each box rather than on the whole court, so the board's
+  // swap control can be a real button in an unhidden position.
   if (!occupant) return <div className="pitch-box is-empty" aria-hidden="true" />;
   return (
     <div
@@ -39,13 +44,14 @@ function Box({ occupant, color, throwing, first }) {
         first ? ' is-first' : ''
       }`}
       style={{ '--team': color }}
+      aria-hidden="true"
     >
       <span className="box-name">{occupant.name}</span>
     </div>
   );
 }
 
-function End({ data, place, colors, first }) {
+function End({ data, place, colors, first, onSwapSides }) {
   const box = (side) => {
     const occupant = data.boxes[side];
     return (
@@ -60,57 +66,51 @@ function End({ data, place, colors, first }) {
   return (
     <div className={`court-end at-${place}`}>
       {box('left')}
-      <div className="cornhole-board" aria-hidden="true">
+      {/* Empty but for the swap control, so it needs no aria-hidden of its own. */}
+      <div className="cornhole-board">
         <span className="board-hole" />
+        {onSwapSides && (
+          <button
+            type="button"
+            className="swap-sides"
+            aria-label="Swap which side of the court each team takes"
+            onClick={onSwapSides}
+          >
+            ⇄
+          </button>
+        )}
       </div>
       {box('right')}
     </div>
   );
 }
 
-export default function Positions({ game, onSwapSides, onSwapEnds }) {
+export default function Positions({ game, onSwapSides }) {
   const positions = courtPositions(game);
   const { ends, throwingEnd, first, walks } = positions;
   const colors = game.colors;
   return (
     <div className="positions">
       <p className="visually-hidden">{spoken(positions)}</p>
-      <div className="court" aria-hidden="true">
+      <div className="court">
         <End data={ends[1]} place="far" colors={colors} first={first} />
-        <div className="throw-dir">{throwingEnd === 0 ? '▲' : '▼'}</div>
-        <End data={ends[0]} place="near" colors={colors} first={first} />
+        <div className="throw-dir" aria-hidden="true">
+          {throwingEnd === 0 ? '▲' : '▼'}
+        </div>
+        <End
+          data={ends[0]}
+          place="near"
+          colors={colors}
+          first={first}
+          // The starting board carries it because startSide names that board.
+          onSwapSides={onSwapSides && (() => onSwapSides(otherSide(game.startSide)))}
+        />
       </div>
       <p className="positions-hint">
         {walks
           ? 'Both players walk to the other board after each round, keeping to their own side.'
           : 'Partners keep their board all game and swap boxes each time they throw.'}
       </p>
-      {onSwapSides && (
-        <div className="positions-actions">
-          <button
-            type="button"
-            aria-label="Swap which side of the court each team takes"
-            onClick={() => onSwapSides(otherSide(game.startSide))}
-          >
-            Swap sides
-          </button>
-          {!walks &&
-            ['a', 'b'].map((team) => (
-              <button
-                key={team}
-                type="button"
-                style={{ color: colors[team] }}
-                // The visible label is two names and an arrow, which reads as
-                // nothing at all. It also changes who throws first, and that is
-                // the part nobody expects.
-                aria-label={`Swap boards for ${game.players[team][0]} and ${game.players[team][1]}, changing which of them throws first`}
-                onClick={() => onSwapEnds(team)}
-              >
-                {game.players[team][0]} ⇄ {game.players[team][1]}
-              </button>
-            ))}
-        </div>
-      )}
     </div>
   );
 }

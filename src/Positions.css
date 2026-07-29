@@ -63,6 +63,36 @@
   bottom: 6px;
 }
 
+/* Mirroring the court is the one adjustment with nowhere to live in the name
+   fields, so it sits between the two boxes it swaps. The glyph stays small
+   enough not to fight the board's 2ft x 4ft proportion; ::before is what makes
+   the target big enough to hit. */
+.swap-sides {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.swap-sides::before {
+  content: '';
+  position: absolute;
+  inset: -50% -8px;
+}
+
+.swap-sides:active {
+  color: var(--text);
+}
+
 .pitch-box {
   position: relative;
   display: flex;
@@ -109,11 +139,16 @@
   opacity: 0.4;
 }
 
+/* A bag, matching the marker on the play screen's header and on the name fields,
+   so the same shape means "throws first" wherever it appears. */
 .pitch-box.is-first::before {
-  content: '●';
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
   margin-right: 5px;
-  font-size: 9px;
-  vertical-align: 1px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 .throw-dir {
@@ -128,23 +163,6 @@
   color: var(--muted);
   font-size: 12px;
   text-align: center;
-}
-
-.positions-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-.positions-actions button {
-  padding: 7px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 /* Phone in landscape: height is the scarce axis, so flatten the court. */
@@ -167,6 +185,11 @@
   }
   .court-end.at-near .board-hole {
     bottom: 5px;
+  }
+  .swap-sides {
+    top: 1px;
+    width: 18px;
+    height: 18px;
   }
   .pitch-box {
     padding: 4px 8px;

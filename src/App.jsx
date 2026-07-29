@@ -361,11 +361,15 @@ export default function App() {
             </button>
           ))}
         </div>
-        <TeamsFields game={game} dispatch={dispatch} />
+        <TeamsFields
+          game={game}
+          dispatch={dispatch}
+          onSetFirst={(team, slot) => dispatch({ type: 'throwFirst', team, slot })}
+          onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
+        />
         <Positions
           game={game}
           onSwapSides={(side) => dispatch({ type: 'setStartSide', side })}
-          onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
         />
         <label className="target-field">
           Play to
@@ -616,31 +620,79 @@ export default function App() {
   );
 }
 
-function TeamsFields({ game, dispatch }) {
-  const slots = game.mode === 'doubles' ? [0, 1] : [0];
+const BOARD_NAME = ['start', 'far'];
+
+// The arrangement is adjusted here, on the players it describes, rather than on
+// the court — which stays a drawing. `onSetFirst` and `onSwapEnds` are what gate
+// it to the setup screen: the play screen's edit dialog renders this component
+// too and passes neither, because both would reorder slots and `throwerFor`
+// credits committed rounds by slot.
+function TeamsFields({ game, dispatch, onSetFirst, onSwapEnds }) {
+  const doubles = game.mode === 'doubles';
+  const slots = doubles ? [0, 1] : [0];
   return (
     <div className="teams-fields">
       {['a', 'b'].map((team) => {
         const other = team === 'a' ? 'b' : 'a';
         return (
           <div className="team-field" key={team}>
-            {slots.map((i) => (
-              <input
-                key={i}
-                className="team-name-input"
-                value={game.players[team][i]}
-                maxLength={16}
-                style={{ color: game.colors[team] }}
-                onChange={(e) =>
-                  dispatch({ type: 'rename', team, index: i, name: e.target.value })
-                }
-                aria-label={
-                  game.mode === 'doubles'
-                    ? `Team ${team.toUpperCase()} player at the ${i === 0 ? 'start' : 'far'} end`
-                    : `Team ${team.toUpperCase()} player name`
-                }
-              />
-            ))}
+            <div className="field-rows">
+              {slots.map((i) => {
+                const name = game.players[team][i];
+                const here = BOARD_NAME[i];
+                const there = BOARD_NAME[1 - i];
+                const first = game.nextFirst === team && i === 0;
+                return (
+                  <div className="field-row" key={i}>
+                    {onSetFirst ? (
+                      <button
+                        type="button"
+                        className={`first-bag${first ? ' is-first' : ''}`}
+                        style={
+                          first
+                            ? { background: game.colors[team], borderColor: game.colors[team] }
+                            : undefined
+                        }
+                        onClick={() => onSetFirst(team, i)}
+                        aria-label={`${name} throws first`}
+                        aria-pressed={first}
+                        title="Throws first"
+                      />
+                    ) : (
+                      <span className="first-bag-spacer" aria-hidden="true" />
+                    )}
+                    <input
+                      className="team-name-input"
+                      value={name}
+                      maxLength={16}
+                      style={{ color: game.colors[team] }}
+                      onChange={(e) =>
+                        dispatch({ type: 'rename', team, index: i, name: e.target.value })
+                      }
+                      aria-label={
+                        doubles
+                          ? `Team ${team.toUpperCase()} player at the ${here} board`
+                          : `Team ${team.toUpperCase()} player name`
+                      }
+                    />
+                    {onSwapEnds && doubles ? (
+                      <button
+                        type="button"
+                        className={`end-chip${i === 0 ? ' at-start' : ''}`}
+                        onClick={() => onSwapEnds(team)}
+                        // The visible text is where they stand; the name has to
+                        // contain it and still say what pressing does.
+                        aria-label={`${name} at the ${here} board, press to move to the ${there} board`}
+                      >
+                        {here} board
+                      </button>
+                    ) : (
+                      <span className="first-bag-spacer" aria-hidden="true" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             <div className="swatches">
               {PALETTE.map((c) => (
                 <button
