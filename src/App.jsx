@@ -350,16 +350,31 @@ export default function App() {
     return (
       <div className="app setup">
         <Logo className="setup-logo" colorA={game.colors.a} colorB={game.colors.b} />
-        <div className="mode-toggle" role="group" aria-label="Game mode">
-          {['singles', 'doubles'].map((m) => (
-            <button
-              key={m}
-              className={game.mode === m ? 'is-on' : ''}
-              onClick={() => dispatch({ type: 'setMode', mode: m })}
-            >
-              {m === 'singles' ? 'Singles' : 'Doubles'}
-            </button>
-          ))}
+        {/* Start game sits up here with the mode, not at the foot of the screen:
+            it is the one thing pressed every game, the names persist between
+            games so there is usually nothing to fill in, and above everything
+            else nothing below it can push it off the first screen. */}
+        <div className="setup-top">
+          <div className="mode-toggle" role="group" aria-label="Game mode">
+            {['singles', 'doubles'].map((m) => (
+              <button
+                key={m}
+                className={game.mode === m ? 'is-on' : ''}
+                onClick={() => dispatch({ type: 'setMode', mode: m })}
+              >
+                {m === 'singles' ? 'Singles' : 'Doubles'}
+              </button>
+            ))}
+          </div>
+          <button
+            className="start-game"
+            onClick={() => {
+              dispatch({ type: 'start', at: Date.now() });
+              setScreen('play');
+            }}
+          >
+            Start game
+          </button>
         </div>
         <TeamsFields
           game={game}
@@ -401,18 +416,6 @@ export default function App() {
           status={scoreboard.status}
           error={scoreboard.error}
         />
-        <button
-          className="end-round"
-          onClick={() => {
-            dispatch({ type: 'start', at: Date.now() });
-            setScreen('play');
-          }}
-        >
-          Start game
-        </button>
-        {/* Below Start game, not above it: that button already sits off the
-            bottom of a phone's first screen, and this is something to read while
-            waiting rather than something to get past. */}
         <Lineup game={game} colors={game.colors} matches={matches} />
         <button className="setup-stats" onClick={() => setScreen('stats')}>
           Stats

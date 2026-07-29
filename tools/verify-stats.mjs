@@ -127,25 +127,28 @@ check('a second match is archived alongside the first', (await archive()).length
 await page.getByRole('button', { name: 'New game' }).click();
 
 // The pre-game form panel, and the one thing about it no unit test can reach:
-// that it does not push `Start game` further down. The setup screen already
-// overflows every phone — measured, that button's bottom edge sits 55px below the
-// fold on a 393x852 iPhone before anything is added — which is the whole reason
-// the panel goes below it rather than under the names.
+// that nothing added to this screen pushes `Start game` off the first screenful.
+// It used to be measured as "the panel does not move it", which stopped meaning
+// anything once the button moved up beside the mode toggle — it now precedes
+// every panel in the DOM, so hiding one cannot move it. What is worth holding is
+// the property that motivated all of it: the button is reachable without
+// scrolling, in both modes, with everything present.
 {
-  const startBottom = () =>
+  const startVisible = () =>
     page
-      .locator('.setup .end-round')
-      .evaluate((e) => Math.round(e.getBoundingClientRect().bottom + window.scrollY));
+      .locator('.start-game')
+      .evaluate((e) => Math.round(window.innerHeight - e.getBoundingClientRect().bottom));
 
   check('the form panel is on the setup screen', (await page.locator('.lineup').count()) === 1);
-  const withPanel = await startBottom();
-  await page.addStyleTag({ content: '.lineup{display:none!important}' });
-  const withoutPanel = await startBottom();
-  check(
-    'it does not move Start game',
-    withPanel === withoutPanel,
-    `${withPanel} with, ${withoutPanel} without`,
-  );
+  // Everything after this block plays in whichever mode it was already in, and
+  // switching adds a second player slot per team, so put it back.
+  const wasOn = await page.locator('.mode-toggle button.is-on').innerText();
+  for (const mode of ['Singles', 'Doubles']) {
+    await page.getByRole('button', { name: mode }).click();
+    const clear = await startVisible();
+    check(`Start game is above the fold in ${mode.toLowerCase()}`, clear > 0, `${clear}px clear`);
+  }
+  await page.getByRole('button', { name: wasOn.trim() }).click();
   await page.reload();
   await page.waitForSelector('.setup');
 

@@ -48,13 +48,34 @@
   margin: 0 auto;
 }
 
+/* Mode and Start game share a row. Both shrink rather than wrap, because a wrap
+   here would put the button back below the fold on the narrowest phone. */
+.setup-top {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+}
+
 .mode-toggle {
   display: flex;
   gap: 0;
-  align-self: center;
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+}
+
+.start-game {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #27ae60;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
 }
 
 .mode-toggle button {
