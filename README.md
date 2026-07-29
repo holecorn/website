@@ -48,10 +48,15 @@ Committing a round can flash a cornhole callout: **WASH** on a tied round, and,
 on the winning throw, **GAME** (or **SKUNK** when the loser is left on zero) with
 a confetti burst in the winner's colours.
 
-A small bag beside a team's name marks who throws first this round. Tap either
-team's marker to set it (the opening coin toss, or a correction); after that it
-moves automatically to whichever team scored in the previous round, and stays put
-on a wash.
+A small bag beside a team's name marks who throws first this round — the same
+marker used on the setup screen and in the court diagram. It's set before the game
+begins and then moves automatically to whichever team scored in the previous
+round, staying put on a wash.
+
+**The play screen only does scoring.** Names, colours, who throws first and where
+everyone stands are all fixed once you press **Start game**, because finished
+matches are credited to players by name and by the board they stood at. If you
+need to change any of it, **New game** takes you back to setup.
 
 Both teams stay on screen with live running totals and each team's points so far
 this round, so you can read the score mid-round. **End round** stays disabled
@@ -61,9 +66,7 @@ many are still to place. Press it to commit the round and update the totals.
 lanes so you can correct and re-commit it. **New game** returns to the setup
 screen, keeping the same teams (names and colours); if a game is still in
 progress it asks for confirmation first, but once someone has won it just goes —
-the result is already saved to your stats. During play, tapping a team's name reopens the name
-and colour fields in a modal so you can adjust them without resetting the score.
-The two teams can't share a colour.
+the result is already saved to your stats. The two teams can't share a colour.
 
 The **round history** is a toggle on phones and portrait; on wide landscape
 screens (e.g. an iPad in landscape) it's shown permanently in a right-hand
@@ -85,7 +88,7 @@ height is left, scrolling rather than running off the bottom.
 
 **Positions** draws the court from above — both boards, each flanked by its two
 pitcher's boxes — and shows who is standing where this round. Whoever is throwing
-is outlined in their team colour, with a dot marking the box that throws first,
+is outlined in their team colour, with a bag marking the box that throws first,
 an arrow pointing at the board they're aiming at, and anyone waiting their turn
 dimmed. It's a toggle on phones, opening just below the buttons; on wide landscape
 screens it's permanently on show at the top of the right-hand column, above the
@@ -98,12 +101,23 @@ the two players at a board trade pitcher's boxes each time they throw, which
 comes round every second round. Waiting players are drawn in the box they'll
 throw from next, not the one being used this round.
 
-The starting arrangement is set on the setup screen, underneath the team names:
-**Swap sides** mirrors the whole court, and in doubles each team gets a button to
-swap which partner stands at which board. Swapping a pair over also swaps **who
-throws first** for that team, because the partner at the starting board is the one
-who opens — the two aren't separate settings. It's all fixed once the game starts,
-because past rounds are credited to players by the board they were standing at.
+The starting arrangement is set on the **name fields**, on the players it
+describes, and the diagram just reports the result. Each name gets a bag on its
+left — filled for whoever throws the opening bag, dashed for everyone else — and
+tapping one hands that player the opening throw. In doubles each name also carries
+the board it stands at, **start board** or **far board**; pressing it swaps that
+pair over without changing which team leads. Because the partner at the starting
+board is the one who opens, giving the opening bag to somebody at the far board
+brings them down to the starting board too — the two aren't separate settings.
+
+The one adjustment that isn't a property of a name is which side of the court each
+team takes, so it lives on the diagram: the small **⇄** on the starting board
+mirrors the whole thing.
+
+It's all fixed once the game starts, because past rounds are credited to players
+by the board they were standing at. During play the first thrower can still be
+corrected by tapping a team's bag beside the score, which changes only which team
+leads the round.
 
 These are the conventions this group plays, not a rulebook: in particular, when
 singles players walk down they each keep their own side of the court.

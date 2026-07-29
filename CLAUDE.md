@@ -44,8 +44,9 @@ project dependency. It starts and stops its own preview server.
   `gameStats()` in `stats.js` derives it.
 - `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects.
 - `src/Positions.jsx` / `src/Positions.css` — the court diagram (who stands in
-  which pitcher's box this round). Draws only; `courtPositions()` in `scoring.js`
-  works out the arrangement.
+  which pitcher's box this round). `courtPositions()` in `scoring.js` works out the
+  arrangement; the only thing this file mutates is which side of the court each
+  team takes, and the rest is set on the name fields in `App.jsx`.
 - `src/Logo.jsx` — the chalk HOLE/CORN wordmark (tints to the two team colours).
 - `src/scoreboard.js` — pure payload/topic/settings helpers for the external
   scoreboard, plus its localStorage read/write. Tested in `src/scoreboard.test.js`.
@@ -114,13 +115,53 @@ project dependency. It starts and stops its own preview server.
     a field, and why **swapping ends also changes who throws first**: slot 0
     throws even rounds, so the two are the same fact and cannot be set
     independently.
-  - **The court is `aria-hidden` and the arrangement is spoken in prose instead.**
-    Everything the drawing says — who is up, which box, which board they're aiming
-    at, who throws first — is position, colour, border style and a pseudo-element
-    dot, none of which survives being read aloud, and four names read in DOM order
-    are worse than nothing. So `spoken()` builds a sentence and the drawing is
-    hidden. `verify-positions.mjs` asserts the sentence names the same pair the
-    lit boxes do, so it can't drift into describing a court nobody is looking at.
+  - **The arrangement is adjusted on the name fields, and the court only reports
+    it.** The fields were already a positional list — the inputs' `aria-label` has
+    always said "player at the start board" / "at the far board" — so each row grew
+    a bag (`throwFirst`) and a board chip (`swapEnds`), and `Positions` kept only
+    the mirror. Controls in the drawing were built first and removed: the boxes are
+    26–151px of cramped space, and it cost 22px of name track and a parallel set of
+    hidden buttons. **Don't move them back.**
+    - **`throwFirst` is two facts, not one.** Naming the opening thrower sets
+      `nextFirst` *and*, if that player is the far partner, swaps their pair —
+      because slot 0 throws even rounds, per the bullet above. So it is `setFirst`
+      composed with `swapEnds`, not a third piece of state. The chip is the other
+      half: it reorders a pair *without* changing which team leads, which the bag
+      cannot express.
+    - **It is only meaningful on setup, where `rounds.length` is 0**, which is what
+      makes the throwing end 0 and a slot index mean "the board they stand at".
+    - **The chip states the board rather than pointing.** An up/down arrow was the
+      obvious control and is wrong: the form lists slot 0 **first** and the court
+      draws it **last** (far row on top), so a direction is correct in one place and
+      inverted in the other. The visible text is where they stand, and the
+      `aria-label` has to contain that text as well as saying what pressing does
+      (WCAG Label in Name), hence "Rho at the far board, press to move to the start
+      board".
+    - **The bag needs the setup gate as much as the chip does**, because a slot-1
+      bag is `swapEnds` + `setFirst`, not just `setFirst`.
+    - **The browser check is what makes any of this safe**, not the unit tests.
+      Verified by mutation: pointing a bag at `1 - i` (the partner of the row it sits
+      on), and turning the play screen's team name back into a button, both pass all
+      220 unit tests and fail only `verify-positions.mjs`. Same blindness `activeIdx`
+      has.
+  - **The pitch boxes are `aria-hidden`, not the whole court, and the arrangement is
+    spoken in prose instead.** Everything the drawing says — who is up, which box,
+    which board they're aiming at, who throws first — is position, colour, border
+    style and a pseudo-element bag, none of which survives being read aloud, and
+    four names read in DOM order are worse than nothing. So `spoken()` builds a
+    sentence and the boxes are hidden. `verify-positions.mjs` asserts the sentence
+    names the same pair the lit boxes do, so it can't drift into describing a court
+    nobody is looking at.
+    - **Hiding the boxes rather than `.court` is what lets the mirror be a real
+      button.** A focusable button inside an `aria-hidden` subtree has no accessible
+      name, which is why the earlier in-court controls needed `tabIndex={-1}` plus a
+      parallel set of focus-revealed buttons. Moving `aria-hidden` down one level
+      deleted all of that. `.cornhole-board` needs none of its own — it is empty but
+      for the control.
+    - **The first-thrower marker is a bag on all three surfaces** — `::before` on
+      `.pitch-box.is-first`, `.first-bag` on the play header, `.first-bag` on the
+      fields — so the shape means one thing wherever it appears. It was a `●` in the
+      court until the fields grew one.
   - **Positions are deliberately absent from the scoreboard payload.** A public
     board shows the score; the byte budget is tight and the firmware pins the
     contract. `scoreboard.test.js`'s `toEqual` is what keeps it out.
@@ -196,13 +237,41 @@ project dependency. It starts and stops its own preview server.
   - **`public/icon.svg` and `public/app-icon.svg` are still at 15°**, deliberately. They
     are an abstract pair of filled boxes rather than the wordmark, and changing them means
     re-rasterising three committed PNGs and moving everyone's installed home-screen icon.
-- **The court arrangement is only adjustable from setup**, and structurally so:
-  `Positions` mutates nothing unless it is handed `onSwapSides`/`onSwapEnds`, and
-  only the setup screen passes them. That matters because `TeamsFields` is reused
-  in the play screen's team-edit dialog — a swap control living there would move
-  partners between ends mid-game, and `throwerFor` attributes committed rounds by
-  slot, so every doubles stat would be silently re-credited. Keep the mutation
-  path out of the shared component rather than adding a runtime guard to it.
+- **The play screen deals only with scoring. Nothing about who the teams are can
+  be changed once a game is under way** — not names, not colours, not who throws
+  first. There used to be a team-edit dialog behind the header names and a
+  first-thrower toggle on each bag, and both are gone: names and slot order are
+  what `throwerFor` and the career stats attribute rounds by, and a mid-game colour
+  change republishes to the board. So the header's bag is an **indicator** (it still
+  has to be there — after round one it follows whoever scored last) and the name is
+  text. `verify-positions.mjs` asserts this as an *absence*, including a list of
+  every button the screen may show, because nothing in the components would notice
+  a control coming back.
+  - **The known cost, accepted: a name typo noticed after `Start game` is
+    permanent.** Career stats fold by name and a record bakes in the names at
+    archive time, so that match reports a phantom player; `New game` clears the
+    game rather than returning to setup with it. Recovery is deleting the match or
+    export → edit → import. **Renaming on the stats screen is the proper fix and is
+    not built yet.**
+  - **`setFirst` survives with no caller of its own.** `throwFirst` composes it, and
+    it is the natural way for a test to say "B opens", so the rule stayed in
+    `scoring.js` when its reducer case went.
+- **The arrangement is only adjustable from setup**, and structurally so:
+  `TeamsFields` draws the bag and the board chip only when handed
+  `onSetFirst`/`onSwapEnds`, and `Positions` draws the mirror only when handed
+  `onSwapSides`. With the edit dialog gone `TeamsFields` has a single call site, so
+  the gate now guards against a *second* one being added — which is worth keeping,
+  because that is the failure where every doubles stat is silently re-credited and
+  nothing fails. Note that a *boolean* prop would be a runtime guard rather than a
+  structural one: the absent handler is the gate.
+- **The name fields' row is `.field-row`, not `.name-row`, and that is the
+  `.app.stats-screen` trap again.** The play screen's header already owns
+  `.name-row` further down `App.css`, with a different `gap` and no `width`, so at
+  equal specificity source order would have silently won and the fields' rows would
+  have run at the header's spacing. Caught before it shipped only because the class
+  was grepped; **a new row-shaped surface needs a new class or the two-class form.**
+  The `.first-bag` glyph *is* shared on purpose — nothing redeclares it, only
+  `.field-row .first-bag::before` adds a target.
 - **CSS media-query ordering:** in `src/App.css`, the responsive tiers
   (`max-height` and the landscape/wide-history queries) live at the **end of the
   file, after the base rules**. They rely on source order to win at equal
@@ -381,20 +450,45 @@ project dependency. It starts and stops its own preview server.
   a match both devices hold wins, so an import can't rewrite local history.
   `validRecord` gates every entry because the file came from a picker and could
   be anything — it checks exactly the fields `stats.js` reads without checking.
-- **The pre-game form panel goes *below* `Start game`, and that is measured, not
-  taste.** The setup screen already overflows every phone: with default state,
-  `Start game`'s bottom edge sits **9px below the fold** on a 393x852 iPhone in
-  singles and 131px in doubles, and 124/246px on a 375x667 SE. (Re-measured after the
-  wordmark's tilt was eased and its viewBox trimmed, together worth 46px of the screen's
-  height. Before that the singles figure was 55px, and a doubles figure of 135px was
-  recorded that never reconciled — doubles adds ~122px at *both* widths, so it was wrong.)
-  Putting the panel
-  under the names — the obvious spot, next to what you just typed — would push the
-  one action you take every single game another 132px (singles) or 221px (doubles)
-  further down. Below it costs nothing above the fold and is where you are already
-  scrolling while you wait. `verify-stats.mjs` asserts `Start game` does not move,
-  measured against the same page with the panel `display:none`; inverting the
-  placement fails that and nothing else.
+- **`Start game` sits at the top beside the mode toggle, and that retired a long
+  fight over pixels.** It is the one control pressed every game, the names persist
+  between games so there is usually nothing to fill in, and **above everything else
+  nothing below it can push it off the first screen** — measured, it now clears the
+  fold by 682px on a 393x852 iPhone and 529px on a 375x667 SE, in both modes.
+  - **So the pre-game form panel's placement is a free choice again.** It used to be
+    pinned *below* `Start game` because that button sat near the bottom and anything
+    above it cost the one action you take every game. That reasoning is spent; the
+    panel stays where it is because that is where you read it while waiting, not
+    because it has to.
+  - **`verify-stats.mjs` used to assert `Start game` does not move** when the panel
+    is hidden. That became true by construction — the button now precedes every
+    panel in the DOM — so it was replaced with the property it was always chasing:
+    the button is above the fold in both modes with everything present. **A check
+    that cannot fail is worse than no check**, because it reads as coverage.
+  - For the record, since the numbers took several passes: before this the bottom
+    edge sat 26px below the fold in singles and 131px in doubles (141/263 on an SE),
+    which came from a court tap hint costing 17px on top of 9/131 and 124/246, which
+    came from easing the wordmark's tilt and trimming its viewBox (46px). An earlier
+    doubles figure of 135px never reconciled — doubles adds ~122px at *both* widths,
+    so it was wrong.
+- **The team card is one row per player, and the colours sit beside them.** Both
+  facts are about height: the swatches were a horizontal strip on their own line,
+  and moving them to a 2x2 grid in a right-hand column took the doubles card from
+  140px to 100px and the singles card from 100px to 76px. **2x2 and not a vertical
+  strip** because four stacked 20px circles need 98px and two player rows only give
+  80px, which would have made the card taller in singles than it was before.
+  - **The two board chips share a grid column, which is why they are the same
+    width.** `.field-rows` is one grid for both players and `.field-row` is
+    `display: contents`, so the chip track sizes to the widest label across both
+    rows ("start board"). Sized any other way the two names sit at different offsets,
+    which is what it looked like before and reads as broken. It also keeps a row
+    element for tests and state to hang off, the same trick `.side-rail` uses.
+  - **The cost is name width: the input went 219px to 161px in doubles** (143px on
+    an SE), so a name over about 12 characters scrolls inside the field rather than
+    being fully visible. Shortening the chips to "start"/"far" buys 35px back and was
+    the deliberate trade not taken — the full label explains itself. The names stay
+    centred rather than left-aligned: they sit 62px left of the card's centre, but
+    the input's underline gives the eye its reference so it reads as intended.
 - **`played` is not `matches > 0` for the sake of it.** It distinguishes a genuine
   zero from no history, which is what lets both the panel and the board say "first
   game" rather than reporting somebody as 0% of everything. `lineupPayload` uses the
@@ -1003,7 +1097,12 @@ assertion it exists for is that **the court names the same thrower the scoring
 lanes do**. Both sides derive the parity correctly and are unit tested; nothing
 below `App.jsx` can catch it handing the wrong one to the wrong component, and
 crossing them over passes all 131 unit tests. Checked by inverting `activeIdx`,
-which fails that assertion and nothing else.
+which fails that assertion and nothing else. **The arrangement controls are there
+for the same reason, and more so now that they sit in a different panel from the
+drawing they change**: a bag wired to the partner of its own row, and the setup
+handlers reaching the play screen's edit dialog, both pass all 220 unit tests and
+fail only here. It also asserts what the controls' *absence* is worth — no bag or
+chip in that dialog — because nothing in `TeamsFields` itself would notice.
 
 `src/stats.test.js` builds its fixtures by playing rounds through the real
 scoring functions and archiving the result, rather than hand-writing record
