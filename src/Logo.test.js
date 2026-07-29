@@ -55,11 +55,12 @@ describe('the wordmark', () => {
   });
 
   // A rotated box is much taller than its content, so the viewBox has to be sized to the
-  // tilt or the saving is spent on empty space. 3.0 is comfortably below the 3.17 the
-  // current geometry gives and comfortably above the 2.80 it had at 15 degrees, so this
-  // fails if the tilt is eased without re-deriving the box, or the box without the tilt.
+  // tilt or the height saved is spent on empty space instead. Measured, a box trimmed to
+  // what the mark paints gives 4.00 at 8 degrees and 3.37 at 15, so 3.8 sits between them:
+  // it fails if the tilt is eased without re-deriving the box, and if the box is left loose
+  // enough to reintroduce the padding that put 50px above the mark against a 20px rhythm.
   it('has a viewBox proportioned to that angle', () => {
     const [, , w, h] = jsx.viewBox.split(' ').map(Number);
-    expect(w / h).toBeGreaterThan(3);
+    expect(w / h).toBeGreaterThan(3.8);
   });
 });

@@ -37,11 +37,15 @@
   padding-top: 32px;
 }
 
+/* No vertical margin: the mark's viewBox is trimmed to what it paints, so the space
+   around it is the screen's own rhythm — .setup's 20px gap below, its padding-top above.
+   Margins here used to sit on top of the viewBox's dead space and put 50px above the mark
+   against that 20px gap. */
 .setup-logo {
   display: block;
   width: 100%;
   max-width: 320px;
-  margin: 8px auto 4px;
+  margin: 0 auto;
 }
 
 .mode-toggle {

@@ -174,7 +174,17 @@ project dependency. It starts and stops its own preview server.
     was drawn at, and the viewBox is sized to that: a rotated box is much taller than its
     content, so easing the tilt gave the setup screen **13px** of height back. Easing the
     tilt without re-deriving the box spends that on empty space; re-deriving the box
-    without the tilt clips the mark. The test fails either way round.
+    without the tilt clips the mark. The test fails either way round — measured, a box
+    trimmed to the painted mark gives an aspect of 4.00 at 8° and 3.37 at 15°, and the
+    bound sits between them.
+  - **The viewBox is trimmed to what the mark *paints*, not to `getBBox`.** A `<text>`
+    bbox includes the font's descender space, so deriving the box from it left 8.7 units
+    of dead space above the mark and 11.0 below — on screen, **50px of gap above the mark
+    and 37px below against `.setup`'s 20px rhythm**, since the margins sat on top of it.
+    Trimmed, the element is 80px rather than 101px and `.setup-logo` needs no vertical
+    margin at all: below the mark you get the flex gap, above it the screen's own
+    `padding-top`. Adding margin back, or re-deriving the box from `getBBox`, brings the
+    gap back with it.
   - **The text's `x` is an optical centring — don't "correct" it to the box centre.**
     Measured, the original `x=3` had the glyph run within 1.5 units of dead centre (gaps of
     17.4 and 17.8 units for HOLE) and still read as sitting right; `x=1` balances it and
@@ -373,11 +383,12 @@ project dependency. It starts and stops its own preview server.
   be anything — it checks exactly the fields `stats.js` reads without checking.
 - **The pre-game form panel goes *below* `Start game`, and that is measured, not
   taste.** The setup screen already overflows every phone: with default state,
-  `Start game`'s bottom edge sits **42px below the fold** on a 393x852 iPhone in
-  singles and 164px in doubles, and 154/277px on a 375x667 SE. (Re-measured after the
-  wordmark's tilt was eased, which gave 13px back. The 375 pair is exactly the previously
-  recorded 166/288 less that saving; the 393 doubles figure recorded as 135 does not
-  reconcile — doubles adds ~122px at *both* widths, so it was wrong before.) Putting the panel
+  `Start game`'s bottom edge sits **9px below the fold** on a 393x852 iPhone in
+  singles and 131px in doubles, and 124/246px on a 375x667 SE. (Re-measured after the
+  wordmark's tilt was eased and its viewBox trimmed, together worth 46px of the screen's
+  height. Before that the singles figure was 55px, and a doubles figure of 135px was
+  recorded that never reconciled — doubles adds ~122px at *both* widths, so it was wrong.)
+  Putting the panel
   under the names — the obvious spot, next to what you just typed — would push the
   one action you take every single game another 132px (singles) or 221px (doubles)
   further down. Below it costs nothing above the fold and is where you are already
