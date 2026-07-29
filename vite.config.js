@@ -35,10 +35,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // The MQTT client is precached along with everything else, at ~104kB
+        // gzipped per install. It used to be excluded as useless without a
+        // network; a self-hosted broker on a signal-less field inverts that —
+        // see docs/OFFLINE-SCOREBOARD.md.
         globPatterns: ['**/*.{js,css,html,svg,png,ttf,woff2}'],
-        // The MQTT client is only reachable with a network anyway, so keep it
-        // out of the offline precache rather than shipping it to every install.
-        globIgnores: ['**/mqtt*.js'],
       },
     }),
   ],
