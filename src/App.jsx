@@ -28,6 +28,8 @@ import {
   newGame,
   setBag,
   setFirst,
+  throwFirst,
+  swapEnds,
   setStartSide,
   courtPositions,
   endRound,
@@ -108,15 +110,12 @@ function reducer(game, action) {
       return setBag(game, action.team, action.index, action.tier);
     case 'setFirst':
       return setFirst(game, action.team);
+    case 'throwFirst':
+      return throwFirst(game, action.team, action.slot);
     case 'setStartSide':
       return setStartSide(game, action.side);
-    case 'swapEnds': {
-      // Which partner stands at which end is the slot order. Setup-screen only:
-      // committed rounds are attributed by slot, so a swap mid-game would
-      // re-credit them.
-      const [near, far] = game.players[action.team];
-      return { ...game, players: { ...game.players, [action.team]: [far, near] } };
-    }
+    case 'swapEnds':
+      return swapEnds(game, action.team);
     case 'endRound':
       return endRound(game);
     case 'undoRound':

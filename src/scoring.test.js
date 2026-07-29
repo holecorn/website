@@ -10,6 +10,8 @@ import {
   teamLabel,
   winVerb,
   setFirst,
+  throwFirst,
+  swapEnds,
   setStartSide,
   courtPositions,
   totals,
@@ -345,6 +347,75 @@ describe('courtPositions', () => {
   it('falls back to the left for a game saved before the side existed', () => {
     const game = { ...named('doubles'), startSide: undefined };
     expect(order(courtPositions(game).ends[0])).toBe('ab');
+  });
+
+  it('labels each box with the slot its name came from', () => {
+    // What lets a tap on the drawing act on the right player without the
+    // component re-deriving the doubles slot rule.
+    const doubles = courtPositions(named('doubles')).ends;
+    expect(doubles.map((end) => end.boxes.left.slot)).toEqual([0, 1]);
+    expect(doubles.map((end) => end.boxes.left.name)).toEqual(['A0', 'A1']);
+    const singles = courtPositions(named('singles')).ends;
+    expect(singles[0].boxes.left.slot).toBe(0);
+  });
+});
+
+// Which player is up first, as the whole app derives it: the box at the throwing
+// end belonging to the team due to lead.
+function opener(game) {
+  const { ends, throwingEnd, first } = courtPositions(game);
+  return ['left', 'right']
+    .map((s) => ends[throwingEnd].boxes[s])
+    .find((box) => box?.team === first)?.name;
+}
+
+describe('throwFirst', () => {
+  it('gives the opening bag to whoever is named, from any of the four boxes', () => {
+    const game = named('doubles');
+    for (const team of ['a', 'b']) {
+      for (const slot of [0, 1]) {
+        expect(opener(throwFirst(game, team, slot))).toBe(game.players[team][slot]);
+      }
+    }
+  });
+
+  it('rearranges nobody when the partner already at the near end is named', () => {
+    const game = named('doubles');
+    expect(throwFirst(game, 'b', 0).players).toEqual(game.players);
+  });
+
+  it('swaps only the named pair when the far partner is named', () => {
+    const g = throwFirst(named('doubles'), 'b', 1);
+    expect(g.players.b).toEqual(['B1', 'B0']);
+    expect(g.players.a).toEqual(['A0', 'A1']);
+  });
+
+  it('keeps the named partner at their new end for the rest of the game', () => {
+    // Slot order is a whole-game fact, so the swap has to survive the doubles
+    // four-cycle rather than only holding for round one.
+    let game = throwFirst(named('doubles'), 'a', 1);
+    for (let r = 0; r < 4; r += 1) {
+      const { ends } = courtPositions(game);
+      expect(['left', 'right'].map((s) => ends[0].boxes[s].name)).toContain('A1');
+      game = washRound(game);
+    }
+  });
+
+  it('is only a change of team in singles, where nobody is at the far end', () => {
+    const game = named('singles');
+    const g = throwFirst(game, 'b', 0);
+    expect(opener(g)).toBe('B0');
+    expect(g.players).toEqual(game.players);
+  });
+});
+
+describe('swapEnds', () => {
+  it('reorders one team and leaves the other, and the lead, alone', () => {
+    const game = setFirst(named('doubles'), 'b');
+    const g = swapEnds(game, 'a');
+    expect(g.players.a).toEqual(['A1', 'A0']);
+    expect(g.players.b).toEqual(['B0', 'B1']);
+    expect(g.nextFirst).toBe('b');
   });
 });
 

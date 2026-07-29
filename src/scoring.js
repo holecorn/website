@@ -98,6 +98,23 @@ export function setFirst(game, team) {
   return { ...game, nextFirst: team };
 }
 
+// Which partner stands at which end is the order of the players array, because
+// slot 0 throws even rounds. Setup-screen only: committed rounds are attributed
+// by slot, so a swap mid-game would silently re-credit them.
+export function swapEnds(game, team) {
+  const [near, far] = game.players[team];
+  return { ...game, players: { ...game.players, [team]: [far, near] } };
+}
+
+// Name the player who throws the opening bag. That is two facts rather than one:
+// their team leads, and in doubles they have to be standing where slot 0 stands,
+// so choosing the far partner swaps the pair's ends. Only meaningful before the
+// first round, when the throwing end is 0 — which is also the only screen that
+// may reorder slots.
+export function throwFirst(game, team, slot) {
+  return setFirst(slot === 1 ? swapEnds(game, team) : game, team);
+}
+
 export function otherSide(side) {
   return side === 'left' ? 'right' : 'left';
 }
@@ -140,9 +157,9 @@ export function courtPositions(game) {
       end,
       throwing,
       boxes: {
-        [aSide]: occupied ? { team: 'a', name: game.players.a[slot] } : null,
+        [aSide]: occupied ? { team: 'a', slot, name: game.players.a[slot] } : null,
         [otherSide(aSide)]: occupied
-          ? { team: 'b', name: game.players.b[slot] }
+          ? { team: 'b', slot, name: game.players.b[slot] }
           : null,
       },
     };
