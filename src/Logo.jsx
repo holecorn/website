@@ -1,5 +1,20 @@
 // The Hole Corn wordmark: two chalky, boxed, angled words forming a shallow V,
 // coloured to match the two teams. A stylised take on a chalk-on-tarmac drawing.
+//
+// The geometry here is duplicated in public/logo.svg, which is what the LED panel's
+// wordmark is generated from — src/Logo.test.js holds the two together.
+//
+// The tilt is 8 degrees rather than the 15 it was drawn at, and the viewBox is sized to
+// that: a rotated box is much taller than its content, so easing the tilt gives back
+// 13px of the setup screen's height at the 320px the logo is capped to. It matches the
+// panel, which needed the shallower angle to fit 32 rows at a legible size.
+//
+// The text's x is an *optical* centring, not a geometric one, so don't "correct" it to the
+// box centre. Measured, x=3 put the glyph run within 1.5 units of dead centre — gaps of
+// 17.4 and 17.8 units for HOLE — and still read as sitting right. Two units left balances
+// it; -1 overshoots into looking left-biased. The panel's copy is centred geometrically
+// instead: generate_logo.mjs fits each box to its own letters, and at 5 mm pitch the
+// quantisation swamps a nudge this size.
 
 // Tint a colour toward white so it reads as powdery chalk and stays legible on
 // the dark background.
@@ -19,7 +34,7 @@ export default function Logo({ colorA = '#2f80ed', colorB = '#eb5757', className
     <svg
       className={className}
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="80 28 280 100"
+      viewBox="82 36 276 87"
       role="img"
       aria-label="Hole Corn"
     >
@@ -43,15 +58,15 @@ export default function Logo({ colorA = '#2f80ed', colorB = '#eb5757', className
         letterSpacing="7"
         textAnchor="middle"
       >
-        <g transform="translate(156 78) rotate(15)">
+        <g transform="translate(156 78) rotate(8)">
           <rect x="-58" y="-24" width="116" height="48" rx="3" stroke={chalkA} strokeWidth="4" />
-          <text x="3" y="2" dominantBaseline="central" fill={chalkA} stroke="none">
+          <text x="1" y="2" dominantBaseline="central" fill={chalkA} stroke="none">
             HOLE
           </text>
         </g>
-        <g transform="translate(284 78) rotate(-15)">
+        <g transform="translate(284 78) rotate(-8)">
           <rect x="-58" y="-24" width="116" height="48" rx="3" stroke={chalkB} strokeWidth="4" />
-          <text x="3" y="2" dominantBaseline="central" fill={chalkB} stroke="none">
+          <text x="1" y="2" dominantBaseline="central" fill={chalkB} stroke="none">
             CORN
           </text>
         </g>

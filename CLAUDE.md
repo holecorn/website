@@ -164,6 +164,28 @@ project dependency. It starts and stops its own preview server.
   decides where the rail's panels go and JS decides whether they render at all;
   they have to say the same thing or the panels appear with nothing laying them
   out and no toggle to dismiss them.
+- **The wordmark's geometry lives in two files, and `src/Logo.test.js` holds them
+  together.** `src/Logo.jsx` draws it in the app; `public/logo.svg` is what
+  `firmware/hub75/generate_logo.mjs` bakes for the LED panel. They can't be merged — the
+  component takes the team colours as props, the generator needs a file to hand a browser —
+  so a divergence would leave the panel showing the shape the SVG last held, visible only
+  as a splash that looks slightly wrong next to the phone.
+  - **The tilt and the viewBox are pinned as a pair.** The mark leans 8°, not the 15° it
+    was drawn at, and the viewBox is sized to that: a rotated box is much taller than its
+    content, so easing the tilt gave the setup screen **13px** of height back. Easing the
+    tilt without re-deriving the box spends that on empty space; re-deriving the box
+    without the tilt clips the mark. The test fails either way round.
+  - **The text's `x` is an optical centring — don't "correct" it to the box centre.**
+    Measured, the original `x=3` had the glyph run within 1.5 units of dead centre (gaps of
+    17.4 and 17.8 units for HOLE) and still read as sitting right; `x=1` balances it and
+    `x=-1` overshoots into looking left-biased. Two other criteria disagree with the eye
+    here and both are wrong: bounding-box centring wants 3.5, and centre-of-mass wants 6.2
+    for HOLE against 1.7 for CORN, because `H` is heavy where `L` and `E` are light. The
+    panel's copy is centred *geometrically* instead — `generate_logo.mjs` fits each box to
+    its own letters, and at 5 mm pitch the quantisation swamps a nudge this size.
+  - **`public/icon.svg` and `public/app-icon.svg` are still at 15°**, deliberately. They
+    are an abstract pair of filled boxes rather than the wordmark, and changing them means
+    re-rasterising three committed PNGs and moving everyone's installed home-screen icon.
 - **The court arrangement is only adjustable from setup**, and structurally so:
   `Positions` mutates nothing unless it is handed `onSwapSides`/`onSwapEnds`, and
   only the setup screen passes them. That matters because `TeamsFields` is reused
@@ -351,8 +373,11 @@ project dependency. It starts and stops its own preview server.
   be anything — it checks exactly the fields `stats.js` reads without checking.
 - **The pre-game form panel goes *below* `Start game`, and that is measured, not
   taste.** The setup screen already overflows every phone: with default state,
-  `Start game`'s bottom edge sits **55px below the fold** on a 393x852 iPhone in
-  singles and 135px in doubles, and 166/288px on a 375x667 SE. Putting the panel
+  `Start game`'s bottom edge sits **42px below the fold** on a 393x852 iPhone in
+  singles and 164px in doubles, and 154/277px on a 375x667 SE. (Re-measured after the
+  wordmark's tilt was eased, which gave 13px back. The 375 pair is exactly the previously
+  recorded 166/288 less that saving; the 393 doubles figure recorded as 135 does not
+  reconcile — doubles adds ~122px at *both* widths, so it was wrong before.) Putting the panel
   under the names — the obvious spot, next to what you just typed — would push the
   one action you take every single game another 132px (singles) or 221px (doubles)
   further down. Below it costs nothing above the fold and is where you are already
