@@ -140,15 +140,26 @@
 }
 
 /* A bag, matching the marker on the play screen's header and on the name fields,
-   so the same shape means "throws first" wherever it appears. */
-.pitch-box.is-first::before {
+   so the same shape means "throws first" wherever it appears. Every occupied box
+   carries one — dashed when that player isn't up first — because a marker that
+   only appears on one box shifts its name sideways by the marker's width, and the
+   two names then jump every time the arrangement changes. */
+.pitch-box:not(.is-empty)::before {
   content: '';
   flex: none;
   width: 8px;
   height: 8px;
   margin-right: 5px;
   border-radius: 2px;
+  border: 1px dashed var(--muted);
+  opacity: 0.6;
+}
+
+.pitch-box.is-first::before {
+  border-style: solid;
+  border-color: currentColor;
   background: currentColor;
+  opacity: 1;
 }
 
 .throw-dir {
