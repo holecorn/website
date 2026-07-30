@@ -1087,37 +1087,96 @@ project dependency. It starts and stops its own preview server.
 - **The splash is a fourth screen and the second with no layout id**, so it has its own
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at
-  random each boot**, with a 2x2 connect indicator in the corner. 24.5% duty against the
-  30% ceiling. **HOLE slides in from the left and CORN from the right** over the first
-  `SPLASH_SLIDE_MS` of the 3.3s. The parts that are easy to undo:
-  - **The slide is one integer function and a clock argument, and both halves are load-
-    bearing.** `splashSlide` lives in `render.h` — it is drawing, so the pixel check has to
-    own it, unlike `SPLASH_MS`, which is the sketch's the way `WINNER_BLINK` is. `elapsed`
-    is passed *in*, so the same inputs still give the same frame; the masks are **sampled**
-    at an offset rather than drawn at one, so a word half off the panel is clipped by the
-    read and nothing is written outside it.
-    - **The travel is a whole panel width per word**, not the distance to each word's own
-      edge, because the masks are panel-sized and carry their own placement — so `PANEL_W`
-      is off-screen whatever `generate_logo.mjs` last produced. Measured cost: the first
-      ~130ms draws nothing, which at boot follows a dark panel and reads as nothing at all.
-    - **Duty is unaffected**, because a clipped word lights *less* than a settled one —
-      measured, 0.1%, 4.4% and 21.0% through the slide against 24.6% at rest. So this is
-      not a screen `DUTY_CEILING` needed re-checking for, which the form screen was.
+  random each boot**, with a 2x2 connect indicator in the corner. 24.6% duty against the
+  30% ceiling. **The mark assembles itself by being thrown there**: the wordmark's two
+  boxes are two cornhole boards, so they stand from the first frame and the eight letters
+  arc in one at a time — HOLE's from the left, CORN's from the right, the boards taking it
+  in turns — landing short, skidding to a stop and knocking the board down a pixel.
+  `SPLASH_ANIM_MS` is 3.58s of the 5s. The parts that are easy to undo:
+  - **`SPLASH_STAGGER_MS` is `SPLASH_FLIGHT_MS`, not a number of its own**, so a bag
+    touches down exactly as the next is let go and **there is never more than one in the
+    air** — the one still sliding is on the board. Every spacing from 190 to 640ms was
+    rendered and compared side by side before choosing: at 190 two or three bags are in
+    flight at once and it reads as a flurry, and at a flight plus its skid (640) each bag
+    stops before the next is thrown, which is a beat too far apart and costs another 1.5s
+    of splash. Derived rather than written down so a change to the flight carries the
+    rhythm with it. **The cost either way is that the animation now outlasts a WiFi
+    association**, so a warm reconnect meeting a dead broker would freeze it part-filled —
+    see the firmware README.
+  - **The boards stand still and only the letters are thrown, which is the whole idea.**
+    The boxes were already the thing the letters land in, so the alternative — throwing
+    each word whole, box and all — reads as two boards being lobbed about. It was built
+    and previewed first; don't go back to it.
+  - **A letter is a *rectangle*, not a mask, and that is what makes this cost 128 bytes
+    instead of another 16 kB.** `generate_logo.mjs` labels the five connected pieces of
+    each word and emits the four letters' bounding boxes; the box is everything outside
+    them. That only works because **no box pixel lands inside a letter's rectangle and no
+    two rectangles meet** — so the generator asserts both and refuses to write a mark it
+    cannot divide. Measured on the current mark: 0 clashes, and 4- and 8-connectivity agree
+    on all five pieces. A wider `letter-spacing` or a tighter box would fail there rather
+    than as a letter flying off with a slice of frame.
+  - **The flight is integer functions and a clock argument, and all of it lives in
+    `render.h`** — it is drawing, so the pixel check has to own it, unlike `SPLASH_MS`,
+    which is the sketch's the way `WINNER_BLINK` is. `elapsed`, the colours *and the
+    throwing order* are passed in, so the same inputs still give the same frame.
+    - **Bags are written where they have got to, not sampled at an offset** — the reverse
+      of the slide, and forced: nine pieces each carry their own offset, so there is no one
+      shift to read the maps through. `splashPx` clips on the way out.
+    - **A bag starts just off its own edge**, which the rectangles make knowable per
+      letter. The slide had to travel `PANEL_W` because its masks were panel-sized, and
+      paid for it with ~130ms of empty panel.
+    - **`SPLASH_APEX` is 6 because that is the least headroom any letter has**, measured
+      off `LOGO_HOLE_LETTERS` — so a bag at the top of its arc reaches row 0 exactly and
+      nothing is ever clipped by the panel's top edge. Raising it clips the tops of the
+      shallowest letters.
+    - **The knock is read off the clock, never remembered**, so a frame is a pure function
+      of `elapsed`. The bags already resting go down with the board; a board dropping alone
+      looks like its bags are floating, and that has its own assertion because nothing else
+      noticed it.
+    - **Duty went down, not up.** Every animation frame lights *less* than the settled mark
+      — measured, 12.4% for the bare boards and 21.3% at the busiest frame between, against
+      24.6% at rest — so this is not a screen `DUTY_CEILING` needed re-checking for. The
+      trade is that the first 0.4s is 12.4% rather than the slide's fuller frame, which
+      slightly weakens the "it helps the power bank start" side effect in the firmware
+      README. Still ~9x the idle screen.
+  - **Each board keeps one colour, bags included, and the order is shuffled per board.**
+    So the throws vary every boot and **what they settle into does not**: the settled frame
+    is byte-identical to the splash before this change, all five scenes of it, which is the
+    property to check first if this is ever touched. `test_render.cpp` pins both halves of
+    what the order may change — nothing once every bag is down, and which bags are down
+    part way through.
+    - **Colouring each bag by the order it was thrown in was built first and rejected.**
+      It put two bags of each colour on every board in a different arrangement each boot,
+      which is a truer picture of a round and a worse logo: the mark the animation resolves
+      to has to be the app's, not a variant of it. The scene assertion is the guard — if a
+      bag ever takes a colour of its own again, `the order must leave no trace once every
+      bag has landed` fails.
   - **The scenes cannot pin an easing curve, and four of them nearly shipped pretending
-    to.** A curve that differs *between* two sample times draws an identical frame at each,
-    so `test_render.cpp` writes `out/splash-curve.json` — every offset the slide passes
-    through — and `test-firmware.mjs` compares the JS against all 802 of them. Verified by
-    mutation: a JS curve off by one millisecond passes all four slide scenes and fails only
-    the curve. **Don't replace the curve dump with more scenes.**
-    - **Where the slide *ends* is unpinned by any frame**, because every frame renders
-      through the same offset, so a slide settling a pixel off its mark shifts the PPMs
-      with it and still matches. Hence the two assertions on the ends of the curve, and
+    to.** A flight that differs *between* two sample times draws an identical frame at each,
+    so `test_render.cpp` writes `out/splash-curve.json` — every offset of all eight bags
+    plus both boards' knocks — and `test-firmware.mjs` compares the JS against all 28,656
+    offsets and 7,164 knock samples. **Don't replace the curve dump with more scenes.**
+    Verified by mutation for *this* animation rather than inherited from the slide's: a
+    linear skid in the JS instead of a quadratic one passes all 43 scenes pixel for pixel
+    and fails only the curve. Two other timing bugs *are* caught by frames — truncation
+    turned to rounding fails three scenes, and a 1ms shift fails the apex frame because
+    that one is sampled at the extremum — so the note this replaced, which claimed the
+    scenes catch nothing, was too strong.
+    - **Where a flight *ends* and *starts* is unpinned by any frame**, because every frame
+      renders through the same offsets, so a bag settling a pixel off its square shifts the
+      PPMs with it and still matches. Hence the assertions on the ends of the flight, and
       the browser check's "clear of both edges".
-  - **The emulator steps the slide's clock in `SPLASH_RENDER_INTERVAL`s, not per animation
+    - **Two assertions were written against the constants they check and passed their own
+      mutations.** `SPLASH_THUMP = 0` and `SPLASH_SKID = 0` each removed a visible part of
+      the animation with nothing failing, because both sides of the comparison moved
+      together. They now state the property — the board's bottom edge is *lower* than
+      settled, a bag touches down *short* of its square. **Anything new here that compares a
+      frame against the constant that drew it deserves the same suspicion.**
+  - **The emulator steps the clock in `SPLASH_RENDER_INTERVAL`s, not per animation
     frame**, so it draws the frames the board draws: a browser gets through half again as
-    many (60Hz against the board's 25ms tick), and how smooth 30 frames of slide look is
-    the question the emulator exists to answer. Repeating a value is a render React drops,
-    so it also repaints only on the ticks.
+    many (60Hz against the board's 25ms tick), and how smooth the throws look at the
+    board's own rate is the question the emulator exists to answer. Repeating a value is a
+    render React drops, so it also repaints only on the ticks.
     - **Nothing checks this, and no cheap check can.** Removing the quantisation fails no
       assertion — verified by mutation. Telling 25ms steps from 16ms ones through the
       canvas needs a count of distinct frames over ~40 clock steps against a threshold
@@ -1125,21 +1184,27 @@ project dependency. It starts and stops its own preview server.
       instead: **if you simplify it back to `setElapsed(t)`, the emulator quietly stops
       answering that question.**
   - **`verify-panel.mjs` is the only thing that can see the emulator hand over a moving
-    clock**, and it needed two fixes to be able to:
+    clock**, and it asks *only* what a browser can answer — the shape of the flight is
+    asserted off the framebuffer in `test_render.cpp`, and repeating it here would be a
+    check that cannot fail. So it reads three things: the boards are up with every letter's
+    square still empty, at the top of the second bag's arc it is lighting LEDs the finished
+    mark leaves dark (51 of them, measured), and everything ends on its own square. It needed
+    two fixes to be able to:
     - **`page.clock.install()` leaves the clock ticking with real time** — measured, 503ms
       of it for a 500ms wait — so the frames landed wherever the round trips left them. The
       old block's comment claimed the opposite and was harmless only because nothing moved.
-      It now `pauseAt`s as well, and the mid-slide read went from 2px-from-settled to the
-      frame it asks for. **A `runFor` step is not a step unless the clock is paused.**
+      It now `pauseAt`s as well, and the mid-animation read went from 2px-from-settled to
+      the frame it asks for. **A `runFor` step is not a step unless the clock is paused.**
     - **Brightness is thresholded against a measured constant, not the row's own minimum.**
       That minimum wobbles by a pixel of antialiasing, and when it landed on 71 rather than
       72 every unlit LED counted as lit: the old "lit across the middle" assertion was
       passing on **122 LEDs of noise**. An unlit dot reads 72, a neighbour's halo lifts one
       to ~95, the faintest coverage pixel reads ~200, so the bar is 150.
-    - **The mark's position is measured as a column *span* over every row**, not as a count
-      on one row. A single row crosses letters wherever the words are, so both the count and
-      the edge test read almost the same mid-slide as settled — which is how the first
-      version of this check passed while measuring nothing.
+    - **Nothing there may depend on which letter is where**, because the order is shuffled
+      per page load and the check cannot see the shuffle. That is why "bags are in the air"
+      is measured as *lit where the settled frame is dark* rather than by looking at a named
+      letter, and why the letter rectangles are imported from `panelLogo.js` instead of
+      being written down.
   - **The mark is re-spaced for the panel and is not the app's geometry.** Fitted as
     authored it used 82 of 128 columns and the letters came out at 10px, where Bebas
     Neue's condensed R and N run into themselves. `generate_logo.mjs` eases the tilt to 8°,
@@ -1219,7 +1284,9 @@ project dependency. It starts and stops its own preview server.
   - **Measured cost: +1.72 kB gzipped** of the main chunk (85.66 → 87.38) and 4 kB of
     flash, on top of what the emulator already costs. Coverage is 0.82 kB of that over a
     1-bit mask. Re-measure rather than assuming — the slide added 0.15 kB (89.54 → 89.69),
-    which is what a curve and an offset should cost.
+    which is what a curve and an offset should cost, and the throws that replaced it added
+    0.57 kB (89.70 → 90.27) for eight flights, the knock and a shuffle. On the board they
+    are 128 bytes of letter rectangles and no new masks at all.
 - ESP32-class hardware is 2.4GHz-only; iPhone hotspots default to 5GHz, so
   **Maximize Compatibility** has to be on. Expect this to be the first thing that
   goes wrong when the hardware board arrives.

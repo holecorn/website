@@ -22,7 +22,16 @@ import {
   GLYPH_MASK,
   GLYPH_SMALL,
 } from './panelGlyphs.js';
-import { LOGO_CORN, LOGO_H, LOGO_HOLE, LOGO_LEVELS, LOGO_W } from './panelLogo.js';
+import {
+  LOGO_CORN,
+  LOGO_CORN_LETTERS,
+  LOGO_H,
+  LOGO_HOLE,
+  LOGO_HOLE_LETTERS,
+  LOGO_LETTERS,
+  LOGO_LEVELS,
+  LOGO_W,
+} from './panelLogo.js';
 
 // Truncating, because every one of these is an `int` division in render.h and
 // the layout constants depend on the remainder being thrown away. Rounding
@@ -69,15 +78,25 @@ const FORM_PPR_MAX = 4;
 
 // How long the board shows the wordmark at power-on. Mirrored in sketch.ino, the
 // same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
-// The slide is the other way round — it is drawing, so render.h owns it and this is
-// the copy the pixel check holds.
-export const SPLASH_MS = 3300;
-export const SPLASH_SLIDE_MS = 800;
-const SPLASH_TRAVEL = PANEL_W;
+// The throws are the other way round — they are drawing, so render.h owns them and this
+// is the copy the pixel check holds.
+export const SPLASH_MS = 5000;
+export const SPLASH_BOARDS = 2;
+export const SPLASH_THROWS = SPLASH_BOARDS * LOGO_LETTERS;
+const SPLASH_FLIGHT_MS = 420;
+const SPLASH_APEX = 6;
+const SPLASH_SKID = 4;
+const SPLASH_SKID_MS = 220;
+// One flight, so a bag touches down as the next is let go — see render.h.
+const SPLASH_STAGGER_MS = SPLASH_FLIGHT_MS;
+const SPLASH_THUMP = 1;
+const SPLASH_THUMP_MS = 70;
+export const SPLASH_ANIM_MS =
+  (SPLASH_THROWS - 1) * SPLASH_STAGGER_MS + SPLASH_FLIGHT_MS + SPLASH_SKID_MS;
 
 // The board's redraw rate while the splash is up, mirrored from sketch.ino for the same
-// reason SPLASH_MS is. The emulator steps the slide's clock in these increments, so it
-// draws the frames the panel draws rather than the ones a 60Hz browser could.
+// reason SPLASH_MS is. The emulator steps the animation's clock in these increments, so
+// it draws the frames the panel draws rather than the ones a 60Hz browser could.
 export const SPLASH_RENDER_INTERVAL = 25;
 
 export const SPLASH_DOT = 2;
@@ -566,36 +585,75 @@ const covered = (c, level) => ({
   b: idiv(c.b * level, LOGO_LEVELS),
 });
 
-// Integer, and exact: the widest product here is travel x span^3, which is 6.6e10 and
-// so still whole in a double, where the C++ needs 64 bits to hold it.
-export function splashSlide(elapsed) {
-  const t = elapsed > 0 ? elapsed : 0;
-  if (t >= SPLASH_SLIDE_MS) return 0;
-  const left = SPLASH_SLIDE_MS - t;
-  return idiv(SPLASH_TRAVEL * left * left * left, SPLASH_SLIDE_MS * SPLASH_SLIDE_MS * SPLASH_SLIDE_MS);
+const splashThrownAt = (board, slot) => (slot * SPLASH_BOARDS + board) * SPLASH_STAGGER_MS;
+const splashLandedAt = (board, slot) => splashThrownAt(board, slot) + SPLASH_FLIGHT_MS;
+const splashLanded = (board, slot, elapsed) => elapsed >= splashLandedAt(board, slot);
+
+export function splashThump(board, elapsed) {
+  for (let slot = 0; slot < LOGO_LETTERS; slot += 1) {
+    const at = splashLandedAt(board, slot);
+    if (elapsed >= at && elapsed - at < SPLASH_THUMP_MS) return SPLASH_THUMP;
+  }
+  return 0;
 }
 
-export function drawSplash(fb, colorA, colorB, connect, elapsed) {
-  const hole = chalk(colorA);
-  const corn = chalk(colorB);
-  const slide = splashSlide(elapsed);
+export function splashThrow(rect, dir, board, slot, elapsed) {
+  const from = dir < 0 ? -(rect.x1 + 1) : PANEL_W - rect.x0;
+  const start = splashThrownAt(board, slot);
+  const t = elapsed > 0 ? elapsed : 0;
+  if (t <= start) return { dx: from, dy: 0 };
+
+  const e = t - start;
+  if (e < SPLASH_FLIGHT_MS) {
+    const travel = dir * SPLASH_SKID - from;
+    const rise = 4 * SPLASH_APEX * e * (SPLASH_FLIGHT_MS - e);
+    return {
+      dx: from + idiv(travel * e, SPLASH_FLIGHT_MS),
+      dy: -idiv(rise, SPLASH_FLIGHT_MS * SPLASH_FLIGHT_MS),
+    };
+  }
+
+  const sliding = e - SPLASH_FLIGHT_MS;
+  if (sliding >= SPLASH_SKID_MS) return { dx: 0, dy: 0 };
+  const left = SPLASH_SKID_MS - sliding;
+  return { dx: idiv(dir * SPLASH_SKID * left * left, SPLASH_SKID_MS * SPLASH_SKID_MS), dy: 0 };
+}
+
+const splashLetterAt = (letters, x, y) =>
+  letters.findIndex((r) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1);
+
+function splashPx(fb, x, y, color, level) {
+  if (x < 0 || y < 0 || x >= PANEL_W || y >= PANEL_H) return;
+  px(fb, x, y, covered(color, level));
+}
+
+function drawSplashBoard(fb, map, letters, order, board, dir, color, elapsed) {
+  const thump = splashThump(board, elapsed);
+
   for (let y = 0; y < LOGO_H; y += 1) {
     for (let x = 0; x < LOGO_W; x += 1) {
-      const cornX = x - slide;
-      if (cornX >= 0 && cornX < LOGO_W) {
-        const cornLevel = logoLevel(LOGO_CORN[y], cornX);
-        if (cornLevel > 0) {
-          px(fb, x, y, covered(corn, cornLevel));
-          continue;
-        }
-      }
-      const holeX = x + slide;
-      if (holeX >= 0 && holeX < LOGO_W) {
-        const holeLevel = logoLevel(LOGO_HOLE[y], holeX);
-        if (holeLevel > 0) px(fb, x, y, covered(hole, holeLevel));
+      const level = logoLevel(map[y], x);
+      if (level === 0 || splashLetterAt(letters, x, y) >= 0) continue;
+      splashPx(fb, x, y + thump, color, level);
+    }
+  }
+
+  for (let slot = 0; slot < LOGO_LETTERS; slot += 1) {
+    const r = letters[order[slot]];
+    const o = splashThrow(r, dir, board, slot, elapsed);
+    const dy = o.dy + (splashLanded(board, slot, elapsed) ? thump : 0);
+    for (let y = r.y0; y <= r.y1; y += 1) {
+      for (let x = r.x0; x <= r.x1; x += 1) {
+        const level = logoLevel(map[y], x);
+        if (level > 0) splashPx(fb, x + o.dx, y + dy, color, level);
       }
     }
   }
+}
+
+export function drawSplash(fb, colorA, colorB, connect, elapsed, order) {
+  drawSplashBoard(fb, LOGO_HOLE, LOGO_HOLE_LETTERS, order[0], 0, -1, chalk(colorA), elapsed);
+  drawSplashBoard(fb, LOGO_CORN, LOGO_CORN_LETTERS, order[1], 1, +1, chalk(colorB), elapsed);
   if (connect >= 0 && connect < SPLASH_CONNECT.length) {
     drawBlock(fb, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, SPLASH_CONNECT[connect]);
   }

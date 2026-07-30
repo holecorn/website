@@ -127,6 +127,9 @@ for (const suite of SUITES) {
 // substitute: the divergences that matter are single pixels from a truncating
 // division, and they are invisible to review.
 const panel = await import('../src/panelRender.js');
+// The letter rectangles come from the generated asset, not from the renderer: the curve
+// below has to ask about the same letters render.h dumped.
+const logo = await import('../src/panelLogo.js');
 
 const rgbAt = (buf, i) => `${buf[i * 3]},${buf[i * 3 + 1]},${buf[i * 3 + 2]}`;
 
@@ -178,13 +181,14 @@ if (!ran['test_render.cpp']) {
       const state = panel.boardState(scene);
       if (scene.splash !== null) {
         // The splash carries its colour pair in the state's two colours, so it needs no
-        // fields of its own beyond the indicator state and the clock the slide is at.
+        // fields of its own beyond the indicator, the clock and the throwing order.
         panel.drawSplash(
           fb,
           state.colorA,
           state.colorB,
           scene.splash.connect,
           scene.splash.elapsed,
+          scene.splash.order,
         );
       } else {
         panel.renderBoard(
@@ -221,28 +225,48 @@ if (!ran['test_render.cpp']) {
       }
     }
 
-    // The splash's easing curve, every millisecond of it, for the reason
-    // writeSplashCurve in test_render.cpp gives: the scenes above cannot pin it.
+    // Every bag's flight and both boards' knocks, millisecond by millisecond, for the
+    // reason writeSplashCurve in test_render.cpp gives: the scenes above cannot pin them.
+    // Dumped for the identity order, so a throw's slot and its letter are the same index.
     const curve = JSON.parse(readFileSync(resolve(dir, 'splash-curve.json'), 'utf8'));
-    if (curve.length < 2 || curve[0] !== panel.PANEL_W || curve[curve.length - 1] !== 0) {
+    if (curve.throws.length !== panel.SPLASH_THROWS || curve.span < 2) {
       throw new Error(
-        `out/splash-curve.json does not run from off-panel to settled (${curve.length} points)`,
+        `out/splash-curve.json holds ${curve.throws.length} throws over ${curve.span}ms, ` +
+          `not ${panel.SPLASH_THROWS}`,
       );
     }
-    const off = curve.findIndex((slide, t) => slide !== panel.splashSlide(t));
-    if (off >= 0) {
-      problems.push(
-        `splashSlide(${off}) is ${panel.splashSlide(off)} in JS, ${curve[off]} in render.h`,
-      );
-    }
+    let offsets = 0;
+    curve.throws.forEach((flight, n) => {
+      const board = Math.trunc(n / logo.LOGO_LETTERS);
+      const slot = n % logo.LOGO_LETTERS;
+      const rect = (board === 0 ? logo.LOGO_HOLE_LETTERS : logo.LOGO_CORN_LETTERS)[slot];
+      flight.forEach(([dx, dy], t) => {
+        offsets += 1;
+        const o = panel.splashThrow(rect, board === 0 ? -1 : 1, board, slot, t);
+        if (o.dx !== dx || o.dy !== dy) {
+          problems.push(
+            `board ${board} slot ${slot} at ${t}ms is ${o.dx},${o.dy} in JS, ${dx},${dy} in render.h`,
+          );
+        }
+      });
+    });
+    curve.thump.forEach((knocks, board) => {
+      knocks.forEach((thump, t) => {
+        if (panel.splashThump(board, t) !== thump) {
+          problems.push(
+            `board ${board}'s knock at ${t}ms is ${panel.splashThump(board, t)} in JS, ${thump} in render.h`,
+          );
+        }
+      });
+    });
 
     if (problems.length > 0) {
       throw new Error(
-        `src/panelRender.js has drifted from firmware/hub75/render.h:\n     ${problems.join('\n     ')}`,
+        `src/panelRender.js has drifted from firmware/hub75/render.h:\n     ${problems.slice(0, 8).join('\n     ')}`,
       );
     }
     process.stdout.write(
-      `   ${scenes.length} scenes identical, pixel for pixel; ${curve.length} splash offsets agree\n`,
+      `   ${scenes.length} scenes identical, pixel for pixel; ${offsets} splash offsets agree\n`,
     );
   });
 }

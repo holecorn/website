@@ -78,6 +78,38 @@ struct Framebuffer {
     return n;
   }
 
+  // The bottommost lit row within a column span, or -1. This is how the splash's thump is
+  // measured: a board that dropped a pixel has to have taken its lowest edge with it.
+  int litBottom(int x0, int x1) const {
+    for (int y = PANEL_H - 1; y >= 0; y--) {
+      if (litRow(y, x0, x1)) return y;
+    }
+    return -1;
+  }
+
+  // Is this exact colour anywhere on the panel? A fully covered pixel is drawn at the
+  // colour it was handed, so this is how "both words are in their own colour" is asked.
+  bool hasColor(Rgb c) const {
+    for (int i = 0; i < PANEL_W * PANEL_H; i++) {
+      const uint8_t* p = px_ + i * 3;
+      if (p[0] == c.r && p[1] == c.g && p[2] == c.b) return true;
+    }
+    return false;
+  }
+
+  bool litAt(int x, int y) const {
+    if (x < 0 || y < 0 || x >= PANEL_W || y >= PANEL_H) return false;
+    const uint8_t* p = px_ + (y * PANEL_W + x) * 3;
+    return p[0] || p[1] || p[2];
+  }
+
+  bool anyLitIn(const LogoRect& r) const {
+    for (int y = r.y0; y <= r.y1; y++) {
+      if (litRow(y, r.x0, r.x1 + 1)) return true;
+    }
+    return false;
+  }
+
   // How many different brightnesses are on screen, counted on the strongest channel of
   // each lit pixel. Two means every pixel is either off or full — which is what the
   // splash looked like before it carried coverage, and is indistinguishable from it by
@@ -221,19 +253,29 @@ static std::string lineupJson(const LineupState* l) {
   return out + "]}";
 }
 
-// `splash` is null for an ordinary scene and the indicator state plus the animation
-// clock for a splash one, which is what tells tools/test-firmware.mjs which renderer to
-// replay it through. The two colours ride in colorA/colorB, so a splash scene needs no
-// other new field.
+// `splash` is null for an ordinary scene and the indicator state, the animation clock and
+// the throwing order for a splash one, which is what tells tools/test-firmware.mjs which
+// renderer to replay it through. The two colours ride in colorA/colorB, so those are the
+// only new fields a splash scene needs.
 struct SplashScene {
   int connect;
   uint32_t elapsed;
+  const uint8_t (*order)[LOGO_LETTERS];
 };
 
 static std::string splashJson(const SplashScene* splash) {
   if (!splash) return "null";
+  std::string order = "[";
+  for (int board = 0; board < SPLASH_BOARDS; board++) {
+    order += board ? ",[" : "[";
+    for (int slot = 0; slot < LOGO_LETTERS; slot++) {
+      order += (slot ? "," : "") + std::to_string(splash->order[board][slot]);
+    }
+    order += "]";
+  }
+  order += "]";
   return "{\"connect\":" + std::to_string(splash->connect) +
-         ",\"elapsed\":" + std::to_string(splash->elapsed) + "}";
+         ",\"elapsed\":" + std::to_string(splash->elapsed) + ",\"order\":" + order + "}";
 }
 
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
@@ -253,23 +295,43 @@ static void record(const std::string& name, const BoardState& s, bool haveState,
       ",\"splash\":" + splashJson(splash) + "}");
 }
 
-// Every offset the slide passes through, for tools/test-firmware.mjs to compare against
-// src/panelRender.js. A handful of scenes cannot do this job: they pin the frames at the
-// times they were dumped, and an easing curve that differs anywhere between them draws
-// an identical frame at each sample. Verified by mutation — a curve off by one
-// millisecond passes every scene here and fails this. Runs one millisecond past the end,
-// so the settled tail is covered too.
+// Every offset every bag passes through, and both boards' knocks, for
+// tools/test-firmware.mjs to compare against src/panelRender.js. A handful of scenes
+// cannot do this job: they pin the frames at the times they were dumped, and a flight that
+// differs anywhere between them draws an identical frame at each sample. Verified by
+// mutation — making the JS skid linear rather than quadratic passes every scene below,
+// pixel for pixel, and fails only this. Runs one millisecond past the end, so the settled
+// tail is covered too.
+//
+// Dumped for the identity order, so slot and letter are the same thing here and the curve
+// does not depend on a shuffle; that the order is applied at all is a scene's job.
 static void writeSplashCurve() {
   FILE* f = fopen("out/splash-curve.json", "wb");
   if (!f) {
     printf("  cannot write out/splash-curve.json — run `mkdir -p out` first\n");
     exit(1);
   }
-  fprintf(f, "[");
-  for (uint32_t t = 0; t <= SPLASH_SLIDE_MS + 1; t++) {
-    fprintf(f, "%s%d", t ? "," : "", splashSlide(t));
+  fprintf(f, "{\"span\":%u,\"throws\":[", SPLASH_ANIM_MS + 1);
+  for (int board = 0; board < SPLASH_BOARDS; board++) {
+    for (int slot = 0; slot < LOGO_LETTERS; slot++) {
+      const LogoRect& r = board == 0 ? LOGO_HOLE_LETTERS[slot] : LOGO_CORN_LETTERS[slot];
+      fprintf(f, "%s[", board || slot ? "," : "");
+      for (uint32_t t = 0; t <= SPLASH_ANIM_MS + 1; t++) {
+        const SplashOffset o = splashThrow(r, board == 0 ? -1 : 1, board, slot, t);
+        fprintf(f, "%s[%d,%d]", t ? "," : "", o.dx, o.dy);
+      }
+      fprintf(f, "]");
+    }
   }
-  fprintf(f, "]\n");
+  fprintf(f, "],\"thump\":[");
+  for (int board = 0; board < SPLASH_BOARDS; board++) {
+    fprintf(f, "%s[", board ? "," : "");
+    for (uint32_t t = 0; t <= SPLASH_ANIM_MS + 1; t++) {
+      fprintf(f, "%s%d", t ? "," : "", splashThump(board, t));
+    }
+    fprintf(f, "]");
+  }
+  fprintf(f, "]}\n");
   fclose(f);
 }
 
@@ -301,21 +363,25 @@ static Framebuffer shot(const std::string& name, const BoardState& s, bool haveS
   return fb;
 }
 
-// The splash has no layout id and no board state, so it needs its own shot(). The
-// colour pair and the clock are arguments here for the same reason they are ones in
-// drawSplash: the sketch picks the pair at random and reads the clock, and this check
-// needs the same inputs twice. `elapsed` defaults to the settled frame, which is the
-// one the rest of the assertions are about.
+// Left to right, which the sketch shuffles at power-on. The curve and most of the frames
+// are dumped through this one so a scene's letters are where its name says they are.
+static const uint8_t SPLASH_IN_ORDER[SPLASH_BOARDS][LOGO_LETTERS] = {{0, 1, 2, 3}, {0, 1, 2, 3}};
+
+// The splash has no layout id and no board state, so it needs its own shot(). The colour
+// pair, the clock and the order are arguments here for the same reason they are ones in
+// drawSplash: the sketch picks them and this check needs the same inputs twice. `elapsed`
+// defaults to the settled frame, which is the one the rest of the assertions are about.
 static Framebuffer splashShot(const std::string& name, const char* hexA, const char* hexB,
-                              int connect, uint32_t elapsed = SPLASH_SLIDE_MS) {
+                              int connect, uint32_t elapsed = SPLASH_ANIM_MS,
+                              const uint8_t (*order)[LOGO_LETTERS] = SPLASH_IN_ORDER) {
   BoardState s = makeState(0, 0, 0, "", "");
   parseColor(hexA, s.colorA);
   parseColor(hexB, s.colorB);
 
   Framebuffer fb;
-  drawSplash(fb, s.colorA, s.colorB, connect, elapsed);
+  drawSplash(fb, s.colorA, s.colorB, connect, elapsed, order);
   fb.write(name);
-  const SplashScene scene = {connect, elapsed};
+  const SplashScene scene = {connect, elapsed, order};
   record(name, s, false, true, true, PANEL_FULL, nullptr, &scene);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
@@ -457,14 +523,32 @@ int main() {
   splashShot("splash-wifi-only", "#f2c94c", "#27ae60", 1);
   const Framebuffer splashBare = splashShot("splash-no-dot", "#2f80ed", "#eb5757", -1);
 
-  // The slide in. The frames worth dumping are the one before either word has appeared,
-  // one with a sliver of each on screen, one near the end — and one long after, which is
-  // where the animation has to have stopped.
-  const Framebuffer slideStart = splashShot("splash-slide-start", "#2f80ed", "#eb5757", 2, 0);
-  const Framebuffer slideEdges = splashShot("splash-slide-edges", "#2f80ed", "#eb5757", -1, 200);
-  const Framebuffer slideNear = splashShot("splash-slide-near", "#2f80ed", "#eb5757", 2, 400);
-  const Framebuffer slideHeld =
-      splashShot("splash-slide-held", "#2f80ed", "#eb5757", 2, SPLASH_SLIDE_MS * 10);
+  // The throws. The frames worth dumping are the one before any bag has been let go, the
+  // top of the first arc, the moment after the first landing, one with the boards part
+  // filled — and one long after, which is where the animation has to have stopped.
+  //
+  // No indicator on the arc frame: it is measured by what reaches the panel's top row, and
+  // the dot lives there.
+  const Framebuffer throwStart = splashShot("splash-throw-start", "#2f80ed", "#eb5757", 2, 0);
+  const Framebuffer throwApex =
+      splashShot("splash-throw-apex", "#2f80ed", "#eb5757", -1, SPLASH_FLIGHT_MS / 2);
+  const Framebuffer throwThump =
+      splashShot("splash-throw-thump", "#2f80ed", "#eb5757", 2, SPLASH_FLIGHT_MS + 10);
+  // 2500ms: five bags down — three on one board, two on the other — the sixth in the air
+  // and two still to be thrown. Derived from nothing on purpose, since a scene is a moment
+  // somebody chose to look at, but it does have to be one with the boards part filled and
+  // with no knock in progress, so that this frame and the thump frame each say one thing.
+  const Framebuffer throwPart = splashShot("splash-throw-part", "#2f80ed", "#eb5757", 2, 2500);
+  const Framebuffer throwHeld =
+      splashShot("splash-throw-held", "#2f80ed", "#eb5757", 2, SPLASH_ANIM_MS * 10);
+
+  // A different order, settled and part way through. A board is one colour, so the order
+  // has to be invisible once everything has landed and visible before that.
+  static const uint8_t shuffled[SPLASH_BOARDS][LOGO_LETTERS] = {{2, 0, 3, 1}, {1, 3, 0, 2}};
+  const Framebuffer throwShuffled =
+      splashShot("splash-throw-shuffled", "#2f80ed", "#eb5757", 2, SPLASH_ANIM_MS, shuffled);
+  const Framebuffer throwShuffledMid =
+      splashShot("splash-throw-shuffled-mid", "#2f80ed", "#eb5757", 2, 2500, shuffled);
 
   writeScenes();
   writeSplashCurve();
@@ -490,6 +574,15 @@ int main() {
   // other check here while making the second colour inert.
   check(memcmp(splashDefault.px_, splashSwapped.px_, sizeof splashDefault.px_) != 0,
         "the two words must take their colours independently");
+  // And each in its own, which the assertion above cannot see: handing both boards the
+  // same colour still changes the frame when the pair is swapped, so it passes. Found by
+  // mutation, and it matters more now that a board's letters take the board's colour —
+  // one board drawn in the other's is a mark that reads as one word.
+  Rgb chalkA, chalkB;
+  parseColor("#2f80ed", chalkA);
+  parseColor("#eb5757", chalkB);
+  check(splashDefault.hasColor(chalk(chalkA)) && splashDefault.hasColor(chalk(chalkB)),
+        "and both of the pair must actually reach the panel");
   check(splashNoWifi.lit() == splashDefault.lit(),
         "the indicator state must not change how much is lit");
   // Exactly the dot's worth of extra pixels: both that it is drawn and that it lands
@@ -501,26 +594,106 @@ int main() {
   check(!splashBare.litRow(SPLASH_DOT_Y, SPLASH_DOT_X, PANEL_W),
         "an out-of-range connect state must draw no indicator");
 
-  // The slide. Everything here is measured off the frames rather than off splashSlide,
-  // so it is about what got drawn: the masks are sampled at an offset, and an unguarded
-  // read would either wrap a word onto the wrong module or drop it entirely.
-  check(slideStart.lit() == SPLASH_DOT * SPLASH_DOT,
-        "before the slide the wordmark must be off the panel, indicator aside");
-  check(slideEdges.lit() > 0 && slideEdges.lit() < splashBare.lit(),
-        "mid-slide must draw part of the mark — not all of it, and not none");
-  // Clipped by *opposite* edges, which is the assertion a slide from one side, or from
-  // the wrong sides, fails. Both words are cut at once for most of the animation.
-  check(slideEdges.litSpan(0, 1) > 0 && slideEdges.litSpan(PANEL_W - 1, PANEL_W) > 0,
-        "mid-slide the two words must be clipped by opposite edges");
-  check(slideNear.lit() > slideEdges.lit() && slideNear.lit() < splashDefault.lit(),
-        "the mark must keep arriving, and still be short of settled");
-  check(memcmp(splashDefault.px_, slideHeld.px_, sizeof splashDefault.px_) == 0,
-        "the slide must finish and then stay finished");
-  // The ends of the curve, because nothing above can see them: every frame here is
-  // rendered through the same offset, so a slide that settled a pixel off its mark
-  // would shift the PPMs with it and pass the comparison against them.
-  check(splashSlide(SPLASH_SLIDE_MS) == 0, "the slide must settle where the masks put it");
-  check(splashSlide(0) == SPLASH_TRAVEL, "the slide must start a whole panel out");
+  // The throws. Everything here is measured off the frames rather than off splashThrow, so
+  // it is about what got drawn: a letter is written where it has got to, and an unguarded
+  // write would wrap a bag onto the wrong module or onto the row above.
+  //
+  // The boards are up from the first frame and every letter's square is empty, which is
+  // the pair of assertions a splash that drew the mark settled and merely moved the words
+  // around would fail.
+  for (int i = 0; i < LOGO_LETTERS; i++) {
+    check(!throwStart.anyLitIn(LOGO_HOLE_LETTERS[i]) && !throwStart.anyLitIn(LOGO_CORN_LETTERS[i]),
+          "before the first throw every letter must still be off the panel");
+    check(splashDefault.anyLitIn(LOGO_HOLE_LETTERS[i]) &&
+              splashDefault.anyLitIn(LOGO_CORN_LETTERS[i]),
+          "settled, every letter must be on its own square");
+  }
+  check(throwStart.lit() > SPLASH_DOT * SPLASH_DOT,
+        "the two boards must be up before the first bag is thrown");
+  check(throwStart.lit() < splashDefault.lit(), "the boards alone must be less than the mark");
+  check(throwPart.lit() > throwStart.lit() && throwPart.lit() < splashDefault.lit(),
+        "part way through, some bags must have landed and some still be coming");
+
+  // The arc, measured where it can only have come from one: at the top of its flight the
+  // first bag is drawn above the board's own top edge, and nothing else on the panel ever
+  // reaches that row. A flat throw — the slide this replaced — lights nothing here.
+  check(!splashBare.litRow(0, 0, PANEL_W), "settled, nothing may reach the panel's top row");
+  check(throwApex.litRow(0, 0, PANEL_W / 2),
+        "at the top of its arc a bag must be drawn clear above the board");
+
+  // The knock, and that it is the landing board's alone. HOLE's first bag lands at
+  // SPLASH_FLIGHT_MS and CORN's a stagger later, so at this moment one board is down a
+  // pixel and the other is not.
+  //
+  // Where one board's columns end and the other's begin is measured off the maps rather
+  // than written down: it is the generator that decides how close the two boxes sit, and a
+  // divider that fell inside either of them would put one board's bottom edge in the
+  // other's column range and make both of these assertions meaningless.
+  int holeRight = 0, cornLeft = PANEL_W;
+  for (int y = 0; y < LOGO_H; y++) {
+    for (int x = 0; x < LOGO_W; x++) {
+      if (logoLevel(LOGO_HOLE[y], x) > 0 && x > holeRight) holeRight = x;
+      if (logoLevel(LOGO_CORN[y], x) > 0 && x < cornLeft) cornLeft = x;
+    }
+  }
+  check(holeRight < cornLeft, "the two boards must not share a column, or a knock cannot be told apart");
+  const int divide = holeRight + 1;
+  // The `> 0` is not redundant with the sum: without it the assertion is written in terms
+  // of the constant it is checking, so setting SPLASH_THUMP to 0 satisfies both sides and
+  // the knock leaves the animation without a single check noticing. Found by mutation.
+  check(SPLASH_THUMP > 0 &&
+            throwThump.litBottom(0, divide) == splashDefault.litBottom(0, divide) + SPLASH_THUMP,
+        "a landing must knock the board it lands in down a pixel");
+  check(throwThump.litBottom(divide, PANEL_W) == splashDefault.litBottom(divide, PANEL_W),
+        "and must not knock the other board, which nothing has landed in yet");
+
+  // And the bag resting on it goes down with it, or the two come apart for the 70ms the
+  // board is low. Counted against the mask rather than against another frame: every pixel
+  // the bag has must be lit at the offset the flight reports plus the knock, so a board
+  // that dropped on its own leaves the bottom row of each stroke unaccounted for.
+  const LogoRect& firstBag = LOGO_HOLE_LETTERS[SPLASH_IN_ORDER[0][0]];
+  const SplashOffset resting = splashThrow(firstBag, -1, 0, 0, SPLASH_FLIGHT_MS + 10);
+  int bagPixels = 0, bagDrawn = 0;
+  for (int y = firstBag.y0; y <= firstBag.y1; y++) {
+    for (int x = firstBag.x0; x <= firstBag.x1; x++) {
+      if (logoLevel(LOGO_HOLE[y], x) == 0) continue;
+      bagPixels++;
+      if (throwThump.litAt(x + resting.dx, y + resting.dy + SPLASH_THUMP)) bagDrawn++;
+    }
+  }
+  check(bagPixels > 0 && bagDrawn == bagPixels,
+        "and the bag that landed must go down with it, not hang where it was");
+
+  check(memcmp(splashDefault.px_, throwHeld.px_, sizeof splashDefault.px_) == 0,
+        "the throws must finish and then stay finished");
+
+  // The order is what the sketch shuffles, and both halves of what it may change are
+  // asserted. It decides the animation and nothing that survives it: a board is one
+  // colour, so once every bag is down the frame is the app's wordmark whichever order they
+  // arrived in. This is the assertion that would fail if a bag ever took a colour of its
+  // own — which is how the first version of this animation worked, and is not what is
+  // wanted: the mark the throws settle into has to be the logo, not a variant of it.
+  check(memcmp(splashDefault.px_, throwShuffled.px_, sizeof splashDefault.px_) == 0,
+        "the order must leave no trace once every bag has landed");
+  check(memcmp(throwPart.px_, throwShuffledMid.px_, sizeof throwPart.px_) != 0,
+        "but part way through it must decide which bags are already down");
+
+  // The ends of the flight, because nothing above can see them: every frame here is
+  // rendered through the same offset, so a bag that settled a pixel off its square would
+  // shift the PPMs with it and pass the comparison against them.
+  const SplashOffset landed = splashThrow(LOGO_HOLE_LETTERS[0], -1, 0, 0, SPLASH_ANIM_MS);
+  const SplashOffset thrown = splashThrow(LOGO_HOLE_LETTERS[0], -1, 0, 0, 0);
+  const SplashOffset peak = splashThrow(LOGO_HOLE_LETTERS[0], -1, 0, 0, SPLASH_FLIGHT_MS / 2);
+  const SplashOffset touchdown = splashThrow(LOGO_HOLE_LETTERS[0], -1, 0, 0, SPLASH_FLIGHT_MS);
+  check(landed.dx == 0 && landed.dy == 0, "a bag must settle where the mask puts it");
+  check(thrown.dx == -(LOGO_HOLE_LETTERS[0].x1 + 1) && thrown.dy == 0,
+        "and start just off its own edge, not a panel out");
+  check(peak.dy == -SPLASH_APEX, "the arc must reach its apex half way through the flight");
+  // Stated as short-and-down rather than as SPLASH_SKID, for the reason the knock above
+  // is: comparing against the constant lets a skid of zero pass, and then a bag stops dead
+  // where it lands with nothing to say so.
+  check(touchdown.dx < 0 && touchdown.dy == 0,
+        "and touch down short of its square, with the slide still to come");
 
   // The wordmark is antialiased, which no count of lit pixels can see: a hard-masked
   // asset would satisfy every check above. Its whole purpose is the tilted strokes, and

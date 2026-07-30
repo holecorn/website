@@ -18,9 +18,10 @@ import {
 import {
   PANEL_H,
   PANEL_W,
+  SPLASH_ANIM_MS,
+  SPLASH_BOARDS,
   SPLASH_MS,
   SPLASH_RENDER_INTERVAL,
-  SPLASH_SLIDE_MS,
   WINNER_BLINK,
   boardLiveness,
   boardState,
@@ -30,6 +31,9 @@ import {
   parseColor,
   renderBoard,
 } from './panelRender.js';
+// Straight from the generated asset, because how many letters there are to throw is the
+// mark's own business rather than the renderer's.
+import { LOGO_LETTERS } from './panelLogo.js';
 import { PALETTE } from './scoring.js';
 import { paintPanel, panelCell } from './panelPaint.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
@@ -91,20 +95,37 @@ function splashPair() {
   return [parseColor(PALETTE[i].value), parseColor(PALETTE[j].value)];
 }
 
+// And the order each board's four letters are thrown in, which is the other thing the
+// sketch picks: bags land where they land, so no two boots fill a board the same way.
+// It changes the animation only — a board is one colour, so the mark they settle into is
+// the app's wordmark whichever order they arrived in.
+function splashOrders() {
+  return Array.from({ length: SPLASH_BOARDS }, () => {
+    const order = Array.from({ length: LOGO_LETTERS }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+  });
+}
+
 // The board shows the wordmark while WiFi and MQTT come up, so the emulator does too —
 // it is the only way to see the splash without the hardware. The indicator reads the
 // same three-step progress the board's does; a browser has no WiFi state of its own,
 // so a connecting socket stands in for the middle one.
 //
-// `elapsed` drives the two words in from the edges, and drawSplash turns it into an
-// offset — so the curve is the firmware's and this only holds the clock. Animated
-// for the slide and then left alone: after it nothing moves until the splash goes.
+// `elapsed` is what throws the letters into the two boards, and drawSplash turns it into
+// offsets — so the flight is the firmware's and this only holds the clock. Animated until
+// everything has landed and then left alone: after that nothing moves until the splash
+// goes.
 //
 // The clock is stepped in SPLASH_RENDER_INTERVALs rather than per animation frame, so
 // the emulator draws the frames the board draws. A browser gets through half again as
-// many, which would make this smoother here than on the panel — and how smooth 30
-// frames of slide look is the question the emulator exists to answer. Repeating a value
-// is also a render React drops, so the canvas is repainted only on the ticks.
+// many, which would make this smoother here than on the panel — and how smooth the
+// throws look at the board's own rate is the question the emulator exists to answer.
+// Repeating a value is also a render React drops, so the canvas is repainted only on the
+// ticks.
 function useSplash(status) {
   const [showing, setShowing] = useState(true);
   const [elapsed, setElapsed] = useState(0);
@@ -113,7 +134,7 @@ function useSplash(status) {
     let frame = requestAnimationFrame(function step() {
       const t = Date.now() - start;
       setElapsed(Math.floor(t / SPLASH_RENDER_INTERVAL) * SPLASH_RENDER_INTERVAL);
-      if (t < SPLASH_SLIDE_MS) frame = requestAnimationFrame(step);
+      if (t < SPLASH_ANIM_MS) frame = requestAnimationFrame(step);
     });
     const id = setTimeout(() => setShowing(false), SPLASH_MS);
     return () => {
@@ -160,6 +181,7 @@ export default function Panel() {
 
   const splash = useSplash(status);
   const [splashColors] = useState(splashPair);
+  const [splashOrder] = useState(splashOrders);
 
   const frameRef = useRef(null);
   const canvasRef = useRef(null);
@@ -169,12 +191,12 @@ export default function Panel() {
     if (!canvasRef.current) return;
     const fb = createFramebuffer();
     if (splash.showing) {
-      drawSplash(fb, splashColors[0], splashColors[1], splash.connect, splash.elapsed);
+      drawSplash(fb, splashColors[0], splashColors[1], splash.connect, splash.elapsed, splashOrder);
     } else {
       renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn);
     }
     paintPanel(canvasRef.current, fb, cell);
-  }, [payload, live, blinkOn, cell, layout, drawn, splash, splashColors]);
+  }, [payload, live, blinkOn, cell, layout, drawn, splash, splashColors, splashOrder]);
 
   if (!configComplete(config)) {
     return (

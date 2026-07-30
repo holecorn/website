@@ -15,13 +15,16 @@
 
 import { chromium } from 'playwright';
 import { GLYPH_SMALL } from '../src/panelGlyphs.js';
+// Which square each letter lands on, so the splash block can ask whether the bags are
+// still in the air without knowing the order they were thrown in.
+import { LOGO_CORN_LETTERS, LOGO_HOLE_LETTERS } from '../src/panelLogo.js';
 import {
   DIGIT_Y,
   PANEL_H,
   PANEL_W,
+  SPLASH_ANIM_MS,
   SPLASH_DOT,
   SPLASH_MS,
-  SPLASH_SLIDE_MS,
 } from '../src/panelRender.js';
 
 const BASE = 'http://localhost:4173/';
@@ -119,20 +122,26 @@ console.log('?panel=1 routes to the panel, not the app');
   await page.close();
 }
 
-// The pixel check proves drawSplash draws the wordmark and every offset the slide passes
-// through; it cannot see whether Panel.jsx ever puts it on screen, that it hands over a
-// clock that moves, or that it gets out of the way again. All three matter: a splash that
-// never cleared would hide the score for the whole game, and one drawn at a fixed elapsed
-// would be a still of an animation that every hermetic check would pass.
+// The pixel check proves drawSplash draws the wordmark, every offset every bag passes
+// through and both boards' knocks; it cannot see whether Panel.jsx ever puts it on screen,
+// that it hands over a clock that moves, or that it gets out of the way again. All three
+// matter: a splash that never cleared would hide the score for the whole game, and one
+// drawn at a fixed elapsed would be a still of an animation that every hermetic check
+// would pass.
 //
-// The clock is installed *and paused* so the slide can be stepped through at chosen times
-// rather than caught. Both halves are needed: install() on its own leaves the clock
+// So this block asks only what a browser can answer. The shape of the flight — the arc,
+// where a bag starts, the knock a landing gives the board — is asserted off the
+// framebuffer in test_render.cpp, where it belongs; repeating it here would be a check
+// that cannot fail.
+//
+// The clock is installed *and paused* so the animation can be stepped through at chosen
+// times rather than caught. Both halves are needed: install() on its own leaves the clock
 // ticking with real time — measured, 503ms of it for a 500ms wait — so every frame here
 // would land wherever the round trips to the browser happened to leave it. With a 2.5s
-// splash and nothing moving that was merely invisible; with an 800ms slide the mid-slide
+// splash and nothing moving that was merely invisible; with an animation the mid-flight
 // read drifted to within a couple of pixels of settled.
 const CLOCK_START = 1700000000000;
-console.log('\nthe splash slides in at startup, then clears');
+console.log('\nthe splash throws the letters in at startup, then clears');
 {
   const page = await browser.newPage({ viewport: { width: 1000, height: 400 } });
   await page.clock.install({ time: CLOCK_START });
@@ -169,36 +178,59 @@ console.log('\nthe splash slides in at startup, then clears');
     cell = await cellSize(page);
     check('the caption says it is starting up', (await page.locator('.panel-caption').innerText()).includes('Starting up'));
 
-    // Before the slide starts both words are a whole panel out, so nothing of the mark
-    // is on screen yet.
+    // Before the first bag is let go the two boards are up and every letter's square is
+    // empty. This is what a splash drawn at a fixed elapsed fails: drawn settled from the
+    // first frame, the letters are already in place here.
+    const squares = [...LOGO_HOLE_LETTERS, ...LOGO_CORN_LETTERS];
+    const filled = (grid) =>
+      squares.filter((r) => {
+        for (let y = r.y0; y <= r.y1; y += 1) {
+          for (let x = r.x0; x <= r.x1; x += 1) if (grid[y][x] > LIT) return true;
+        }
+        return false;
+      }).length;
+
     const start = await painted();
-    check('the wordmark starts off the panel entirely', start.count === 0, `${start.count} LEDs lit`);
+    check('the two boards are up from the first frame', start.count > 0, `${start.count} LEDs lit`);
+    check('and every letter is still to be thrown', filled(start.grid) === 0,
+      `${filled(start.grid)} of ${squares.length} squares filled`);
     const dot = start.grid[0].slice(PANEL_W - SPLASH_DOT).filter((v) => v > LIT).length;
     check('the connect indicator is lit in the corner', dot === SPLASH_DOT, `${dot} of ${SPLASH_DOT} LEDs`);
 
-    // Part way in, both words are hanging off their own edge. This is the pair of
-    // assertions a fixed elapsed fails: drawn settled from the first frame the mark is
-    // already whole here, and it reaches neither edge.
+    // Part way through, a bag is in the air — which is measured against the settled frame
+    // below rather than by counting: a bag anywhere but on its own square lights LEDs the
+    // finished mark leaves dark, and which bag that is depends on a shuffle this check
+    // cannot see.
     //
-    // 300ms rather than anywhere in the slide: the emulator steps its clock at the
-    // board's redraw rate, so the frame here is quantised, and both words are only
-    // clipped at once between about 190ms and 470ms. Earlier than that HOLE has not
-    // reached the left edge yet.
-    await page.clock.runFor(300);
-    const sliding = await painted();
-    check(
-      'part way in the two words are arriving from opposite edges',
-      sliding.count > 0 && sliding.min === 0 && sliding.max === PANEL_W - 1,
-      `${sliding.count} LEDs, columns ${sliding.min}-${sliding.max}`,
-    );
+    // 630ms is the top of the second bag's arc — one flight in, plus half of the next — so
+    // the first bag has stopped, no knock is in progress, and the only thing off the mark
+    // is that one bag, displaced in both axes and well onto the panel. Reading just after
+    // a release instead would catch a bag barely clear of its own edge, which is a handful
+    // of LEDs and too thin to assert on.
+    await page.clock.runFor(630);
+    const flying = await painted();
 
-    // And then it stops where the masks put it, which is inside both edges.
-    await page.clock.runFor(SPLASH_SLIDE_MS);
+    // And then everything stops on its own square, inside both edges.
+    await page.clock.runFor(SPLASH_ANIM_MS);
     const settled = await painted();
     check(
       'the wordmark settles whole, clear of both edges',
-      settled.count > sliding.count && settled.min > 0 && settled.max < PANEL_W - 1,
-      `${settled.count} LEDs against ${sliding.count} mid-slide, columns ${settled.min}-${settled.max}`,
+      settled.count > flying.count && settled.min > 0 && settled.max < PANEL_W - 1,
+      `${settled.count} LEDs against ${flying.count} in flight, columns ${settled.min}-${settled.max}`,
+    );
+    check('every bag ends up on its own square', filled(settled.grid) === squares.length,
+      `${filled(settled.grid)} of ${squares.length}`);
+
+    let airborne = 0;
+    for (let y = 2; y < PANEL_H; y += 1) {
+      for (let x = 0; x < PANEL_W; x += 1) {
+        if (flying.grid[y][x] > LIT && settled.grid[y][x] <= LIT) airborne += 1;
+      }
+    }
+    check(
+      'part way through, bags are lighting LEDs the finished mark does not',
+      airborne > 0,
+      `${airborne} LEDs off the mark`,
     );
 
     await page.clock.runFor(SPLASH_MS + 100);

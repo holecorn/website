@@ -5,6 +5,10 @@
 // One coverage map per word, 4 bits per pixel, two pixels to a byte: the low nibble is
 // the even column. Coverage of 15 is a fully lit pixel; anything below
 // 40% of full was dropped rather than dimmed.
+//
+// Each word also carries the four rectangles its letters occupy, left to right, so the
+// splash can throw them into a box that stays put. Everything in the map outside them
+// is the box.
 // HOLE 483 px, CORN 519 px, 542 of them part-lit.
 #pragma once
 
@@ -21,6 +25,15 @@ static const int LOGO_MIN_LEVEL = 6;
 // sha256 of the two sources above. tools/test-firmware.mjs checks it rather than
 // re-running this generator, which needs a browser.
 static const char LOGO_SOURCE_SHA[] = "392988248162558c049231eca56d54eaa0c0e2e9dc4368151d123d05c03ee85d";
+
+static const int LOGO_LETTERS = 4;
+
+struct LogoRect {
+  int x0, y0, x1, y1;
+};
+
+static const LogoRect LOGO_HOLE_LETTERS[LOGO_LETTERS] = {{13, 6, 20, 18}, {26, 7, 32, 20}, {38, 9, 43, 21}, {50, 11, 56, 23}};
+static const LogoRect LOGO_CORN_LETTERS[LOGO_LETTERS] = {{68, 12, 75, 24}, {81, 10, 87, 22}, {93, 8, 100, 21}, {106, 6, 113, 19}};
 
 static const uint8_t LOGO_HOLE[LOGO_H][LOGO_STRIDE] = {
   { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },

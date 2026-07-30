@@ -61,8 +61,8 @@ await new Promise((r) => setTimeout(r, 1000));
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
 const errors = [];
 
-// The wait has to outlast the broker round trip *and* the emulator's splash, which
-// covers the canvas while it slides in — derived from SPLASH_MS rather than left as a
+// The wait has to outlast the broker round trip *and* the emulator's splash, which covers
+// the canvas while the letters are thrown in — derived from SPLASH_MS rather than left as a
 // number that happened to be longer than it.
 async function open(query, viewport) {
   const page = await browser.newPage({ viewport });

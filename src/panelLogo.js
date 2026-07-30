@@ -5,6 +5,10 @@
 // One coverage map per word, 4 bits per pixel, two pixels to a byte: the low nibble is
 // the even column. Coverage of 15 is a fully lit pixel; anything below
 // 40% of full was dropped rather than dimmed.
+//
+// Each word also carries the four rectangles its letters occupy, left to right, so the
+// splash can throw them into a box that stays put. Everything in the map outside them
+// is the box.
 // HOLE 483 px, CORN 519 px, 542 of them part-lit.
 
 export const LOGO_W = 128;
@@ -14,6 +18,11 @@ export const LOGO_LEVELS = 15;
 export const LOGO_MIN_LEVEL = 6;
 
 export const LOGO_SOURCE_SHA = '392988248162558c049231eca56d54eaa0c0e2e9dc4368151d123d05c03ee85d';
+
+export const LOGO_LETTERS = 4;
+
+export const LOGO_HOLE_LETTERS = [{ x0: 13, y0: 6, x1: 20, y1: 18 }, { x0: 26, y0: 7, x1: 32, y1: 20 }, { x0: 38, y0: 9, x1: 43, y1: 21 }, { x0: 50, y0: 11, x1: 56, y1: 23 }];
+export const LOGO_CORN_LETTERS = [{ x0: 68, y0: 12, x1: 75, y1: 24 }, { x0: 81, y0: 10, x1: 87, y1: 22 }, { x0: 93, y0: 8, x1: 100, y1: 21 }, { x0: 106, y0: 6, x1: 113, y1: 19 }];
 
 export const LOGO_HOLE = [
   [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],

@@ -51,12 +51,13 @@ const uint32_t WINNER_BLINK = 500;
 
 // The wordmark at power-on. Nothing waits for it — WiFi and MQTT connect underneath —
 // so it costs only the seconds the board would otherwise spend on the no-state dashes.
-// Long enough for the two words to slide in (SPLASH_SLIDE_MS in render.h) and then be
-// read. Mirrored in src/panelRender.js for the emulator.
-const uint32_t SPLASH_MS = 3300;
+// Long enough for the eight letters to be thrown in one at a time (SPLASH_ANIM_MS in
+// render.h, 3.58 s of this) and the finished mark then to be read for a beat. Mirrored in
+// src/panelRender.js for the emulator.
+const uint32_t SPLASH_MS = 5000;
 
 // Redraw rate while the splash is up. RENDER_INTERVAL is sized for a score that
-// changes once a round; the slide needs frames, and it can have them because
+// changes once a round; the throws need frames, and they can have them because
 // rendering does not block and there is no traffic to keep up with yet.
 const uint32_t SPLASH_RENDER_INTERVAL = 25;
 
@@ -92,6 +93,7 @@ uint32_t lastLive = 0;
 bool wifiWasUp = false;
 uint32_t splashStart = 0;
 Rgb splashA, splashB;
+uint8_t splashOrder[SPLASH_BOARDS][LOGO_LETTERS];
 int brightnessStep = BRIGHTNESS_DEFAULT_STEP;
 
 // --------------------------------------------------------------- buttons ----
@@ -157,6 +159,22 @@ void pickSplashColors() {
   splashB = SPLASH_PALETTE[j];
 }
 
+// And the order the letters land in, a shuffle per board. Here rather than in render.h for
+// the same reason the colours are: that file has to give the same frame for the same
+// inputs or the pixel check cannot hold it. It varies the animation and only that — the
+// mark it settles into is the same one every boot.
+void pickSplashOrder() {
+  for (int board = 0; board < SPLASH_BOARDS; board++) {
+    for (int slot = 0; slot < LOGO_LETTERS; slot++) splashOrder[board][slot] = slot;
+    for (int i = LOGO_LETTERS - 1; i > 0; i--) {
+      const int j = esp_random() % (i + 1);
+      const uint8_t swap = splashOrder[board][i];
+      splashOrder[board][i] = splashOrder[board][j];
+      splashOrder[board][j] = swap;
+    }
+  }
+}
+
 // Indexes SPLASH_CONNECT: no wifi, wifi but no broker, subscribed. Only the splash
 // shows this — once a score is up, a dropped link is already said by the whole panel
 // dimming, so a corner dot would be repeating it.
@@ -183,7 +201,7 @@ void render() {
   // the splash and dropped straight after would otherwise have no stamp to run its
   // grace period from, and the board would dim the instant the splash cleared.
   if (splashing()) {
-    drawSplash(canvas, splashA, splashB, connectState(), millis() - splashStart);
+    drawSplash(canvas, splashA, splashB, connectState(), millis() - splashStart, splashOrder);
     return;
   }
 
@@ -312,6 +330,7 @@ void setup() {
   panel->clearScreen();
 
   pickSplashColors();
+  pickSplashOrder();
   splashStart = millis();
   render();
 

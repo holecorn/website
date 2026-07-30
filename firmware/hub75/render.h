@@ -131,26 +131,107 @@ static const int SPLASH_DOT = 2;
 static const int SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
 static const int SPLASH_DOT_Y = 0;
 
-// HOLE arrives from the left and CORN from the right, meeting where the masks put
-// them. Travel is a whole panel width per word rather than the distance from each
-// word's own edge to its resting place: the masks are panel-sized and carry their own
-// placement, so a full width is the one figure that is off-screen whatever
-// generate_logo.mjs last produced. The two words never cross — they rest side by side
-// — so no ordering rule is needed for the moving frames that isn't needed at rest.
-static const uint32_t SPLASH_SLIDE_MS = 800;
-static const int SPLASH_TRAVEL = PANEL_W;
-
-// How far each word still has to travel. Eased out rather than linear because the
-// board redraws in tens of milliseconds, so the slide gets few frames and they are
-// better spent on the arrival than shared evenly with a stretch of empty panel.
+// The two boxes the mark draws round its words are two cornhole boards, so the splash
+// throws the letters into them: the boxes are up from the first frame and the eight
+// letters arrive one at a time, HOLE's from the left and CORN's from the right, the two
+// boards taking it in turns the way bags do.
 //
-// 64-bit because travel x span^3 overruns a uint32_t, and integer throughout so
-// src/panelRender.js can mirror it exactly.
-inline int splashSlide(uint32_t elapsed) {
-  if (elapsed >= SPLASH_SLIDE_MS) return 0;
-  const uint64_t left = SPLASH_SLIDE_MS - elapsed;
-  const uint64_t span = SPLASH_SLIDE_MS;
-  return int(SPLASH_TRAVEL * left * left * left / (span * span * span));
+// Which letter is thrown when is the sketch's to choose, for the same reason the colour
+// pair is — see drawSplash. What lives here is the flight, because the pixel check has
+// to own anything that decides where a pixel goes.
+static const int SPLASH_BOARDS = 2;
+static const int SPLASH_THROWS = SPLASH_BOARDS * LOGO_LETTERS;
+
+// Hand to touchdown.
+static const uint32_t SPLASH_FLIGHT_MS = 420;
+// How far above its resting line a letter passes at the top of its arc. Six rows is what
+// the shallowest letter has above it, so no letter is ever clipped by the top of the
+// panel — measured off LOGO_HOLE_LETTERS, where the least headroom is exactly 6.
+static const int SPLASH_APEX = 6;
+// A bag does not stop dead: it lands short and slides the rest of the way.
+static const int SPLASH_SKID = 4;
+static const uint32_t SPLASH_SKID_MS = 220;
+
+// The gap between one throw and the next, and it is one flight rather than a number of its
+// own: at exactly that spacing a bag touches down as the next is let go, so there is never
+// more than one in the air — the one still sliding is already on the board. Every spacing
+// from 190ms to 640ms was rendered and compared side by side. At 190 two or three bags are
+// in flight at once and it reads as a flurry; at a flight plus its skid each bag has fully
+// stopped first, which is a beat too far apart and costs the animation another 1.5s.
+// Keeping it derived is what says a change to the flight carries the rhythm with it.
+static const uint32_t SPLASH_STAGGER_MS = SPLASH_FLIGHT_MS;
+// And the board takes the hit. One row, held long enough to read as a knock rather than
+// a wobble — at 5 mm pitch that is 5 mm of a 160 mm panel.
+static const int SPLASH_THUMP = 1;
+static const uint32_t SPLASH_THUMP_MS = 70;
+
+// Everything is at rest by here, which is what sketch.ino's SPLASH_MS has to outlast.
+static const uint32_t SPLASH_ANIM_MS =
+    (SPLASH_THROWS - 1) * SPLASH_STAGGER_MS + SPLASH_FLIGHT_MS + SPLASH_SKID_MS;
+
+inline uint32_t splashThrownAt(int board, int slot) {
+  return uint32_t(slot * SPLASH_BOARDS + board) * SPLASH_STAGGER_MS;
+}
+inline uint32_t splashLandedAt(int board, int slot) {
+  return splashThrownAt(board, slot) + SPLASH_FLIGHT_MS;
+}
+// A skidding bag is on the board, so it takes the knock with it.
+inline bool splashLanded(int board, int slot, uint32_t elapsed) {
+  return elapsed >= splashLandedAt(board, slot);
+}
+
+// Read off the clock rather than remembered, so a frame stays a pure function of
+// `elapsed` and the pixel check can ask for any moment in any order.
+inline int splashThump(int board, uint32_t elapsed) {
+  for (int slot = 0; slot < LOGO_LETTERS; slot++) {
+    const uint32_t at = splashLandedAt(board, slot);
+    if (elapsed >= at && elapsed - at < SPLASH_THUMP_MS) return SPLASH_THUMP;
+  }
+  return 0;
+}
+
+struct SplashOffset {
+  int dx, dy;
+};
+
+// Where a letter is relative to where it lands. `dir` is -1 for a board fed from the
+// left, +1 from the right.
+//
+// Horizontally near constant speed, because that is what a thrown thing does and the
+// deceleration all belongs in the skid; vertically a parabola, up and back down over the
+// flight. Integer throughout so src/panelRender.js can mirror it exactly, and every
+// division truncates — the widest product is 4 x apex x flight^2 / 4, which is a million
+// and change, so none of it needs 64 bits.
+inline SplashOffset splashThrow(const LogoRect& r, int dir, int board, int slot,
+                                uint32_t elapsed) {
+  // Just off its own edge, wherever generate_logo.mjs put the letter.
+  const int from = dir < 0 ? -(r.x1 + 1) : PANEL_W - r.x0;
+  const uint32_t start = splashThrownAt(board, slot);
+  if (elapsed <= start) return {from, 0};
+
+  const uint32_t e = elapsed - start;
+  if (e < SPLASH_FLIGHT_MS) {
+    const int travel = dir * SPLASH_SKID - from;
+    const int rise = 4 * SPLASH_APEX * int(e) * int(SPLASH_FLIGHT_MS - e);
+    return {from + int(travel * int(e) / int(SPLASH_FLIGHT_MS)),
+            -(rise / int(SPLASH_FLIGHT_MS * SPLASH_FLIGHT_MS))};
+  }
+
+  const uint32_t sliding = e - SPLASH_FLIGHT_MS;
+  if (sliding >= SPLASH_SKID_MS) return {0, 0};
+  const int left = int(SPLASH_SKID_MS - sliding);
+  return {dir * SPLASH_SKID * left * left / int(SPLASH_SKID_MS * SPLASH_SKID_MS), 0};
+}
+
+// Which letter's rectangle a pixel falls in, or -1 for the box. The rectangles are
+// generated, and generate_logo.mjs checks that no pixel of the box lands in one — which
+// is what lets a rectangle stand in for a mask per letter.
+inline int splashLetterAt(const LogoRect* letters, int x, int y) {
+  for (int i = 0; i < LOGO_LETTERS; i++) {
+    const LogoRect& r = letters[i];
+    if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) return i;
+  }
+  return -1;
 }
 
 // No wifi yet, wifi but no broker, subscribed. Three of the app's own team colours,
@@ -571,44 +652,68 @@ inline Rgb covered(Rgb c, uint8_t level) {
              uint8_t(c.b * level / LOGO_LEVELS)};
 }
 
-// The two words are painted from separate coverage maps, so which colour each takes is
-// decided here rather than baked into the asset. CORN is tested first because it owns
-// the overlap where the two boxes cross, which is the order the SVG paints them in.
-//
-// `connect` indexes SPLASH_CONNECT, or is out of range for no indicator at all.
-// `elapsed` is milliseconds since the board came up, which is all the animation needs:
-// the colours and the clock are arguments and the randomness lives in the sketch,
-// because this file host-compiles and the pixel check needs the same inputs to give
-// the same frame.
-//
-// The masks are sampled at an offset rather than drawn at one, so a word half off the
-// panel is clipped by the read and nothing is written outside it.
+// Clipped on the way out rather than on the way in: a letter is drawn where it has got
+// to, so part of one off the edge of the panel is simply not written.
 template <typename Canvas>
-void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed) {
-  const Rgb hole = chalk(colorA);
-  const Rgb corn = chalk(colorB);
-  const int slide = splashSlide(elapsed);
+inline void splashPx(Canvas& c, int x, int y, Rgb color, uint8_t level) {
+  if (x < 0 || y < 0 || x >= PANEL_W || y >= PANEL_H) return;
+  const Rgb p = covered(color, level);
+  c.px(x, y, p.r, p.g, p.b);
+}
+
+// One board: its box, then its four letters in the order they were thrown, so the bag
+// that landed last is the one on top.
+//
+// One colour for the whole board, bags included, so what the throws settle into is the
+// app's own wordmark and not a version of it. That is what keeps the order a matter of
+// timing alone — see drawSplash.
+template <typename Canvas>
+void drawSplashBoard(Canvas& c, const uint8_t map[LOGO_H][LOGO_STRIDE],
+                     const LogoRect* letters, const uint8_t* order, int board, int dir,
+                     Rgb color, uint32_t elapsed) {
+  const int thump = splashThump(board, elapsed);
+
   for (int y = 0; y < LOGO_H; y++) {
     for (int x = 0; x < LOGO_W; x++) {
-      const int cornX = x - slide;
-      if (cornX >= 0 && cornX < LOGO_W) {
-        const uint8_t cornLevel = logoLevel(LOGO_CORN[y], cornX);
-        if (cornLevel > 0) {
-          const Rgb p = covered(corn, cornLevel);
-          c.px(x, y, p.r, p.g, p.b);
-          continue;
-        }
-      }
-      const int holeX = x + slide;
-      if (holeX >= 0 && holeX < LOGO_W) {
-        const uint8_t holeLevel = logoLevel(LOGO_HOLE[y], holeX);
-        if (holeLevel > 0) {
-          const Rgb p = covered(hole, holeLevel);
-          c.px(x, y, p.r, p.g, p.b);
-        }
+      const uint8_t level = logoLevel(map[y], x);
+      if (level == 0 || splashLetterAt(letters, x, y) >= 0) continue;
+      splashPx(c, x, y + thump, color, level);
+    }
+  }
+
+  for (int slot = 0; slot < LOGO_LETTERS; slot++) {
+    const LogoRect& r = letters[order[slot]];
+    const SplashOffset o = splashThrow(r, dir, board, slot, elapsed);
+    const int dy = o.dy + (splashLanded(board, slot, elapsed) ? thump : 0);
+    for (int y = r.y0; y <= r.y1; y++) {
+      for (int x = r.x0; x <= r.x1; x++) {
+        const uint8_t level = logoLevel(map[y], x);
+        if (level > 0) splashPx(c, x + o.dx, y + dy, color, level);
       }
     }
   }
+}
+
+// The two words are painted from separate coverage maps, so which colour each takes is
+// decided here rather than baked into the asset. CORN's board is drawn second because it
+// owns the overlap where the two boxes cross, which is the order the SVG paints them in.
+//
+// `connect` indexes SPLASH_CONNECT, or is out of range for no indicator at all.
+// `elapsed` is milliseconds since the board came up. `order` is which letter each board
+// throws at each slot, 0-3 left to right.
+//
+// The colours, the clock and the order are all arguments and none of them is chosen
+// here: the sketch picks the pair and shuffles the two boards, because this file
+// host-compiles and the pixel check needs the same inputs to give the same frame.
+//
+// The order changes the animation and nothing else: a board is one colour, so whatever
+// order its bags arrive in they settle into the same frame — the app's wordmark. Both
+// halves of that are asserted in test_render.cpp.
+template <typename Canvas>
+void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed,
+                const uint8_t order[SPLASH_BOARDS][LOGO_LETTERS]) {
+  drawSplashBoard(c, LOGO_HOLE, LOGO_HOLE_LETTERS, order[0], 0, -1, chalk(colorA), elapsed);
+  drawSplashBoard(c, LOGO_CORN, LOGO_CORN_LETTERS, order[1], 1, +1, chalk(colorB), elapsed);
   if (connect >= 0 && connect < SPLASH_CONNECT_STATES) {
     drawBlock(c, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, SPLASH_CONNECT[connect]);
   }

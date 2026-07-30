@@ -54,7 +54,8 @@ Spending it means giving up the names, which is the `score` layout below.
 
 ## What it shows
 
-At power-on, the wordmark for 2.5 s — see the fourth screen below. Then the `full`
+At power-on, the wordmark for 5 s while it is thrown together — see the fourth screen
+below. Then the `full`
 layout; `score` drops the names for taller digits — see Two layouts.
 
 ```
@@ -351,16 +352,39 @@ refuses to pass unless some scene carries a lineup.
 
 ### And a fourth: the wordmark at power-on
 
-For `SPLASH_MS` (3.3 s) after `panel->begin()` the board shows the Holecorn
+For `SPLASH_MS` (5 s) after `panel->begin()` the board shows the Holecorn
 wordmark, in **two of the app's four team colours picked at random each boot**, with
 a 2x2 connect indicator in the top-right corner: red for no WiFi, amber for WiFi but
-no broker, green once subscribed. **HOLE slides in from the left and CORN from the
-right** over the first `SPLASH_SLIDE_MS` (0.8 s), meeting where the masks put them.
+no broker, green once subscribed.
+
+**The mark assembles itself by being thrown there.** The two boxes the wordmark draws
+round its words are two cornhole boards, so they are up from the first frame and the
+eight letters are thrown into them — HOLE's from the left, CORN's from the right, the
+two boards taking it in turns. Each bag arcs up and over, lands a few pixels short of
+its square, skids to a stop, and knocks the board it landed in down a pixel. The order
+is shuffled per board every boot, so no two boots fill a board the same way.
+
+**`SPLASH_STAGGER_MS` is one flight, not a number of its own.** At exactly that spacing a
+bag touches down as the next is let go, so **there is never more than one in the air** —
+the one still sliding is already on the board — and the eight arrivals read as eight
+throws. Every spacing from 190 to 640 ms was rendered and compared side by side: at 190 ms
+two or three bags are in flight at once and it reads as a flurry, and at a flight plus its
+skid each bag has fully stopped before the next is thrown, which is a beat too far apart
+and costs another 1.5 s of splash. Deriving it is also what makes a change to the flight
+carry the rhythm with it.
+
+**Each board keeps one colour, bags included**, so what the throws settle into is the
+app's own wordmark rather than a version of it — which makes the shuffle a matter of
+timing alone. Colouring each bag by the order it was thrown in was built first and is
+what this rules out: every board then ended up with two bags of each colour in a
+different arrangement every boot, which is a truer picture of a round and a worse logo.
 
 | | value |
 | --- | --- |
-| duty | **24.5%**, against `DUTY_CEILING`'s 30% — the slide only ever lights less |
-| flash | 4 kB of coverage maps, 2 kB per word |
+| animation | `SPLASH_ANIM_MS` 3.58 s of the 5 s: 8 throws 420 ms apart, each 420 ms of flight and 220 ms of skid |
+| flight | 6 rows of arc, 4 px of skid, a 1-row knock held 70 ms |
+| duty | **24.6%** settled, against `DUTY_CEILING`'s 30% — 12.4% for the bare boards and 21.3% at the busiest frame between, so the animation never approaches it |
+| flash | 4 kB of coverage maps, 2 kB per word, plus **128 bytes** of letter rectangles |
 | brightnesses | 18 on screen, faintest 96 of 242 |
 | mark | 111 x 28 px of the 128 x 32, against 82 px wide as the app once authored it |
 | indicator | 4 px, and it covers none of the mark — asserted, not assumed |
@@ -375,45 +399,76 @@ right** over the first `SPLASH_SLIDE_MS` (0.8 s), meeting where the masks put th
   preference the scorer keeps, and this is the first few seconds of a boot. Nothing on
   the wire selects it, so `tools/test-firmware.mjs` has a second standalone assertion
   that some scene carries a splash.
-- **The two colours and the clock are arguments to `drawSplash`, not read inside it.**
-  `render.h` host-compiles and the pixel check needs the same inputs to produce the same
-  frame, so the randomness lives in `sketch.ino` — `esp_random()`, not `random()`, which
-  is seeded identically every boot and would show the same pair every time. The second
-  index steps past the first over the remaining colours, so it cannot repeat it without a
-  retry loop. `elapsed` arrives the same way, from `millis() - splashStart`.
-- **The slide travels a whole panel width per word, not the distance to its own edge.**
-  The masks are panel-sized and carry their own placement, so `PANEL_W` is the one figure
-  that is off-screen whatever `generate_logo.mjs` last produced. The cost is that the
-  first ~130 ms draws nothing, because that much of the travel happens before either word
-  reaches an edge — invisible at boot, where the panel has been dark anyway. The words
-  rest side by side and so never cross, which is why the moving frames need no ordering
-  rule that the settled one doesn't.
-- **`splashSlide` eases out, and is integer in both languages.** The offset is a cubic on
-  the time left, so the entry is fast and the arrival slow: the board redraws in tens of
-  milliseconds, and those few frames are better spent on the arrival than shared evenly
-  with a stretch of empty panel. 64-bit in the C++ because travel x span³ overruns a
-  `uint32_t`; the JS mirror is exact because the widest product is still whole in a double.
-- **The curve is pinned millisecond by millisecond, not by the scenes.** `test_render.cpp`
-  writes `out/splash-curve.json` and `tools/test-firmware.mjs` compares every entry
-  against `src/panelRender.js`. Dumped frames cannot do this job and it is worth knowing
-  why before trimming it: a curve that differs *between* two sample times draws an
-  identical frame at each of them. Verified by mutation — a JS curve off by one
-  millisecond passes all four slide scenes and fails only this.
-- **Nothing above can see where the slide ends**, because every frame is rendered through
-  the same offset, so a slide that settled a pixel off its mark would shift the PPMs with
-  it and still match. Hence two assertions on the ends of the curve, and one in
-  `tools/verify-panel.mjs` that the settled mark is clear of both edges.
+- **The two colours, the clock and the throwing order are arguments to `drawSplash`, not
+  read inside it.** `render.h` host-compiles and the pixel check needs the same inputs to
+  produce the same frame, so the randomness lives in `sketch.ino` — `esp_random()`, not
+  `random()`, which is seeded identically every boot and would show the same pair every
+  time. The second colour index steps past the first over the remaining colours, so it
+  cannot repeat it without a retry loop; the order is a Fisher-Yates shuffle per board.
+  `elapsed` arrives the same way, from `millis() - splashStart`.
+- **A letter is a rectangle, not a mask, and that is the whole reason this costs 128 bytes
+  rather than another 16 kB.** `generate_logo.mjs` finds the five connected pieces of each
+  word — the box and four letters — and emits the letters' bounding boxes; everything in
+  the map outside them is the box. It works only because nothing of the box lands inside a
+  letter's rectangle and no two letters' rectangles meet, so **the generator checks both**
+  and refuses to write a mark it cannot divide this way. A wider `letter-spacing`, a
+  different font or a box drawn closer would be caught there rather than by a letter
+  flying off with a slice of frame attached.
+- **Bags are written where they have got to, not sampled at an offset.** That is the
+  reverse of the slide this replaced, and it has to be: each of the nine pieces on screen
+  carries its own offset, so there is no single shift to read the map through. Clipping
+  therefore happens on the way out, in `splashPx`.
+- **A bag starts just off its own edge, not a panel out.** The rectangles say where each
+  letter is, so the distance to the edge is known per letter — which is what keeps the
+  first frames from being empty. The slide could not do this: its masks were panel-sized
+  and carried their own placement, so its travel had to be `PANEL_W` and the first ~130 ms
+  drew nothing.
+- **Horizontally near-constant speed, vertically a parabola, then a skid.** The
+  deceleration all belongs in the skid, because that is what a bag does: it arrives at
+  speed, lands short and slides. `SPLASH_APEX` is 6 rows because that is the least
+  headroom any letter has — measured off `LOGO_HOLE_LETTERS`, where the shallowest letter
+  starts at row 6 — so a bag at the top of its arc reaches row 0 and no letter is ever
+  clipped by the top of the panel. Integer throughout in both languages, and the widest
+  product is about a million, so none of it needs 64 bits.
+- **The knock is read off the clock, never remembered.** `splashThump` asks whether any of
+  a board's bags landed within the last `SPLASH_THUMP_MS`, so a frame stays a pure
+  function of `elapsed` and the pixel check can ask for any moment in any order. The bags
+  already resting go down with the board; a board that dropped alone would look like its
+  bags were floating.
+- **The flights and both boards' knocks are pinned millisecond by millisecond, not by the
+  scenes.** `test_render.cpp` writes `out/splash-curve.json` — 28,656 offsets and 7,164
+  knock samples — and `tools/test-firmware.mjs` compares every one against
+  `src/panelRender.js`. Dumped frames cannot do this job and it is worth knowing why
+  before trimming it: a flight that differs *between* two sample times draws an identical
+  frame at each of them. Verified by mutation — making the JS skid linear rather than
+  quadratic passes all 43 scenes pixel for pixel and fails only the curve. Rounding the
+  arc's division instead of truncating does fail three scenes, and a 1 ms shift fails the
+  apex frame because that one is sampled at the extremum, so **not every timing bug needs
+  the curve — only the ones that fall between the frames, which is most of them.**
+- **Nothing in a frame can see where a flight ends or starts**, because every frame is
+  rendered through the same offsets, so a bag that settled a pixel off its square would
+  shift the PPMs with it and still match. Hence the assertions on the ends of the flight,
+  and one in `tools/verify-panel.mjs` that the settled mark is clear of both edges.
+- **Two of those assertions were written against the constants they check, and passed
+  their own mutations.** Setting `SPLASH_THUMP` or `SPLASH_SKID` to 0 removed the knock
+  and the skid with nothing failing, because both sides of the comparison moved together.
+  They now state the property instead — the board's bottom edge must be *lower* than
+  settled, and a bag must touch down *short* of its square. **Anything added here that
+  compares a frame against the constant that drew it is worth the same suspicion.**
 - **`SPLASH_RENDER_INTERVAL` is 25 ms against `RENDER_INTERVAL`'s 100 ms.** A score
-  changes once a round; a slide needs frames, and can have them because rendering does
-  not block and there is no traffic to keep up with yet. At 100 ms the whole animation is
-  eight frames, six of which show movement. **`?panel=1` steps its clock in the same
-  increments**, so the emulator shows the board's cadence rather than the browser's 60 Hz
-  — see `Panel.jsx`, and CLAUDE.md for why no check covers that.
-- **Whether the slide can stutter on real hardware is untested**, since nothing has run on
-  a board. `ensureWifi()` cannot block, and the blocking call — `client.connect()` — is
-  reached only once WiFi is up, which typically takes 1-3 s, so the 800 ms slide should be
-  over first. A warm reconnect that associates in under 800 ms and then meets an
-  unreachable broker is the case that would freeze it mid-arrival.
+  changes once a round; eight throws need frames, and can have them because rendering does
+  not block and there is no traffic to keep up with yet. At 100 ms each flight would be
+  four frames. **`?panel=1` steps its clock in the same increments**, so the emulator
+  shows the board's cadence rather than the browser's 60 Hz — see `Panel.jsx`, and
+  CLAUDE.md for why no check covers that.
+- **Whether the animation can stutter on real hardware is untested**, since nothing has
+  run on a board. `ensureWifi()` cannot block, and the blocking call —
+  `client.connect()` — is reached only once WiFi is up, which typically takes 1-3 s. That
+  falls **inside** the 3.58 s of throws now rather than clearing them as the 0.8 s
+  slide did, so **a warm reconnect that meets an unreachable broker would freeze the
+  animation part-filled** — likelier and more visible the longer the animation runs, and
+  the first thing to look at if the mark ever appears half-thrown. It is also the one cost
+  of the slower pace worth writing down.
 - **The indicator is only on the splash.** Once a score is up, a dropped link is
   already said by the whole panel dimming, so a corner dot would be repeating it. The
   four pixels would fit the `score` layout's margins but not `full`, whose name row
@@ -447,10 +502,12 @@ right** over the first `SPLASH_SLIDE_MS` (0.8 s), meeting where the masks put th
   the strokes — it fights the antialiasing rather than adding texture. Rendered at three
   times the dot size before deciding.
 - **It happens to help the power bank start.** The no-state screen is 1.4% duty and
-  banks cut out below roughly 50-100 mA (see Power); the splash is 24.5%, so the board
-  draws several times as much for the first seconds — which is when the bank decides
-  whether to stay awake. That is a side effect, not the reason, and it does nothing
-  for the idle screen afterwards.
+  banks cut out below roughly 50-100 mA (see Power); the splash is 24.6% settled, so the
+  board draws several times as much for the first seconds — which is when the bank decides
+  whether to stay awake. The throws changed the shape of that and not the conclusion: the
+  bare boards are **12.4%**, so the first 0.4 s is about nine times the idle screen rather
+  than eighteen, climbing from there and reaching the full figure at 3.58 s. A side effect
+  either way, and it does nothing for the idle screen afterwards.
 - **Worth knowing if `DUTY_CEILING` is ever revisited:** measured across every scene, the
   lit-pixel count and a per-channel current proxy diverge by about 1.7x, because these
   colours are never white and a blue pixel lights mostly one LED of three. `form-worst` is
@@ -481,6 +538,13 @@ a pixel belongs to is decided by the **dominant channel**, not by distance to th
 hexes the SVG hardcodes: a dim antialiased blue is nearer `#f18686` than `#69a4f2` in
 plain RGB, which quietly filed a third of HOLE under CORN. Where the two boxes cross, the
 pixel goes to CORN, matching the order the SVG paints them in.
+
+Each word also carries **four letter rectangles**, found by connected-component labelling
+of the map the generator has just built and numbered left to right. They are found rather
+than laid out because the mark is rasterised through a browser: what a letter's pixels are
+is only knowable after the fact. Three properties are checked and each is a way the splash
+would break rather than fail — exactly five pieces per word, no box pixel inside a letter's
+rectangle, and no two rectangles overlapping.
 
 The geometry constants at the top of the generator (`ANGLE`, `LETTER_SPACING`, `BOX_PAD`,
 `BOX_GAP`, `COVERAGE_FLOOR`) are the panel's, not the app's, and each has a comment saying
