@@ -566,6 +566,20 @@ project dependency. It starts and stops its own preview server.
   field's own label already says the board. Without them it is two identical boxes
   and picking the wrong one silently moves half the rounds to the other partner —
   the same trap the setup screen's board chip exists for.
+- **Both editors are dialogs, and the per-match one started as a panel inside the
+  expanded match.** As a panel its fields ran the width of the screen and read as
+  another row of the round table rather than as a form. Two things follow:
+  - **`Modal` opens by being mounted**, so the screen owns which record or player is
+    being edited and there is no ref to toggle. It is `showModal`, and
+    `verify-stats.mjs` asserts `:modal` — which is false both for a `show()` and for
+    the form going back inline, and in either case the match list stays live
+    underneath *with its delete buttons*.
+  - **Neither dismisses on a backdrop click, unlike `App.jsx`'s confirm dialog.**
+    Both hold a name that has been typed, and losing it to a stray tap is worse than
+    one more press on Cancel. Don't unify the two behaviours.
+  - **The fields are 17px because iOS zooms the page on a focus under 16px**, and
+    these now sit in a dialog it would then be scrolling around. They started at
+    15px inline, where the zoom was merely annoying.
 - **`updatedAt`, and why the merge rule had to change with it.** `upsertMatch` keeps
   only the local `endedAt` and takes the incoming body, so `mergeMatches` was
   *last import wins* — this file's claim that "the local copy wins" was only ever
@@ -592,6 +606,23 @@ project dependency. It starts and stops its own preview server.
   last game's names, so it is a *new* player being typed that goes wrong. Default
   names show up in the list because they are genuinely in the archive — filtering
   them would be a lie about the history.
+  - **How the list is drawn is the browser's, and nothing about it is ours to style.**
+    Neither popup inherits the field's font — both use the system UI font — so the
+    field's `700 18px` is not a lever on it, and there is no selector for the items.
+    What differs is row height: measured off screenshots of the two at the same scale,
+    **Chrome gives ~76px per row and Safari ~44px**, which is why Safari's reads as
+    unevenly spaced (the rows are barely taller than the glyphs) and Chrome's reads
+    fine. iOS puts its own control above the keyboard and is fine. **Not a bug to
+    fix**, and the field's font is not the fix for it.
+  - **Chrome also draws a `▾` inside the field, tinted**, because that *does* inherit
+    the field's `color`. Safari draws no indicator. Left alone with the rest.
+  - **The popup cannot be captured under automation, so don't spend time trying.** It
+    is a native window, so Playwright's page screenshots can't see it, and it won't
+    open from CDP-synthesised clicks or `ArrowDown` — which leaves driving the real
+    cursor through System Events, needing Accessibility permission on top of the
+    Screen Recording that `screencapture` already wants. A `screencapture -R` of a
+    headed window shows the `▾` but not the list. The measurements above came from
+    screenshots taken by hand; ask rather than automate this one.
 - **The new markup reuses `.modal` and `.confirm-actions` from `App.css` without
   redeclaring them**, which matters: `Stats.css` is bundled first, so a redeclaration
   would lose at equal specificity — the `.app.stats-screen` trap again. Everything

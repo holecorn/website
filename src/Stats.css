@@ -400,19 +400,11 @@
   font-size: 11px;
 }
 
-/* Editing one match's lineup, above the rounds it reattributes. */
+/* Editing one match's lineup. A dialog like the rename one rather than a panel
+   inside the expanded match, where the fields ran the width of the screen and
+   read as another row of the round table instead of as a form. */
 .match-names {
-  margin: 0 0 12px;
-  padding: 0 0 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.match-names-label {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  margin-top: 14px;
 }
 
 .match-name-heads,
@@ -439,13 +431,6 @@
 .match-name-input {
   flex: 1;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  font-size: 15px;
-  font-weight: 600;
-  text-align: center;
 }
 
 .match-names-note {
@@ -469,9 +454,12 @@
   text-underline-offset: 3px;
 }
 
+/* One look for both dialogs' fields; only the width differs, since a doubles pair
+   sits two to a row. 17px and not the 15px the match fields started at: under
+   16px iOS zooms the page on focus, and these sit in a dialog it would then be
+   scrolling around. */
+.match-name-input,
 .rename-input {
-  width: 100%;
-  margin-top: 14px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -480,6 +468,11 @@
   font-size: 17px;
   font-weight: 600;
   text-align: center;
+}
+
+.rename-input {
+  width: 100%;
+  margin-top: 14px;
 }
 
 .rename-note {

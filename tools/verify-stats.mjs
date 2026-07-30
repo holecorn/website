@@ -483,6 +483,13 @@ check(
   await renPage.getByRole('button', { name: 'Edit names' }).click();
   const slots = renPage.locator('.match-name-input');
   check('doubles offers a field per player', (await slots.count()) === 4);
+  // `:modal` is true only for showModal, so this fails both if the form goes back
+  // inside the expanded match and if the dialog is merely shown — either way the
+  // match list stays live underneath, including its delete buttons.
+  check(
+    'the editor is modal, so the list behind it cannot be touched',
+    await renPage.locator('.match-names').evaluate((f) => f.closest('dialog')?.matches(':modal')),
+  );
   check(
     'each field says which board that player threw from',
     (await slots.nth(1).getAttribute('aria-label'))?.includes('far board'),
