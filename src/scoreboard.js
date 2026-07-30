@@ -89,6 +89,11 @@ export function lineupPayload(game, matches) {
   // because the publisher has no screen: this way the board clears itself the
   // moment scoring begins, and comes back if the game is undone to nothing.
   if (gameStarted(game)) return null;
+  // A casual game takes no names, so there is no roster to report. Checked
+  // explicitly rather than left to the `played` test below: the slots still hold
+  // the default names underneath, and those have genuinely been played under, so
+  // the board would otherwise show a stranger somebody else's form line.
+  if (game.casual) return null;
   const rows = lineupStats(matches ?? [], game);
   // A roster nobody has played under has nothing to report, so the screen stays
   // away entirely rather than showing a table of zeroes.

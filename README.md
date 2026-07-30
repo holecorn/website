@@ -19,7 +19,7 @@ A new game starts on a **setup screen** where you pick **Singles** or **Doubles*
 set each team's name(s) and colour (red, blue, green, yellow — so the on-screen
 colours can match your physical bag sets) and the target score to play to (up to
 99, which is what the external scoreboard can display), then press
-**Start game**.
+**Start**.
 
 The names carry over from the last game, so there's usually nothing to fill in.
 Typing in a name field offers everyone your history already knows — worth picking
@@ -30,6 +30,20 @@ In **doubles**, each team has two players who share the team's colour, standing 
 opposite boards. Since each end is scored as its own round, the throwing partner
 alternates every round; the scoreboard highlights whoever's up and dims the
 benched partner. Scoring is otherwise identical to singles.
+
+Turn on **Guests** for a pickup game with people passing by: no names are taken and
+nothing is recorded. The name fields go away and each team is simply its bag colour
+— "Blue" against "Red" — on the phone, on the external scoreboard and in the winner
+announcement. Everything else works exactly as usual, including the court diagram
+and the in-game stats, but the match is never filed, so it can't drag your averages
+around or leave a stranger in your player list. Pick the colours to match the bags
+you hand out and press **Start**.
+
+It stays on until you turn it off, since guests tend to arrive in runs, and the
+toggle sits beside **Start** so it's in front of you every time you begin a game.
+While one is in play the score reads **not recorded** under the running total. In
+doubles the two partners share the one label, so which of them is up is shown by
+the court diagram rather than by name.
 
 Each team has one **lane per bag**. A lane is a vertical track with three stops:
 
@@ -59,7 +73,7 @@ begins and then moves automatically to whichever team scored in the previous
 round, staying put on a wash.
 
 **The play screen only does scoring.** Names, colours, who throws first and where
-everyone stands are all fixed once you press **Start game**, because finished
+everyone stands are all fixed once you press **Start**, because finished
 matches are credited to players by name and by the board they stood at. If you
 need to change any of it, **New game** takes you back to setup — and a name you
 only notice is wrong after the game can be put right on the stats screen, which
@@ -137,7 +151,8 @@ refresh. There is no backend and no account — everything runs client-side.
 Finishing a game files it away, and the **Stats** button on the setup screen
 reports what has built up. Only completed matches count — walking away from a
 game part-way leaves nothing behind, so a three-round fragment can't drag the
-averages around. Undoing a winning round takes the match back out again.
+averages around. Undoing a winning round takes the match back out again. A
+A **Guests** game is never filed at all, however it ends.
 
 Per player you get matches played, won and lost, **rounds thrown**, **PPR** (raw
 bag points per round, before cancellation — the number cornhole players quote),
@@ -172,7 +187,7 @@ are two ways to put one right, and which one you want depends on how far the typ
 spread.
 
 **Edit names**, inside an expanded match, changes that match and nothing else.
-Use it for a name that was already wrong when you pressed **Start game**, or when
+Use it for a name that was already wrong when you pressed **Start**, or when
 the wrong partner got credited for an end — in doubles the fields say which board
 each player threw from all game, and swapping them swaps who is credited with
 which rounds. The rounds themselves aren't touched; players are credited by the
@@ -196,7 +211,7 @@ screen, so there's no way to move rounds around under a game you're scoring.
 ### Form, before a game starts
 
 Once the names are in, a **Form** panel appears on the setup screen — below
-**Start game**, so it never gets between you and the game — listing everyone about
+**Start**, so it never gets between you and the game — listing everyone about
 to play with their won–lost record, their last five results as dots, their PPR and
 their hole rate. Above it, if these two sides have finished a match before, is the
 record between them: in doubles that's this pair against that pair, not four
@@ -206,7 +221,8 @@ Anyone the history has never seen says **first game** rather than showing a row 
 zeroes, and if nobody in the lineup has played before the panel doesn't appear at
 all. It uses the same name matching as the stats screen, so a typo makes someone a
 newcomer. A genuinely dismal run still gets its numbers — a PPR of 0.0 means every
-bag went on the floor, and it says so.
+bag went on the floor, and it says so. A **Guests** game has no panel, on the phone
+or on the board: there are no names to look anybody up by.
 
 If you have the external scoreboard running, it shows this too — see below.
 

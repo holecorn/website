@@ -48,13 +48,14 @@
   margin: 0 auto;
 }
 
-/* Mode and Start game share a row. Both shrink rather than wrap, because a wrap
-   here would put the button back below the fold on the narrowest phone. */
+/* Mode, Guests and Start share a row. Nothing here may wrap: a second line would
+   put the button back below the fold on the narrowest phone, which is what it was
+   moved up here to escape. */
 .setup-top {
   display: flex;
   align-items: stretch;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mode-toggle {
@@ -78,8 +79,10 @@
   white-space: nowrap;
 }
 
+/* 10px, not 22px: the side padding is what pays for the Guests chip sharing the
+   row. Vertical padding is untouched, so the tap target keeps its height. */
 .mode-toggle button {
-  padding: 8px 22px;
+  padding: 8px 10px;
   border: none;
   background: var(--panel);
   color: var(--muted);
@@ -90,6 +93,33 @@
 .mode-toggle button.is-on {
   background: var(--text);
   color: var(--bg);
+}
+
+/* Third control in .setup-top, which must not wrap — so it neither grows nor
+   shrinks, and the row's fit is held by tools/verify-stats.mjs. */
+.casual-toggle {
+  flex: 0 0 auto;
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.casual-toggle.is-on {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.casual-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 .teams-fields {
@@ -157,6 +187,18 @@
   border-bottom: 1px solid var(--border);
   font: 700 18px system-ui, sans-serif;
   padding: 4px;
+}
+
+/* The input's metrics without its underline, which would suggest something to type
+   into. Padding and font are kept so the card keeps its height when the names go. */
+.team-name-static {
+  min-width: 0;
+  text-align: center;
+  font: 700 18px system-ui, sans-serif;
+  padding: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* States the board and swaps the pair on press. Deliberately not an up/down
@@ -551,6 +593,14 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.casual-note {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 /* Winner */

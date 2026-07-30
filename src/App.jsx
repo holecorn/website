@@ -28,6 +28,7 @@ import {
   clampTarget,
   nameKey,
   newGame,
+  playerLabel,
   setBag,
   throwFirst,
   swapEnds,
@@ -141,6 +142,11 @@ function reducer(game, action) {
       return { ...game, colors: { ...game.colors, [action.team]: action.value } };
     case 'setMode':
       return { ...game, mode: action.mode };
+    case 'setCasual':
+      // Setup only, the same reasoning as the arrangement controls: flipping it
+      // after a win would strand a record the archive effect can no longer see to
+      // remove, and flipping it mid-game would rename every committed round.
+      return gameStarted(game) ? game : { ...game, casual: action.value };
     case 'setTarget':
       return { ...game, target: action.value };
     case 'start':
@@ -156,6 +162,10 @@ function reducer(game, action) {
         players: game.players,
         colors: game.colors,
         mode: game.mode,
+        // Carried like the mode, because guests arrive in runs. Safe to make
+        // sticky only because every New game lands back on setup with the toggle
+        // in view: a run of casual games can't quietly outlast the guests.
+        casual: game.casual,
         startSide: game.startSide,
       });
     default:
@@ -191,6 +201,9 @@ export default function App() {
   // it to one write per outcome: a reload re-commits the same record instead of
   // a second copy, and starting a new game is simply a different id.
   useEffect(() => {
+    // A casual game is never recorded: no names were taken, so filing it would
+    // fold every guest into one career under whatever the slots happen to hold.
+    if (game.casual) return;
     if (game.winner) {
       if (archivedId.current !== game.id) {
         // Set from what was just written rather than re-read, so the form panel
@@ -287,9 +300,14 @@ export default function App() {
   // the court does keeps one definition of the parity, so the lanes and the
   // diagram can't disagree about who is throwing.
   const activeIdx = doubles ? courtPositions(game).throwingEnd : 0;
+  // One row per team in casual even in doubles: both partners carry the same colour
+  // label, so a second row would be the same word dimmed. Which of them is up is
+  // left to the court diagram, which says it by position rather than by name.
   const teamPlayers = (team) =>
-    doubles ? game.players[team] : [game.players[team][0]];
-  const laneName = (team) => game.players[team][doubles ? activeIdx : 0];
+    doubles && !game.casual
+      ? [0, 1].map((i) => playerLabel(game, team, i))
+      : [playerLabel(game, team, 0)];
+  const laneName = (team) => playerLabel(game, team, doubles ? activeIdx : 0);
   const t = totals(game);
   const preview = roundNets(game.current.a, game.current.b);
   const live = { a: t.a + preview.a, b: t.b + preview.b };
@@ -369,10 +387,13 @@ export default function App() {
     return (
       <div className="app setup">
         <Logo className="setup-logo" colorA={game.colors.a} colorB={game.colors.b} />
-        {/* Start game sits up here with the mode, not at the foot of the screen:
-            it is the one thing pressed every game, the names persist between
-            games so there is usually nothing to fill in, and above everything
-            else nothing below it can push it off the first screen. */}
+        {/* Start sits up here with the mode, not at the foot of the screen: it is
+            the one thing pressed every game, the names persist between games so
+            there is usually nothing to fill in, and above everything else nothing
+            below it can push it off the first screen. Three controls share the row
+            and it must not wrap, which is the whole reason the button says "Start"
+            and the mode labels carry 12px of side padding — measured, "Start game"
+            and the original 22px together overrun a 375px phone by 59px. */}
         <div className="setup-top">
           <div className="mode-toggle" role="group" aria-label="Game mode">
             {['singles', 'doubles'].map((m) => (
@@ -385,6 +406,19 @@ export default function App() {
               </button>
             ))}
           </div>
+          {/* Beside the mode rather than inside it: guests are orthogonal to
+              singles/doubles, so a third segment in that group would read as a
+              third mode. The label has to say what pressing does and still contain
+              the visible word — WCAG Label in Name, as the board chip does. */}
+          <button
+            type="button"
+            className={`casual-toggle${game.casual ? ' is-on' : ''}`}
+            onClick={() => dispatch({ type: 'setCasual', value: !game.casual })}
+            aria-pressed={game.casual}
+            aria-label="Guests: take no names and record nothing"
+          >
+            Guests
+          </button>
           <button
             className="start-game"
             onClick={() => {
@@ -392,9 +426,13 @@ export default function App() {
               setScreen('play');
             }}
           >
-            Start game
+            Start
           </button>
         </div>
+        {/* Only while it is on, so the ordinary case spends no height on it. The
+            collapsed fields below say the colours are the teams; what they can't
+            say is that the match won't be filed. */}
+        {game.casual && <p className="casual-hint">This game won&rsquo;t be recorded.</p>}
         <TeamsFields
           game={game}
           dispatch={dispatch}
@@ -436,7 +474,9 @@ export default function App() {
           status={scoreboard.status}
           error={scoreboard.error}
         />
-        <Lineup game={game} colors={game.colors} matches={matches} />
+        {/* Nobody's history to report, and the slots' default names have one that
+            isn't theirs — the same trap `lineupPayload` guards on the board. */}
+        {!game.casual && <Lineup game={game} colors={game.colors} matches={matches} />}
         <button className="setup-stats" onClick={() => setScreen('stats')}>
           Stats
         </button>
@@ -465,6 +505,10 @@ export default function App() {
             <span style={{ color: colors.b }}>{t.b}</span>
           </div>
           <span className="target">to {game.target}</span>
+          {/* The header already reads "Blue" rather than a name, so this only has
+              to confirm what that implies — but it does have to be said, because a
+              game you meant to record and didn't has no other symptom. */}
+          {game.casual && <span className="casual-note">not recorded</span>}
         </div>
         <TeamScore
           players={teamPlayers('b')}
@@ -627,15 +671,20 @@ export default function App() {
 // it to the setup screen: both reorder slots, and `throwerFor` credits committed
 // rounds by slot, so a second caller that passed them would silently re-credit
 // every doubles stat.
+// A casual game keeps this card — the colour is the team's identity there, so the
+// swatches are the only thing on the setup screen that still matters — but the name
+// fields become the colour as text and the board chip goes: with both partners
+// labelled alike, reordering the pair changes nothing anybody can see.
 function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
   const doubles = game.mode === 'doubles';
-  const slots = doubles ? [0, 1] : [0];
+  const casual = game.casual;
+  const slots = doubles && !casual ? [0, 1] : [0];
   return (
     <div className="teams-fields">
       {/* Names already in the archive. A returning player is picked rather than
           retyped, which is where near-duplicate spellings come from. Ignored
           where datalist is unsupported, leaving a plain field. */}
-      {knownNames.length > 0 && (
+      {!casual && knownNames.length > 0 && (
         <datalist id="known-names">
           {knownNames.map((name) => (
             <option key={name} value={name} />
@@ -648,7 +697,7 @@ function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
           <div className="team-field" key={team}>
             <div className="field-rows">
               {slots.map((i) => {
-                const name = game.players[team][i];
+                const name = playerLabel(game, team, i);
                 const here = BOARD_NAME[i];
                 const there = BOARD_NAME[1 - i];
                 const first = game.nextFirst === team && i === 0;
@@ -671,22 +720,31 @@ function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
                     ) : (
                       <span className="first-bag-spacer" aria-hidden="true" />
                     )}
-                    <input
-                      className="team-name-input"
-                      value={name}
-                      maxLength={16}
-                      list={knownNames.length > 0 ? 'known-names' : undefined}
-                      style={{ color: game.colors[team] }}
-                      onChange={(e) =>
-                        dispatch({ type: 'rename', team, index: i, name: e.target.value })
-                      }
-                      aria-label={
-                        doubles
-                          ? `Team ${team.toUpperCase()} player at the ${here} board`
-                          : `Team ${team.toUpperCase()} player name`
-                      }
-                    />
-                    {onSwapEnds && doubles ? (
+                    {casual ? (
+                      <span
+                        className="team-name-static"
+                        style={{ color: game.colors[team] }}
+                      >
+                        {name}
+                      </span>
+                    ) : (
+                      <input
+                        className="team-name-input"
+                        value={name}
+                        maxLength={16}
+                        list={knownNames.length > 0 ? 'known-names' : undefined}
+                        style={{ color: game.colors[team] }}
+                        onChange={(e) =>
+                          dispatch({ type: 'rename', team, index: i, name: e.target.value })
+                        }
+                        aria-label={
+                          doubles
+                            ? `Team ${team.toUpperCase()} player at the ${here} board`
+                            : `Team ${team.toUpperCase()} player name`
+                        }
+                      />
+                    )}
+                    {onSwapEnds && doubles && !casual ? (
                       <button
                         type="button"
                         className={`end-chip${i === 0 ? ' at-start' : ''}`}

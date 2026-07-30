@@ -8,7 +8,14 @@
 // record hold `rounds` in the same shape, which is why `gameStats` can share the
 // per-round accumulation with `playerStats` rather than counting its own.
 
-import { BAGS_PER_SIDE, nameKey, rawPoints, tierCounts, totals } from './scoring.js';
+import {
+  BAGS_PER_SIDE,
+  nameKey,
+  playerLabel,
+  rawPoints,
+  tierCounts,
+  totals,
+} from './scoring.js';
 
 const TEAMS = ['a', 'b'];
 
@@ -191,16 +198,22 @@ export function playerStats(matches) {
 // the slot *is* the identity, and two teams both on the default "Player 1" are
 // two people, not one row. Nothing here needs the game to be over, so there is
 // no win/loss or streak to report as a spurious zero.
+//
+// Except in a casual game, where the slot is *not* an identity — both partners
+// are only the team's colour — so it folds to one row per team. That is the same
+// rule applied to a game that hasn't got slots worth telling apart; two rows
+// labelled "Blue" would be worse than one.
 export function gameStats(game) {
   const rows = [];
   for (const team of TEAMS) {
-    rosterFor(game, team).forEach((name, slot) => {
-      const p = blankThrows(String(name ?? '').trim());
+    const slots = game.casual ? [0] : rosterFor(game, team).map((_, i) => i);
+    for (const slot of slots) {
+      const p = blankThrows(String(playerLabel(game, team, slot) ?? '').trim());
       game.rounds.forEach((round, i) => {
-        if (throwerSlot(game, i) === slot) foldRound(p, round, team);
+        if (game.casual || throwerSlot(game, i) === slot) foldRound(p, round, team);
       });
       rows.push({ team, slot, ...p, ...deriveRates(p) });
-    });
+    }
   }
   return rows;
 }

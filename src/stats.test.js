@@ -662,6 +662,49 @@ describe('gameStats', () => {
     const after = gameStats(undoRound(game)).find((r) => r.name === 'Rho');
     expect([after.rounds, after.hole, after.board, after.fourBaggers]).toEqual([1, 4, 0, 1]);
   });
+
+  // A casual game has no per-slot identity to keep apart — both partners are only
+  // the team's colour — so the panel gets one row per team instead of two rows
+  // reading "Blue". The substance is the fold: every round the team threw lands in
+  // its one row, where a slot-filtered fold would give each row half of them.
+  describe('casual', () => {
+    const rounds = [
+      [[H, F, F, F], [B, F, F, F]],
+      [[B, B, F, F], [F, F, F, F]],
+    ];
+    const casual = (mode) => ({ ...livePlay(mode, players, rounds), casual: true });
+
+    it('folds a doubles game to one row per team, labelled by colour', () => {
+      const rows = gameStats(casual('doubles'));
+      expect(rows.map((r) => [r.team, r.slot, r.name, r.rounds])).toEqual([
+        ['a', 0, 'Blue', 2],
+        ['b', 0, 'Red', 2],
+      ]);
+    });
+
+    it('counts every round the team threw, not the alternating half', () => {
+      const a = gameStats(casual('doubles')).find((r) => r.team === 'a');
+      expect([a.bags, a.rawPoints, a.ppr]).toEqual([8, 5, 2.5]);
+    });
+
+    it('still gives four rows when it is off', () => {
+      const rows = gameStats(livePlay('doubles', players, rounds));
+      expect(rows.map((r) => [r.name, r.rounds])).toEqual([
+        ['Rho', 1],
+        ['Tau', 1],
+        ['Phi', 1],
+        ['Chi', 1],
+      ]);
+    });
+
+    it('is one row per team in singles too, which it already was', () => {
+      const rows = gameStats(casual('singles'));
+      expect(rows.map((r) => [r.name, r.rounds])).toEqual([
+        ['Blue', 2],
+        ['Red', 2],
+      ]);
+    });
+  });
 });
 
 describe('the parity in scoring.js and stats.js', () => {

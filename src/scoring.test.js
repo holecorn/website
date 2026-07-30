@@ -7,6 +7,7 @@ import {
   tierCounts,
   roundNets,
   newGame,
+  playerLabel,
   teamLabel,
   winVerb,
   setFirst,
@@ -171,6 +172,74 @@ describe('teamLabel', () => {
   it('joins both partners in doubles', () => {
     const g = { ...newGame(), mode: 'doubles', players: { a: ['Alice', 'Bob'], b: ['Carol', 'Dave'] } };
     expect(teamLabel(g, 'a')).toBe('Alice & Bob');
+  });
+});
+
+// A guest game takes no names, so the team's colour is the identity. Everything
+// that names a player goes through playerLabel, which is what keeps the phone,
+// the court, the display and the LED panel saying the same thing.
+describe('casual games', () => {
+  const named = {
+    ...newGame(),
+    mode: 'doubles',
+    players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+  };
+  const casual = { ...named, casual: true };
+
+  it('is off by default', () => {
+    expect(newGame().casual).toBe(false);
+  });
+
+  it('labels every slot with its team colour', () => {
+    expect(playerLabel(casual, 'a', 0)).toBe('Blue');
+    expect(playerLabel(casual, 'a', 1)).toBe('Blue');
+    expect(playerLabel(casual, 'b', 0)).toBe('Red');
+  });
+
+  it('reads the typed name when it is off', () => {
+    expect(playerLabel(named, 'a', 1)).toBe('Tau');
+  });
+
+  it('follows the colour a team actually holds', () => {
+    const swapped = { ...casual, colors: { a: '#27ae60', b: '#f2c94c' } };
+    expect(playerLabel(swapped, 'a', 0)).toBe('Green');
+    expect(playerLabel(swapped, 'b', 0)).toBe('Yellow');
+  });
+
+  it('falls back to the team letter for a colour off the palette', () => {
+    const odd = { ...casual, colors: { a: '#123456', b: '#eb5757' } };
+    expect(playerLabel(odd, 'a', 0)).toBe('Team A');
+  });
+
+  // Leaving `players` untouched is what makes the toggle reversible: turning it
+  // off brings the typed names back rather than having overwritten them.
+  it('hides the names without overwriting them', () => {
+    expect(casual.players).toEqual(named.players);
+    expect(playerLabel({ ...casual, casual: false }, 'a', 0)).toBe('Rho');
+  });
+
+  it('gives a doubles team one label rather than the pair joined', () => {
+    expect(teamLabel(casual, 'a')).toBe('Blue');
+    expect(teamLabel(named, 'a')).toBe('Rho & Tau');
+  });
+
+  // The known cost of reading the verb off the label rather than the mode: a
+  // casual pair is a team name, so it takes the singular.
+  it('takes the singular win verb even in doubles', () => {
+    expect(`${teamLabel(casual, 'a')} ${winVerb(teamLabel(casual, 'a'))}`).toBe('Blue wins');
+  });
+
+  it('names the court boxes by colour too', () => {
+    const { ends } = courtPositions(casual);
+    expect(ends[0].boxes.left.name).toBe('Blue');
+    expect(ends[0].boxes.right.name).toBe('Red');
+    expect(ends[1].boxes.left.name).toBe('Blue');
+  });
+
+  it('changes nothing about scoring or where people stand', () => {
+    expect(courtPositions(casual).throwingEnd).toBe(courtPositions(named).throwingEnd);
+    const played = playRound(casual, ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    expect(totals(played)).toEqual({ a: 3, b: 0 });
   });
 });
 

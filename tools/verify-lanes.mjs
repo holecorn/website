@@ -47,7 +47,7 @@ async function measure(width, height) {
   });
   await page.goto(URL);
   await page.waitForSelector('.setup');
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
   const m = await page.evaluate(() => {
     const box = (sel) => {
       const el = document.querySelector(sel);

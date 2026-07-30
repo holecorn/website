@@ -58,6 +58,29 @@ describe('scoreboardPayload', () => {
     });
   });
 
+  // The board and the display only ever receive labels, so a casual game needs no
+  // payload field, no new topic and no firmware change to show the colours.
+  it('sends the colours as the team labels in a casual game', () => {
+    const game = {
+      ...newGame(21),
+      casual: true,
+      mode: 'doubles',
+      players: { a: ['Neil', 'Psi'], b: ['Iota', 'Zeta'] },
+    };
+
+    expect(scoreboardPayload(game)).toEqual({
+      a: 0,
+      b: 0,
+      round: 0,
+      target: 21,
+      first: 'a',
+      teamA: 'Blue',
+      teamB: 'Red',
+      colorA: '#2f80ed',
+      colorB: '#eb5757',
+    });
+  });
+
   // Absent, not null: both consumers already read a missing key as "nobody has
   // won", and the payload sits on a measured byte budget.
   it('leaves the winner out while the game is live', () => {
@@ -261,6 +284,14 @@ describe('the pre-game lineup', () => {
     const [row] = lineupPayload(setup(), archive).rows;
     expect(Object.keys(row).sort()).toEqual(['f', 'l', 'n', 'p', 'w']);
     expect(lineupPayload(setup(), archive)).not.toHaveProperty('layout');
+  });
+
+  // Checked explicitly rather than left to the `played` test: the slots still hold
+  // whatever names were last typed, and those have history the guests don't.
+  it('is null for a casual game whose slots have been played under', () => {
+    const guests = { ...setup(), casual: true };
+    expect(lineupPayload(setup(), archive)).not.toBeNull();
+    expect(lineupPayload(guests, archive)).toBeNull();
   });
 
   // Null is the instruction to clear the retained message, which is the only way

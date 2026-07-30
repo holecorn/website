@@ -35,7 +35,7 @@ async function open(
   await page.getByRole('button', { name: mode }).click();
   const inputs = page.locator('.team-name-input');
   for (const [i, name] of names.entries()) await inputs.nth(i).fill(name);
-  if (start) await page.getByRole('button', { name: 'Start game' }).click();
+  if (start) await page.getByRole('button', { name: 'Start', exact: true }).click();
   return page;
 }
 
@@ -125,10 +125,10 @@ console.log('\nthe name fields set the arrangement and the court reports it');
     `${sidesBefore} -> ${(await nearNames()).join(', ')}`,
   );
 
-  // A chip rearranges slots, so it has to survive Start game rather than only
+  // A chip rearranges slots, so it has to survive Start rather than only
   // showing on the setup screen.
   await row('Tau').locator('.first-bag').click();
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
   const lanes = (await page.locator('.lanes-team').allInnerTexts()).map((s) => s.trim());
   check('the chosen player is up in the scoring lanes', lanes.includes('Tau'), lanes.join(', '));
   check('the court on the play screen agrees', (await marked()) === 'Tau');

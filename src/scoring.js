@@ -62,6 +62,10 @@ export function newGame(target = DEFAULT_TARGET) {
     players: { a: ['Player 1', 'Player 2'], b: ['Player 1', 'Player 2'] },
     colors: { a: '#2f80ed', b: '#eb5757' },
     mode: 'singles',
+    // A game with guests in it: no names are taken and nothing is recorded. Not
+    // a second value of `mode` — it is orthogonal to singles/doubles, and unlike
+    // mode it changes nothing about scoring or where people stand.
+    casual: false,
     target,
     rounds: [],
     current: { a: emptyPositions(), b: emptyPositions() },
@@ -92,8 +96,35 @@ export function nameKey(name) {
 // App.jsx because the stats screen labels an archived lineup with it too.
 export const BOARD_NAME = ['start', 'far'];
 
+// The palette entry a team's bags are, titled for display. The swatches disable
+// the colour the other team holds, so two teams can never share one and a colour
+// name is always an unambiguous label; a value off the palette can only come from
+// a hand-edited save, which falls back to the team letter.
+function colorName(game, team) {
+  const found = PALETTE.find((c) => c.value === game.colors[team]);
+  return found
+    ? found.name[0].toUpperCase() + found.name.slice(1)
+    : `Team ${team.toUpperCase()}`;
+}
+
+// What a player slot is called, and the only place a casual game differs from any
+// other: nobody's name was taken, so the colour is the identity. Everything that
+// names a player has to read it from here or it will be the one surface still
+// showing "Player 1".
+//
+// `players` keeps whatever was typed, so turning casual off brings the names back
+// rather than having overwritten them.
+export function playerLabel(game, team, slot) {
+  return game.casual ? colorName(game, team) : game.players[team][slot];
+}
+
 // Display name for a team: the single player, or both partners in doubles.
 export function teamLabel(game, team) {
+  // One label per team in casual even in doubles: the colour is the whole
+  // identity, so "Blue" rather than "Blue & Blue". `winVerb` keys off TEAM_JOIN
+  // being in the label, so a casual pair reads "Blue wins" — which is right for
+  // a team name, and is the one place casual diverges from the doubles plural.
+  if (game.casual) return playerLabel(game, team, 0);
   const p = game.players[team];
   return game.mode === 'doubles' ? `${p[0]}${TEAM_JOIN}${p[1]}` : p[0];
 }
@@ -171,9 +202,9 @@ export function courtPositions(game) {
       end,
       throwing,
       boxes: {
-        [aSide]: occupied ? { team: 'a', slot, name: game.players.a[slot] } : null,
+        [aSide]: occupied ? { team: 'a', slot, name: playerLabel(game, 'a', slot) } : null,
         [otherSide(aSide)]: occupied
-          ? { team: 'b', slot, name: game.players.b[slot] }
+          ? { team: 'b', slot, name: playerLabel(game, 'b', slot) }
           : null,
       },
     };

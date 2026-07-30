@@ -79,6 +79,86 @@ project dependency. It starts and stops its own preview server.
   and alternates which partner is "up" each round (`rounds.length % 2`). Colour
   stays per team. This group plays each end as its own 4-bag round — **do not add
   an 8-bags-per-round doubles mode.**
+- **`casual` is a guest game, and it is one flag reaching one function.** The group
+  plays on the seafront and invites passers-by in, so the problem it solves is not
+  typing — names were already optional, the defaults are `Player 1`/`Player 2` and
+  `Start game` works untouched — it is that a won game with those defaults *is*
+  archived, folding every stranger into one bogus career whose PPR and form drag the
+  chips around. So the feature is **don't record it**, and everything else falls out
+  of `playerLabel`.
+  - **`playerLabel` is the whole implementation.** In casual it returns the team's
+    `PALETTE` colour name, so the phone header, the lanes, the court diagram, the
+    in-game stats, the winner banner, `?display=1` and the LED panel all say "Blue"
+    from one place — **the board and the display needed no change at all**, because
+    they only ever receive labels. No payload field, no new topic, no firmware
+    change. Anything new that names a player must read it from here or it will be
+    the one surface still showing `Player 1`.
+  - **`players` is deliberately left holding what was typed.** That is what makes
+    the toggle reversible instead of destructive; rewriting the array would lose the
+    real lineup the moment a guest wandered over.
+  - **Two teams can never share a colour** — the swatches disable the other team's —
+    which is what makes a colour name an unambiguous label. A value off the palette
+    can only come from a hand-edited save, and falls back to `Team A`/`Team B`.
+  - **`teamLabel` gives a casual doubles pair one label, not `Blue & Blue`**, so
+    `winVerb` reads it as singular and announces "Blue wins". That is right for a
+    team name and is the known cost of keying the verb off `TEAM_JOIN`; it is
+    asserted rather than left to be discovered.
+  - **`gameStats` folds to one row per team in casual.** "Within one game the slot is
+    the identity" doesn't hold when both partners are the same colour word — two rows
+    reading "Blue" are worse than one. Note the fold changes too: every round the
+    team threw lands in its one row, where the slot-filtered version would give each
+    half of them.
+  - **`lineupPayload` needs its own explicit casual guard**, and the `played` test is
+    not enough: the slots still hold the last names typed, and those genuinely have
+    history, so the board would show a stranger somebody else's form line. The setup
+    screen's `Lineup` panel is hidden for the same reason.
+  - **The name fields go but the swatches stay**, because the colour has become the
+    identity — so `TeamsFields` swaps each input for the colour as text and drops the
+    board chip (with both partners labelled alike, reordering a pair changes nothing
+    observable). The first-thrower bag stays: naming who opens is still useful.
+  - **It is sticky across `New game`, like `mode`**, because guests arrive in runs.
+    That is only safe because every `New game` lands back on setup with the toggle in
+    view — a run of casual games cannot quietly outlast the guests. The reducer case
+    is gated on `gameStarted` for the same reason the arrangement controls are:
+    flipping it after a win would strand a record the archive effect can no longer
+    see to remove.
+  - **The play screen says `not recorded`**, and it has to: a game you meant to
+    record and didn't has no other symptom. Measured, it costs no layout — the
+    header stays 94px and the lanes 61px, because `.center-readout` is shorter than
+    the team score blocks either side of it.
+  - **The toggle shares `.setup-top` with the mode and `Start`, and that row is the
+    tightest space on the screen.** It started as its own row below and cost 58px of
+    height for a control that is off almost always. Three things bought the space and
+    all three are load-bearing: the button says **`Start`** rather than `Start game`
+    (44px), the mode labels carry **10px** of side padding rather than 22px (48px),
+    and the row's gap is 8px (4px). Measured, the row needs 316px against the 328px a
+    360px Android has and the 343px a 375px SE has. **`Start game` with 22px padding
+    overruns the SE by 59px.** At 320px (iPhone 5/SE1) the mode labels clip — they
+    did before this change too, at 326px needed against 288px, so that width has
+    never fitted and is not a regression.
+    - **`verify-stats.mjs` asserts the row is one line *and* that nothing in it is
+      squeezed**, because one line alone is worthless here: `.start-game` may shrink
+      and `.mode-toggle` clips its labels rather than overflowing the document, so
+      restoring the 22px padding leaves the row on one line with 0px slack and passes
+      both a wrap check and an overflow check. Verified by mutation — it fails only
+      the squeeze assertion. Same lesson as `verify-lanes.mjs`.
+    - **The hint is drawn only while it is on**, so the ordinary case spends nothing;
+      it is the one thing the collapsed fields below can't say for themselves.
+    - **A third segment inside `.mode-toggle` is still wrong**, even though it would
+      be free: guests are orthogonal to singles/doubles and a segmented group reads
+      as exclusive. Sitting *beside* the group with the same lit styling is what makes
+      that clear — Singles stays lit when Guests comes on, which demonstrates the two
+      are independent rather than merely asserting it.
+  - **The panel layout is deliberately *not* forced to `score`.** In casual `full`'s
+    name row is "BLUE"/"RED" in blue and red, pure redundancy with the digit colours
+    — but a layout is a preference the scorer keeps, which is the same rule that
+    keeps the form screen out of `PANEL_LAYOUTS`, and driving it from game state
+    would mutate persistent config. The Panel button is already in that row.
+  - **Per-slot anonymity was considered and rejected.** A mixed game (one of us and a
+    guest) is the likely case, and the flag discards both halves — but partial
+    records mean `playerStats`, `sideRecord` and `headToHead` all folding over holes.
+    The existing route for a mixed game is to play it normally and delete the match
+    afterwards.
 - **Bag positions:** `'unthrown' | 'floor' | 'board' | 'hole'`. Bags start
   `unthrown`; once thrown they can move between floor/board/hole but can never
   return to `unthrown` (`setBag` enforces this).
@@ -345,7 +425,8 @@ project dependency. It starts and stops its own preview server.
   already derivable — most are.
 - **Only a won match is archived**, and undoing the winning round takes it back
   out. Abandoning a game leaves nothing, because a three-round fragment would
-  drag every average around.
+  drag every average around. A `casual` game is never archived however it ends —
+  see **`casual` is a guest game** under Domain rules.
 - **The archive is keyed by match id and upserted, not appended.** Win → undo →
   re-win is an ordinary sequence and must leave one record, and a reload of a
   won game re-commits the same one rather than a duplicate. The first `endedAt`
@@ -1227,6 +1308,15 @@ twice, with the pure helpers passing throughout. It covers the same gap for
 renaming — that a career rename reaches the setup lineup and a per-match fix does
 not — where both halves of each are individually correct and only the wiring
 between them can be wrong.
+
+The same is true of the guest-game guard, and both ways round of getting it wrong
+are silent: either a stranger is folded into somebody's career, or every real match
+quietly stops being filed. So that block plays a casual game to a win and then
+**turns the toggle off and plays a real one**, which is what makes the guard the
+flag rather than a break in archiving. Verified by mutation: dropping the guard
+fails the first, and latching it in a ref — the plausible mistake, since the effect
+already keeps `archivedId` that way — fails only the second. Guarding
+unconditionally is caught by the checks at the top of the file instead.
 
 It also ends by stripping the secure-context-only APIs and reloading, because
 **every other browser check runs on `localhost`, which is a secure context** —

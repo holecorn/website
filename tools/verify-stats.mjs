@@ -53,7 +53,7 @@ await page.reload();
 const names = page.locator('.team-name-input');
 await names.nth(0).fill('Neil');
 await names.nth(1).fill('Sigma');
-await page.getByRole('button', { name: 'Start game' }).click();
+await page.getByRole('button', { name: 'Start', exact: true }).click();
 
 // Target 21, so two 12-point rounds finish it.
 await playRound();
@@ -102,12 +102,12 @@ check('end time is not moved by the reload', (await archive())[0].endedAt === ag
 await page.getByRole('button', { name: 'New game' }).click();
 check(
   'a won game starts a new one without asking',
-  await page.getByRole('button', { name: 'Start game' }).isVisible(),
+  await page.getByRole('button', { name: 'Start', exact: true }).isVisible(),
 );
 
 // Second match, so the stats screen has more than one row of history — and the
 // half-played state is what proves the prompt still guards real work.
-await page.getByRole('button', { name: 'Start game' }).click();
+await page.getByRole('button', { name: 'Start', exact: true }).click();
 await playRound();
 await page.getByRole('button', { name: 'New game' }).click();
 check('a game in progress still asks first', await page.getByText('Start a new game?').isVisible());
@@ -127,7 +127,7 @@ check('a second match is archived alongside the first', (await archive()).length
 await page.getByRole('button', { name: 'New game' }).click();
 
 // The pre-game form panel, and the one thing about it no unit test can reach:
-// that nothing added to this screen pushes `Start game` off the first screenful.
+// that nothing added to this screen pushes `Start` off the first screenful.
 // It used to be measured as "the panel does not move it", which stopped meaning
 // anything once the button moved up beside the mode toggle — it now precedes
 // every panel in the DOM, so hiding one cannot move it. What is worth holding is
@@ -146,7 +146,7 @@ await page.getByRole('button', { name: 'New game' }).click();
   for (const mode of ['Singles', 'Doubles']) {
     await page.getByRole('button', { name: mode }).click();
     const clear = await startVisible();
-    check(`Start game is above the fold in ${mode.toLowerCase()}`, clear > 0, `${clear}px clear`);
+    check(`Start is above the fold in ${mode.toLowerCase()}`, clear > 0, `${clear}px clear`);
   }
   await page.getByRole('button', { name: wasOn.trim() }).click();
   await page.reload();
@@ -290,7 +290,7 @@ check('and does not reappear in the list', (await page.locator('.recent li').cou
 
 // Put it back so the export round trip below still has two matches to move.
 await page.getByRole('button', { name: '‹ Back' }).click();
-await page.getByRole('button', { name: 'Start game' }).click();
+await page.getByRole('button', { name: 'Start', exact: true }).click();
 await playRound();
 await playRound();
 await page.waitForFunction(
@@ -676,6 +676,146 @@ check(
   await one.close();
 }
 
+// The setup row holds three controls now, and it must stay on one line at every
+// width the app is used at — a second line puts `Start` back below the fold, which
+// is the whole thing moving it up here escaped. One line is not enough to assert on
+// its own: `.start-game` may shrink and the mode labels clip rather than overflow,
+// so a row that silently squeezed itself would pass both a wrap check and a
+// document-overflow check. Measured against each control's own natural width
+// instead — the verify-lanes lesson. This is what the button saying `Start` and the
+// mode's 10px side padding are for: at 22px with `Start game` the row needed 59px
+// more than a 375px phone has, and 360px Android is narrower still.
+{
+  for (const w of [360, 375]) {
+    const narrow = await browser.newContext({ viewport: { width: w, height: 667 } });
+    const np = await narrow.newPage();
+    await np.goto(URL);
+    await np.evaluate(() => localStorage.clear());
+    await np.reload();
+    await np.waitForSelector('.setup');
+    for (const mode of ['Singles', 'Doubles']) {
+      await np.getByRole('button', { name: mode }).click();
+      const r = await np.evaluate(() => {
+        const top = document.querySelector('.setup-top');
+        const kids = [...top.children];
+        const box = (n) => n.getBoundingClientRect();
+        const gap = parseFloat(getComputedStyle(top).columnGap);
+        return {
+          lines: new Set(kids.map((n) => Math.round(box(n).top))).size,
+          // scrollWidth past the drawn width is what shrinking looks like when
+          // nothing wraps: the label is being cut inside its own button.
+          squeezed: kids
+            .filter((n) => n.scrollWidth > Math.ceil(box(n).width))
+            .map((n) => n.className || n.tagName),
+          slack: Math.round(
+            box(top).width - kids.reduce((s, n) => s + box(n).width, 0) - gap * (kids.length - 1),
+          ),
+        };
+      });
+      const at = `${w}px ${mode.toLowerCase()}`;
+      check(`the setup row is one line at ${at}`, r.lines === 1, `${r.slack}px slack`);
+      check(`and nothing in it is squeezed at ${at}`, r.squeezed.length === 0, r.squeezed.join(' '));
+    }
+    await narrow.close();
+  }
+}
+
+// A guest game: no names taken and nothing recorded. The labels and the cleared
+// lineup are pinned in the unit suites; what only a browser can see is whether the
+// archive effect in App.jsx skips the write — and both ways round of getting that
+// wrong are silent. Either a stranger is folded into somebody's career, or every
+// real match quietly stops being filed. So the toggle is turned back off at the end
+// and a real match played, which is what makes the guard the flag rather than a
+// break in archiving.
+{
+  const guest = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const gp = await guest.newPage();
+  const stored = () => gp.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]'), KEY);
+  const play = async () => {
+    for (const [team, tier] of [[0, 'bag hole'], [1, 'bag floor']]) {
+      const lanes = gp.locator('.team-lanes').nth(team).locator('.lane');
+      for (let i = 0; i < 4; i++) {
+        await lanes.nth(i).getByLabel(tier, { exact: true }).click();
+      }
+    }
+    await gp.getByRole('button', { name: 'End round' }).click();
+  };
+  const filed = async (n) => {
+    try {
+      await gp.waitForFunction(
+        ({ key, want }) => JSON.parse(localStorage.getItem(key) || '[]').length === want,
+        { key: KEY, want: n },
+        { timeout: 3000 },
+      );
+    } catch {
+      // reported by the check that follows, rather than killing the run
+    }
+  };
+
+  await gp.goto(URL);
+  await gp.evaluate(() => localStorage.clear());
+  await gp.reload();
+  await gp.waitForSelector('.setup');
+  check('no hint until guests are turned on', (await gp.locator('.casual-hint').count()) === 0);
+  await gp.getByRole('button', { name: 'Guests' }).click();
+  check('turning them on says the game is not recorded', await gp.locator('.casual-hint').isVisible());
+
+  check('the name fields go', (await gp.locator('.team-name-input').count()) === 0);
+  check(
+    'the swatches stay, because the colour is the identity now',
+    (await gp.locator('.swatch').count()) === 8,
+  );
+  check(
+    'each team is captioned by its colour',
+    (await gp.locator('.team-name-static').allInnerTexts()).join(',') === 'Blue,Red',
+  );
+  // The slots still hold names that have been played under, so a Form panel here
+  // would show a guest somebody else's record.
+  check('no form panel', (await gp.locator('.lineup').count()) === 0);
+
+  await gp.getByRole('button', { name: 'Start', exact: true }).click();
+  check(
+    'the play screen names the teams by colour',
+    (await gp.locator('.team-name').allInnerTexts()).join(',') === 'Blue,Red',
+  );
+  check('and says the game is not being recorded', await gp.locator('.casual-note').isVisible());
+
+  await play();
+  await play();
+  await gp.waitForTimeout(500);
+  check('the guest game finished', await gp.locator('.winner-banner').isVisible());
+  // winVerb reads the verb off the label, so a colour label is singular whatever
+  // the mode — the known cost, asserted rather than left to be discovered.
+  check(
+    'the winner is announced by colour',
+    (await gp.locator('.winner-banner').innerText()).trim() === 'Blue wins!',
+    await gp.locator('.winner-banner').innerText(),
+  );
+  check('a won guest game is not archived', (await stored()).length === 0, `${(await stored()).length} records`);
+
+  await gp.getByRole('button', { name: 'New game' }).click();
+  // Sticky, because guests arrive in runs — and safe only because every New game
+  // lands back here with the toggle in view.
+  check(
+    'the toggle is still on for the next guest game',
+    (await gp.getByRole('button', { name: 'Guests' }).getAttribute('aria-pressed')) === 'true',
+  );
+
+  await gp.getByRole('button', { name: 'Guests' }).click();
+  const back = gp.locator('.team-name-input');
+  check('turning it off brings the fields back', (await back.count()) === 2);
+  await back.nth(0).fill('Neil');
+  await back.nth(1).fill('Sigma');
+  await gp.getByRole('button', { name: 'Start', exact: true }).click();
+  await play();
+  await play();
+  await filed(1);
+  const [real] = await stored();
+  check('a real match is filed again', (await stored()).length === 1);
+  check('under the names typed for it', real?.players?.a?.[0] === 'Neil', real?.players?.a?.[0]);
+  await guest.close();
+}
+
 const plain = await browser.newContext();
 await plain.addInitScript(() => {
   delete Crypto.prototype.randomUUID;
@@ -695,7 +835,7 @@ check('the app renders without secure-context-only APIs', rendered, errors.join(
 check('no uncaught errors on an insecure origin', errors.length === 0, errors.join(' | '));
 
 if (rendered) {
-  await insecure.getByRole('button', { name: 'Start game' }).click();
+  await insecure.getByRole('button', { name: 'Start', exact: true }).click();
   check(
     'a match still gets an id',
     await insecure.evaluate(() => {
