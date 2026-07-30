@@ -79,6 +79,13 @@
   white-space: nowrap;
 }
 
+/* Off while a name is in the lineup twice. Loses the green rather than fading it,
+   so it doesn't read as a button waiting to finish loading. */
+.start-game:disabled {
+  background: var(--panel);
+  color: var(--muted);
+}
+
 /* 10px, not 22px: the side padding is what pays for the Guests chip sharing the
    row. Vertical padding is untouched, so the tap target keeps its height. */
 .mode-toggle button {
@@ -118,6 +125,17 @@
 .casual-hint {
   margin: 0;
   color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* The casual hint's metrics, but this one is a fault rather than a note: Start
+   is off until it goes, so it carries the colour the rest of the app uses to
+   mean stop. Both are drawn only when they apply, so neither costs the ordinary
+   screen any height. */
+.clash-hint {
+  margin: 0;
+  color: #eb5757;
   font-size: 12px;
   text-align: center;
 }
@@ -224,6 +242,12 @@
 .team-name-input:focus {
   outline: none;
   border-bottom-color: var(--text);
+}
+
+/* The name keeps its team colour — recolouring it would say the wrong team owns
+   the bags — so the underline is what marks the two fields the hint is about. */
+.team-name-input[aria-invalid='true'] {
+  border-bottom-color: #eb5757;
 }
 
 .target-field {

@@ -631,7 +631,9 @@ describe('gameStats', () => {
     expect(rho.rounds + tau.rounds).toBe(game.rounds.length);
   });
 
-  it('keeps two teams on the same default name as two players', () => {
+  // The setup screen won't build this lineup any more, but a save from before it
+  // refused one, or an imported record, still can.
+  it('keeps two teams on the same name as two players', () => {
     const shared = { a: ['Player 1', 'Player 2'], b: ['Player 1', 'Player 2'] };
     const rows = gameStats(livePlay('singles', shared, [[[H, H, F, F], [F, F, F, F]]]));
     expect(rows).toHaveLength(2);

@@ -81,10 +81,9 @@ project dependency. It starts and stops its own preview server.
   an 8-bags-per-round doubles mode.**
 - **`casual` is a guest game, and it is one flag reaching one function.** The group
   plays on the seafront and invites passers-by in, so the problem it solves is not
-  typing — names were already optional, the defaults are `Player 1`/`Player 2` and
-  `Start game` works untouched — it is that a won game with those defaults *is*
-  archived, folding every stranger into one bogus career whose PPR and form drag the
-  chips around. So the feature is **don't record it**, and everything else falls out
+  typing — names were already optional, every slot comes pre-named and `Start` works
+  untouched — it is that a won game with those defaults *is* archived, folding every
+  stranger into one bogus career whose PPR and form drag the chips around. So the feature is **don't record it**, and everything else falls out
   of `playerLabel`.
   - **`playerLabel` is the whole implementation.** In casual it returns the team's
     `PALETTE` colour name, so the phone header, the lanes, the court diagram, the
@@ -159,6 +158,37 @@ project dependency. It starts and stops its own preview server.
     records mean `playerStats`, `sideRecord` and `headToHead` all folding over holes.
     The existing route for a mixed game is to play it normally and delete the match
     afterwards.
+- **Nobody can play themselves, and `duplicateNames` is the whole rule.** A name is
+  the only identity the app has, so one name in two slots of a lineup is one person
+  on both sides of the court — `playerStats` folds a win and a loss for the same
+  match into one career, `sideRecord` reports no matchup at all, and in doubles
+  somebody is their own partner. `Start` is disabled while it holds.
+  - **It refuses where the archive's editor warns**, which is not an inconsistency:
+    a lineup is about to be played and costs a keystroke to fix, whereas a record is
+    history and the ones needing the edit most are exactly the clashing ones. The
+    two notes point at each other; don't unify them.
+  - **`newGame`'s defaults are numbered across the lineup, not within each team.**
+    `a: [1, 3]`, `b: [2, 4]`, so the app cannot open on a lineup it would refuse to
+    start — and singles, the common case, still reads Player 1 against Player 2. Any
+    new default name has to keep all four distinct.
+  - **`loadGame` renames the slots that still hold an old default**, per slot, so a
+    save from when both teams defaulted to `Player 1`/`Player 2` doesn't greet
+    somebody with a blocked `Start` over names they never typed. Anything typed is
+    left alone, and the rewrite is keyed off the *old* default for that slot rather
+    than off the clash, so it can't touch a real name.
+  - **Only the slots the mode plays**, so the default partner is not a clash in
+    singles — and a guest game has nothing to clash, since every slot is the team's
+    colour and `players` still holds the last real lineup. That casual guard is the
+    one a mutation proves: without it the toggle can't rescue a repeated lineup.
+  - **The hint carries the reason and the fields carry the location.** The
+    `.setup-top` row has no room for a longer button label (see the `Start` bullet
+    under casual), so the button is `aria-describedby` the hint, and the two
+    offending inputs take `aria-invalid` and a red underline — four boxes and one
+    sentence otherwise leaves you counting. The name keeps its team colour; only the
+    underline changes.
+  - **Blank slots are not people** and never clash, the same rule `participants`
+    folds by. Leaving a name blank is still allowed — a separate question, and one
+    this rule deliberately doesn't answer.
 - **Bag positions:** `'unthrown' | 'floor' | 'board' | 'hole'`. Bags start
   `unthrown`; once thrown they can move between floor/board/hole but can never
   return to `unthrown` (`setBag` enforces this).
@@ -485,10 +515,11 @@ project dependency. It starts and stops its own preview server.
   simply be called with the live game: it would count `matches += 1` and push a
   loss for a `winner: null` game, reporting an unfinished game as 0–1.
 - **`gameStats` keys by team and slot; `playerStats` keys by name.** Within one
-  game the slot *is* the identity — two teams both on the default "Player 1" are
-  two different people, and name-folding them would merge two rows on the screen
-  you're looking at while you play. Across a career, folding by name is the point.
-  Don't unify the two.
+  game the slot *is* the identity — two teams on one name are two different people,
+  and name-folding them would merge two rows on the screen you're looking at while
+  you play. Across a career, folding by name is the point. Don't unify the two. The
+  setup screen no longer builds such a lineup, but an older save or an imported
+  record still can, so the rule stays.
 - **`id` and `startedAt` live in `App.jsx`, not `scoring.js`**, which stays pure.
   `startedAt` is stamped when **Start game** is pressed rather than at
   `newGame()`, because the setup screen can sit open indefinitely and that time
@@ -632,11 +663,13 @@ project dependency. It starts and stops its own preview server.
   name-folding already is the identity. What it needs is *saying*: the dialog names
   whose history is about to absorb which, and how many matches, since this screen
   can't split them again. Splitting is the per-match edit, one match at a time.
-- **A name on both teams is warned about, not refused.** The default doubles lineup
-  is `Player 2` on both sides, so blocking a clash would leave exactly the records
-  most in need of editing uneditable. (The career fold does credit those throws to
-  both sides — pre-existing, and the warning says so rather than pretending
-  otherwise.)
+- **A name on both teams is warned about here, not refused — the opposite of the
+  setup screen, and deliberately.** These are records already filed that way, and
+  the ones most in need of editing are exactly the ones that would be locked: every
+  match played before the setup screen refused the lineup. (The career fold does
+  credit those throws to both sides, and the warning says so rather than pretending
+  otherwise.) See **Nobody can play themselves** under Domain rules for the other
+  half.
 - **`nameKey` lives in `scoring.js` now, not `stats.js`.** Three places need the
   identity rule — the career fold, the archive rewrite and the reducer — and two
   definitions of "same person" is the failure that has no symptom. `BOARD_NAME`
@@ -1317,6 +1350,14 @@ flag rather than a break in archiving. Verified by mutation: dropping the guard
 fails the first, and latching it in a ref — the plausible mistake, since the effect
 already keeps `archivedId` that way — fails only the second. Guarding
 unconditionally is caught by the checks at the top of the file instead.
+
+The self-play block spends most of its checks on the lineups that must *start*,
+not on the one that must not: a rule that never lets go is the same bug as one
+that never bites, and `duplicateNames` is already unit tested. So it covers the
+defaults the app opens on, a save written when both teams defaulted alike, four
+different people in doubles, and a guest game. Verified by mutation — dropping the
+`disabled`, the `casual` guard, the `loadGame` rewrite and the new defaults each
+fail only their own assertions.
 
 It also ends by stripping the secure-context-only APIs and reloading, because
 **every other browser check runs on `localhost`, which is a secure context** —

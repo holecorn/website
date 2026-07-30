@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   MAX_TARGET,
   clampTarget,
+  duplicateNames,
   emptyPositions,
   rawPoints,
   tierCounts,
@@ -240,6 +241,66 @@ describe('casual games', () => {
     expect(courtPositions(casual).throwingEnd).toBe(courtPositions(named).throwingEnd);
     const played = playRound(casual, ['hole', 'floor', 'floor', 'floor'], emptyPositions());
     expect(totals(played)).toEqual({ a: 3, b: 0 });
+  });
+});
+
+// Nobody can play themselves. One name in two slots is one person on both sides
+// of the court, and the career fold would credit them the win and the loss for
+// the same match.
+describe('duplicateNames', () => {
+  const singles = { ...newGame(), players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] } };
+  const doubles = { ...singles, mode: 'doubles' };
+
+  it('passes a lineup of four different people', () => {
+    expect(duplicateNames(doubles)).toEqual([]);
+  });
+
+  it('passes the defaults, which is the lineup the app opens on', () => {
+    expect(duplicateNames(newGame())).toEqual([]);
+    expect(duplicateNames({ ...newGame(), mode: 'doubles' })).toEqual([]);
+  });
+
+  it('catches one player on both teams', () => {
+    expect(duplicateNames({ ...singles, players: { a: ['Rho', 'Tau'], b: ['Rho', 'Chi'] } })).toEqual(
+      ['Rho'],
+    );
+  });
+
+  it('catches someone partnering themselves', () => {
+    expect(duplicateNames({ ...doubles, players: { a: ['Rho', 'Rho'], b: ['Phi', 'Chi'] } })).toEqual(
+      ['Rho'],
+    );
+  });
+
+  it('folds spelling the same way the career does', () => {
+    expect(duplicateNames({ ...singles, players: { a: [' rho ', 'Tau'], b: ['Rho', 'Chi'] } })).toEqual(
+      ['Rho'],
+    );
+  });
+
+  // Singles never reads the second slot, so the default partner sitting on both
+  // teams is not a clash until doubles is chosen.
+  it('only looks at the slots the mode plays', () => {
+    const shared = { ...singles, players: { a: ['Rho', 'Sigma'], b: ['Phi', 'Sigma'] } };
+    expect(duplicateNames(shared)).toEqual([]);
+    expect(duplicateNames({ ...shared, mode: 'doubles' })).toEqual(['Sigma']);
+  });
+
+  it('reports both names when a whole pair is repeated', () => {
+    expect(
+      duplicateNames({ ...doubles, players: { a: ['Rho', 'Tau'], b: ['Rho', 'Tau'] } }),
+    ).toEqual(['Rho', 'Tau']);
+  });
+
+  it('leaves blank slots alone, because a blank is not a person', () => {
+    expect(duplicateNames({ ...doubles, players: { a: ['Rho', ''], b: ['Phi', '  '] } })).toEqual([]);
+  });
+
+  // A guest game has no names to clash: every slot is the team's colour, and the
+  // slots still hold whatever was typed for the last real game.
+  it('has nothing to say about a guest game', () => {
+    const guests = { ...doubles, casual: true, players: { a: ['Rho', 'Rho'], b: ['Rho', 'Rho'] } };
+    expect(duplicateNames(guests)).toEqual([]);
   });
 });
 

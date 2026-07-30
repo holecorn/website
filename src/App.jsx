@@ -26,6 +26,7 @@ import {
   MAX_TARGET,
   PALETTE,
   clampTarget,
+  duplicateNames,
   nameKey,
   newGame,
   playerLabel,
@@ -57,6 +58,18 @@ function identified(game) {
   return game.id ? game : { ...game, id: newMatchId() };
 }
 
+// Both teams used to default to Player 1 and Player 2, which `duplicateNames`
+// now refuses. Nobody typed those, so a slot still holding one takes the name it
+// would have had today; anything typed is left alone.
+const OLD_DEFAULTS = ['Player 1', 'Player 2'];
+
+function migrateDefaults(players) {
+  const fresh = newGame().players;
+  const swap = (team) =>
+    players[team].map((name, i) => (name === OLD_DEFAULTS[i] ? fresh[team][i] : name));
+  return { a: swap('a'), b: swap('b') };
+}
+
 function loadGame() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -67,10 +80,11 @@ function loadGame() {
       // Migrate the old single-name-per-team shape to player slots.
       if (!parsed.players && parsed.names) {
         merged.players = {
-          a: [parsed.names.a, 'Player 2'],
-          b: [parsed.names.b, 'Player 2'],
+          a: [parsed.names.a, merged.players.a[1]],
+          b: [parsed.names.b, merged.players.b[1]],
         };
       }
+      merged.players = migrateDefaults(merged.players);
       delete merged.names;
       return identified(merged);
     }
@@ -384,6 +398,7 @@ export default function App() {
   }
 
   if (screen === 'setup') {
+    const clashes = duplicateNames(game);
     return (
       <div className="app setup">
         <Logo className="setup-logo" colorA={game.colors.a} colorB={game.colors.b} />
@@ -419,8 +434,12 @@ export default function App() {
           >
             Guests
           </button>
+          {/* The row has no space for a label that explains itself, so the
+              reason sits under it and the button points at it. */}
           <button
             className="start-game"
+            disabled={clashes.length > 0}
+            aria-describedby={clashes.length > 0 ? 'lineup-clash' : undefined}
             onClick={() => {
               dispatch({ type: 'start', at: Date.now() });
               setScreen('play');
@@ -433,10 +452,17 @@ export default function App() {
             collapsed fields below say the colours are the teams; what they can't
             say is that the match won't be filed. */}
         {game.casual && <p className="casual-hint">This game won&rsquo;t be recorded.</p>}
+        {clashes.length > 0 && (
+          <p className="clash-hint" id="lineup-clash">
+            {clashes.join(' and ')} {clashes.length === 1 ? 'is' : 'are'} in the lineup
+            twice. Two players need two names.
+          </p>
+        )}
         <TeamsFields
           game={game}
           dispatch={dispatch}
           knownNames={knownNames}
+          clashes={clashes}
           onSetFirst={(team, slot) => dispatch({ type: 'throwFirst', team, slot })}
           onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
         />
@@ -675,10 +701,13 @@ export default function App() {
 // swatches are the only thing on the setup screen that still matters — but the name
 // fields become the colour as text and the board chip goes: with both partners
 // labelled alike, reordering the pair changes nothing anybody can see.
-function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
+function TeamsFields({ game, dispatch, knownNames, clashes = [], onSetFirst, onSwapEnds }) {
   const doubles = game.mode === 'doubles';
   const casual = game.casual;
   const slots = doubles && !casual ? [0, 1] : [0];
+  // Which name is doubled is the hint's job; this is which two fields hold it,
+  // because four boxes and one sentence leaves you counting.
+  const clashed = new Set(clashes.map(nameKey));
   return (
     <div className="teams-fields">
       {/* Names already in the archive. A returning player is picked rather than
@@ -698,6 +727,7 @@ function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
             <div className="field-rows">
               {slots.map((i) => {
                 const name = playerLabel(game, team, i);
+                const clash = clashed.has(nameKey(name));
                 const here = BOARD_NAME[i];
                 const there = BOARD_NAME[1 - i];
                 const first = game.nextFirst === team && i === 0;
@@ -733,6 +763,8 @@ function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
                         value={name}
                         maxLength={16}
                         list={knownNames.length > 0 ? 'known-names' : undefined}
+                        aria-invalid={clash || undefined}
+                        aria-describedby={clash ? 'lineup-clash' : undefined}
                         style={{ color: game.colors[team] }}
                         onChange={(e) =>
                           dispatch({ type: 'rename', team, index: i, name: e.target.value })

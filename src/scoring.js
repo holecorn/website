@@ -59,7 +59,13 @@ export function newGame(target = DEFAULT_TARGET) {
     // Two player slots per team; singles uses only the first. In doubles the
     // slot index is also the end of the court that player stands at, which is
     // why it is slot 0 that throws on even rounds.
-    players: { a: ['Player 1', 'Player 2'], b: ['Player 1', 'Player 2'] },
+    //
+    // Numbered across the lineup rather than within each team, because both
+    // teams defaulting to the same two names is a lineup `duplicateNames`
+    // refuses — the app would open on a game it would not let you start. The
+    // odd/even split is what keeps singles reading "Player 1" against
+    // "Player 2", which is the pairing seen most.
+    players: { a: ['Player 1', 'Player 3'], b: ['Player 2', 'Player 4'] },
     colors: { a: '#2f80ed', b: '#eb5757' },
     mode: 'singles',
     // A game with guests in it: no names are taken and nothing is recorded. Not
@@ -116,6 +122,32 @@ function colorName(game, team) {
 // rather than having overwritten them.
 export function playerLabel(game, team, slot) {
   return game.casual ? colorName(game, team) : game.players[team][slot];
+}
+
+// The names this lineup holds more than once, as typed. A name is the only
+// identity the app has, so one name in two slots is one person on both sides of
+// the court: `playerStats` folds a win and a loss for the same match into one
+// career, `sideRecord` reports no matchup at all, and in doubles someone is
+// their own partner. Nobody can play themselves, so the setup screen refuses to
+// start on it — unlike the archive's editor, which warns instead, because
+// records already filed that way have to stay editable.
+//
+// A casual game has nothing to clash: every slot is the team's colour. A blank
+// slot is not a person, the same rule `participants` folds by.
+export function duplicateNames(game) {
+  if (game.casual) return [];
+  const seen = new Set();
+  const twice = new Map();
+  for (const team of ['a', 'b']) {
+    for (const slot of game.mode === 'doubles' ? [0, 1] : [0]) {
+      const name = String(game.players[team][slot] ?? '').trim();
+      const key = nameKey(name);
+      if (!key) continue;
+      if (seen.has(key)) twice.set(key, name);
+      seen.add(key);
+    }
+  }
+  return [...twice.values()];
 }
 
 // Display name for a team: the single player, or both partners in doubles.

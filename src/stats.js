@@ -195,9 +195,10 @@ export function playerStats(matches) {
 // Per-player stats for the game in progress, in lane order.
 //
 // Keyed by team and slot, not by name the way `playerStats` is: within one game
-// the slot *is* the identity, and two teams both on the default "Player 1" are
-// two people, not one row. Nothing here needs the game to be over, so there is
-// no win/loss or streak to report as a spurious zero.
+// the slot *is* the identity, and two teams on one name are two rows, not one.
+// The setup screen refuses to start such a lineup, but an older save or an
+// imported record can still hold one. Nothing here needs the game to be over, so
+// there is no win/loss or streak to report as a spurious zero.
 //
 // Except in a casual game, where the slot is *not* an identity — both partners
 // are only the team's colour — so it folds to one row per team. That is the same

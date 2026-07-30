@@ -720,6 +720,81 @@ check(
   }
 }
 
+// Nobody can play themselves. `duplicateNames` is unit tested; what only a browser
+// can see is that Start is really held shut on it — and, the half that would go
+// unnoticed, that it opens again for every lineup that is fine. A rule that never
+// lets go is the same bug as one that never bites, so this block spends most of its
+// checks on the lineups that must start: the defaults the app opens on, a save
+// written when both teams defaulted to the same two names, and a guest game, whose
+// slots still hold whatever the last real game typed.
+{
+  const dup = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const dp = await dup.newPage();
+  dp.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  const start = dp.getByRole('button', { name: 'Start', exact: true });
+  const fields = dp.locator('.team-name-input');
+  const hint = dp.locator('.clash-hint');
+  const fill = async (names) => {
+    for (const [i, name] of names.entries()) await fields.nth(i).fill(name);
+  };
+
+  await dp.goto(URL);
+  await dp.evaluate(() => localStorage.clear());
+  await dp.reload();
+  await dp.waitForSelector('.setup');
+  check('the lineup the app opens on can start', await start.isEnabled());
+
+  await fill(['Rho', 'Rho']);
+  check('one name on both teams holds Start shut', await start.isDisabled());
+  check(
+    'and the hint names them',
+    (await hint.innerText()).startsWith('Rho is in the lineup twice'),
+    await hint.innerText(),
+  );
+  check(
+    'both fields are marked, so it is clear which two',
+    (await dp.locator('.team-name-input[aria-invalid="true"]').count()) === 2,
+  );
+
+  await fields.nth(1).fill('Tau');
+  check('a second name lets it start again', await start.isEnabled());
+  check('and the hint goes with it', (await hint.count()) === 0);
+
+  await dp.getByRole('button', { name: 'Doubles' }).click();
+  await fill(['Rho', 'Rho', 'Phi', 'Chi']);
+  check('nor can a player partner themselves', await start.isDisabled());
+  await fill(['Rho', 'Tau', 'Phi', 'Chi']);
+  check('four different people in doubles can start', await start.isEnabled());
+
+  await fill(['Rho', 'Tau', 'Rho', 'Tau']);
+  check('a whole pair on both sides is refused too', await start.isDisabled());
+  await dp.getByRole('button', { name: 'Guests' }).click();
+  check('but guests start on it, because the colour is the identity', await start.isEnabled());
+
+  // A save from when both teams defaulted to Player 1 and Player 2 is a lineup the
+  // app would now refuse — for names nobody typed. loadGame renames the slots that
+  // still hold a default, which no unit test can see: it isn't exported.
+  await dp.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      'holecorn.game.v3',
+      JSON.stringify({ players: { a: ['Player 1', 'Player 2'], b: ['Player 1', 'Player 2'] } }),
+    );
+  });
+  await dp.reload();
+  await dp.waitForSelector('.setup');
+  check('an old default lineup loads as one that can start', await start.isEnabled());
+  check(
+    'and reads as two players rather than one twice',
+    (await fields.evaluateAll((els) => els.map((e) => e.value).join(','))) === 'Player 1,Player 2',
+    await fields.evaluateAll((els) => els.map((e) => e.value).join(',')),
+  );
+  await dup.close();
+}
+
 // A guest game: no names taken and nothing recorded. The labels and the cleared
 // lineup are pinned in the unit suites; what only a browser can see is whether the
 // archive effect in App.jsx skips the write — and both ways round of getting that

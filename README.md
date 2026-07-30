@@ -26,6 +26,13 @@ Typing in a name field offers everyone your history already knows — worth pick
 from, because a player is only ever identified by their name, so a fresh spelling
 of a familiar one is a new person as far as the stats are concerned.
 
+For the same reason, **one name can't appear twice in a lineup**: nobody plays
+themselves or partners themselves, and to the stats that's one person credited
+with both the win and the loss. **Start** stays off until it's fixed, with the
+repeated name called out and both fields underlined in red. If you really do have
+two Neils, give one of them an initial — the stats can't tell them apart
+otherwise either.
+
 In **doubles**, each team has two players who share the team's colour, standing at
 opposite boards. Since each end is scored as its own round, the throwing partner
 alternates every round; the scoreboard highlights whoever's up and dims the
