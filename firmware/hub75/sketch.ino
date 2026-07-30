@@ -54,9 +54,12 @@ const uint32_t WINNER_BLINK = 500;
 // Mirrored in src/panelRender.js for the emulator.
 const uint32_t SPLASH_MS = 2500;
 
-// Evening play, so this is deliberately low. Raise it for daylight; measured
-// duty is ~12% (see README), so the headroom is in the supply, not here.
-const uint8_t PANEL_BRIGHTNESS = 40;
+// The board's own UP and DOWN buttons, which step panel brightness through
+// BRIGHTNESS_LEVELS. Neither has a pull-up fitted, so they read low when pressed,
+// and both are clear of the HUB75 pinmap in setup().
+const uint8_t BUTTON_UP_PIN = 6;
+const uint8_t BUTTON_DOWN_PIN = 7;
+const uint32_t BUTTON_LOCKOUT = 30;
 
 // ----------------------------------------------------------------- state ----
 
@@ -83,6 +86,45 @@ uint32_t lastLive = 0;
 bool wifiWasUp = false;
 uint32_t splashUntil = 0;
 Rgb splashA, splashB;
+int brightnessStep = BRIGHTNESS_DEFAULT_STEP;
+
+// --------------------------------------------------------------- buttons ----
+
+struct Button {
+  uint8_t pin;
+  bool down;
+  uint32_t settled;
+};
+
+Button buttonUp = {BUTTON_UP_PIN, false, 0};
+Button buttonDown = {BUTTON_DOWN_PIN, false, 0};
+
+// True once per press. A lockout rather than a sampling filter: loop() runs far
+// more often than a contact bounces, so all that needs ignoring is a second edge
+// arriving straight after an accepted one.
+bool pressed(Button& b) {
+  const bool down = digitalRead(b.pin) == LOW;
+  if (down == b.down || millis() - b.settled < BUTTON_LOCKOUT) return false;
+  b.down = down;
+  b.settled = millis();
+  return down;
+}
+
+// Both buttons are read every pass, whatever the first one says, or an edge on the
+// other is missed rather than deferred.
+void pollBrightness() {
+  const bool up = pressed(buttonUp);
+  const bool down = pressed(buttonDown);
+  const int dir = up ? 1 : (down ? -1 : 0);
+  if (dir == 0) return;
+
+  const int next = stepBrightness(brightnessStep, dir);
+  if (next == brightnessStep) return;
+  brightnessStep = next;
+  // Applied to the scan, not to the framebuffer, so it lands without a re-render.
+  panel->setBrightness8(BRIGHTNESS_LEVELS[next]);
+  Serial.printf("brightness %d\n", BRIGHTNESS_LEVELS[next]);
+}
 
 // --------------------------------------------------------------- display ----
 
@@ -238,6 +280,9 @@ bool connectMqtt() {
 void setup() {
   Serial.begin(115200);
 
+  pinMode(BUTTON_UP_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_DOWN_PIN, INPUT_PULLUP);
+
   // Pins must be given explicitly. The library has no MatrixPortal preset —
   // platform_detect.hpp falls through to generic ESP32-S3 defaults, and not one
   // of those pins matches this board, so the panel would stay dark with no
@@ -284,6 +329,8 @@ void setup() {
 }
 
 void loop() {
+  pollBrightness();
+
   if (ensureWifi()) {
     if (client.connected()) {
       client.loop();

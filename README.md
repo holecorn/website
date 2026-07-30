@@ -392,6 +392,11 @@ target, and a rule under whoever throws next. This is the one being built. It
 runs off a USB power bank rather than mains — the layout draws a few watts, so a
 10,000 mAh bank covers a session several times over.
 
+The two buttons on the controller are **brightness, up and down**: five steps from
+a dim evening setting up to full for bright sun. It starts at the dim end every
+time it is switched on. Nothing else about the board is adjustable from the board
+itself — the score, the names and which layout it draws all come from the phone.
+
 It is the only firmware target. A seven-segment build that ran in the
 [Wokwi](https://wokwi.com/) simulator was removed in July 2026, once it had
 drifted far enough from this one that simulating it no longer said anything about

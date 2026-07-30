@@ -1243,10 +1243,27 @@ The parts worth knowing before touching it:
   so the panel's digits are the browser's geometry rather than a redrawing.
   The dash for the no-state screen is defined in the *generator*, not
   `segments.js`, because nothing else needs one.
-- **`diagram.json` is generated** by `generate-diagram.mjs`, which reads the pin
-  arrays out of `sketch.ino`. Don't hand-edit the JSON: the two displays share
-  seven segment lines, and wiring that silently disagrees with the firmware is
-  the likely failure mode.
+- **The board's UP and DOWN buttons step brightness, and that is all they may ever
+  do.** Everything else the panel shows is published state, so a local override
+  would fight the app; brightness is the one setting with no app-side
+  representation and no retained topic to disagree with. `BRIGHTNESS_LEVELS` and
+  `stepBrightness()` live in `board_logic.h` so the host suite covers them, leaving
+  the `.ino` with pin reads and one library call — nothing reaches `render.h`, so
+  the pixel check against `src/panelRender.js` is untouched.
+  - **The range is 40 to 255 and neither end is arbitrary.** The floor is where
+    every faint thing was judged: `COVERAGE_FLOOR` drops splash pixels under ~40%
+    of full *because* at brightness 40 they read as off, and a loss pip is one
+    pixel. Both dim with the global setting and neither has been seen on hardware,
+    so **a darker step waits until the pip has been eyeballed at dusk.** The
+    ceiling is the power budget — 0.98 A worst case against a 3 A fold-back — which
+    means the README's full-brightness runtime figures are now four presses away
+    rather than hypothetical.
+  - **It clamps rather than wrapping**, which is the only reason the step is a
+    tested function instead of arithmetic: wrapping puts one press between the
+    darkest step and 255. Nothing is persisted across a reboot, because brightness
+    tracks the light on the day and 40 is the step that cannot dazzle.
+  - **No on-screen indicator**: the panel is the readout, and drawing one would put
+    it inside the pixel-checked renderer to say what the eye already has.
 - **The HUB75 board runs off a USB power bank, so there is no fuse and no supply
   to size.** A 15 W bank is itself the current limit and folds back, so a fuse
   downstream of it protects nothing — the docs said to fuse for the 40 W peak

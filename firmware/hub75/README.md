@@ -573,6 +573,69 @@ connected to it.** If the board is the only client and it drops, the hotspot
 sleeps and the board can never get back on. Keep a second device on the hotspot,
 or leave the Personal Hotspot settings screen open on the scoring phone.
 
+## Brightness
+
+The MatrixPortal's own **UP** and **DOWN** buttons (GPIO 6 and 7, no pull-ups
+fitted, so `INPUT_PULLUP` and active low) step through `BRIGHTNESS_LEVELS` in
+`board_logic.h`: **40, 70, 120, 180, 255**, booting at 40. They are the board's
+only input, and brightness is the only thing they should ever do — everything else
+the panel shows is published state, and a local override would fight the app.
+
+- **A table, not an increment.** Perceived brightness is roughly logarithmic and
+  the library's own scaling is unverified, so even steps in the value bunch at the
+  top and do nothing at the bottom. Five geometric steps cross the whole range in
+  four presses.
+- **It clamps at both ends**, which is why `stepBrightness()` is a function in
+  `board_logic.h` with a host test rather than arithmetic in the `.ino`. Wrapping
+  would put one press between the darkest step and 255.
+- **The floor is 40 because that is the only value anything faint was judged
+  against.** `COVERAGE_FLOOR` drops splash pixels below ~40% of full precisely
+  because at brightness 40 they are indistinguishable from off, and the form
+  screen's loss pip is a single pixel. Both get dimmer with the global setting and
+  neither has been looked at on hardware. A darker step is a one-entry change to
+  the table **after** the pip has been eyeballed at dusk — not before.
+- **The ceiling is 255 because the power budget allows it**: the worst-case scene
+  is ~0.98 A against a bank that folds back at 3 A. So the full-brightness rows in
+  the tables below are no longer hypothetical — they are four presses away, and
+  the ~6 h runtime with them.
+- **Nothing is remembered across a reboot.** Brightness tracks the light on the
+  day, so 40 is as likely to be right as whatever was set last session, and it is
+  the step that cannot dazzle. `Preferences` would be the change if that turns out
+  to be wrong.
+- **No on-screen indicator, deliberately.** The panel is its own readout — you are
+  looking at the thing that changed. An indicator would also mean drawing in
+  `render.h`, which is pixel-checked against `src/panelRender.js`, for something
+  the eye already has. The serial log prints the new value.
+- **This is the one part of the sketch a host suite cannot reach**, since it is pin
+  reads and a library call. `stepBrightness()` is covered; the wiring is not, so it
+  is a first-power-up check like the rest of `setup()`. Presses are also missed
+  while `connectMqtt()` is blocking on a dead network — the buttons will feel
+  unresponsive until the hotspot is up, which is not a fault.
+
+### The other two buttons are not ours
+
+UP and DOWN are the only inputs this build takes, and the other two on the board
+should stay as they are:
+
+- **RESET is not a GPIO.** It pulls the chip's reset line, so there is nothing to
+  read — pressing it restarts the sketch. That is worth having as-is: a reset
+  replays the splash, whose 2x2 corner indicator distinguishes *no WiFi* from *no
+  broker* from *subscribed*. On site, with no serial console and the board on a
+  stand, that is the diagnostic, and it is the reason a diagnostics screen is not
+  needed. Nothing else about the board is worth a button, because everything else
+  it draws is published state.
+- **BOOT is readable but should not be read.** It is GPIO 0 by ESP32-S3 convention
+  rather than by anything Adafruit document — `pins_arduino.h` defines
+  `PIN_BUTTON_UP`/`PIN_BUTTON_DOWN` and no BOOT at all — so it would want metering
+  first. Two better reasons not to: it is a strapping pin, so held low across a
+  reset the chip comes up in ROM download mode with a dark panel and no clue why,
+  which a bank folding back under load makes reachable by accident; and it is the
+  way back in when flashing fails, on a controller that will be bolted behind a
+  panel.
+- **A third control, if one is ever genuinely needed, is a wire.** The GPIO
+  breakout strip has six pins free, and none of the HUB75 pinmap, GPIO 6 or GPIO 7
+  is among them. Cheaper than borrowing a pin with another job.
+
 ## Power
 
 Duty is measured by counting lit pixels in the host renderer's own framebuffer,
@@ -591,9 +654,10 @@ share of a white pixel's three channels that a team colour actually lights
 | Winner flash | 10.4-12.8% | ~2.3-2.8 W |
 | Worst case (88-88, full names) | 19.8% | ~4.4 W |
 
-At `PANEL_BRIGHTNESS = 40` of 255 those fall further, assuming the library's
+At the boot brightness of 40 of 255 those fall further, assuming the library's
 brightness is linear — which is unverified. None of this has been checked
-against hardware.
+against hardware, and the buttons mean the board can be sitting anywhere between
+40 and 255 (see Brightness).
 
 ### Running off a power bank
 
@@ -612,8 +676,9 @@ the power design:
   question is whether the board stays up, not whether it is safe — which is why
   the sizing below is about headroom and runtime rather than worst-case peak.
 - **The bank does not constrain brightness.** Even at a full 255 the worst case
-  uses a third of the budget, so `PANEL_BRIGHTNESS` can be raised for daylight
-  without revisiting the supply. It is low for evening play, not for power.
+  uses a third of the budget, which is what lets the UP button reach it for
+  daylight without revisiting the supply. Booting at 40 is for evening play, not
+  for power.
 - **One port, one cable, no bare wires.** Everything runs through the controller
   and out of its 5 V terminals (see Assembling it), so nothing here needs a
   chopped lead or a PD trigger board. A second port would buy no current anyway —
@@ -731,6 +796,10 @@ the net delta anything. So this needs a protocol decision first.
 All of the above is derived. One inline USB meter at first power-up settles the
 lot: the running current against the ~0.98 A worst case, whether inrush trips the
 bank before the board starts, and whether the idle screen holds it awake.
+
+Two things the meter cannot answer and only dusk can: whether 40 is dark enough
+to play under, which decides if `BRIGHTNESS_LEVELS` needs a step below it, and
+whether the five steps read as evenly spaced or bunch at one end.
 
 ## Names the panel cannot show
 

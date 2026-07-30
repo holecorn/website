@@ -12,6 +12,8 @@ struct Rgb {
   uint8_t r = 255, g = 255, b = 255;
 };
 
+inline int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
 // Holds a full ASCII doubles label: each name caps at 16 UTF-16 units, joined
 // with " & ", so 35 characters. Don't shrink it to "what the panel can
 // display" — render.h shortens an oversized label by cutting *both* names,
@@ -61,6 +63,33 @@ inline bool parseLayout(const char* payload, size_t length, PanelLayout& out) {
     }
   }
   return false;
+}
+
+// --------------------------------------------------------------- brightness --
+//
+// The MatrixPortal's own UP and DOWN buttons step through these. A table rather
+// than a fixed increment because perceived brightness is roughly logarithmic and
+// the library's scaling is unverified (see README), so even steps in the value
+// would bunch at the top and do almost nothing at the bottom.
+//
+// The floor is the value every faint thing on the panel was judged against: at 40
+// a pixel below ~40% of full is indistinguishable from off, which is what
+// `COVERAGE_FLOOR` and the single-pixel loss pip are calibrated to, and nothing has
+// ever been looked at darker than this. The ceiling is what the supply allows —
+// 255 puts the worst-case scene at ~0.98 A against a bank that folds back at 3 A.
+static const uint8_t BRIGHTNESS_LEVELS[] = {40, 70, 120, 180, 255};
+static const int BRIGHTNESS_LEVEL_COUNT =
+    sizeof BRIGHTNESS_LEVELS / sizeof BRIGHTNESS_LEVELS[0];
+
+// Where the board boots, deliberately not remembered across a reboot: brightness
+// tracks the light on the day, so the darkest step is as likely to be right as
+// whatever was set last session, and it is the one that cannot dazzle.
+static const int BRIGHTNESS_DEFAULT_STEP = 0;
+static const uint8_t PANEL_BRIGHTNESS = BRIGHTNESS_LEVELS[BRIGHTNESS_DEFAULT_STEP];
+
+// Clamps rather than wrapping, which is the whole reason this is a function.
+inline int stepBrightness(int step, int dir) {
+  return clampInt(step + dir, 0, BRIGHTNESS_LEVEL_COUNT - 1);
 }
 
 // ------------------------------------------------------------- pre-game form --
@@ -126,8 +155,6 @@ inline void copyLabel(const char* src, char* dst) {
   for (; src[i] && i < TEAM_LABEL_MAX - 1; i++) dst[i] = src[i];
   dst[i] = '\0';
 }
-
-inline int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 // An empty payload is the publisher clearing the topic, and is the *only* way
 // back to the score screen — so it succeeds with a count of 0 rather than being

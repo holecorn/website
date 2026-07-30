@@ -297,6 +297,28 @@ int main() {
     CHECK(wideL.size() + overhead < 512);
   }
 
+  printf("stepBrightness\n");
+  {
+    CHECK(stepBrightness(0, 1) == 1);
+    CHECK(stepBrightness(1, -1) == 0);
+
+    // Clamped, not wrapped. One press taking the darkest step to 255 is the bug
+    // this shape exists to prevent, and in the dark it is a face full of LEDs.
+    CHECK(stepBrightness(0, -1) == 0);
+    CHECK(stepBrightness(BRIGHTNESS_LEVEL_COUNT - 1, 1) == BRIGHTNESS_LEVEL_COUNT - 1);
+
+    // Ascending, so every press changes something, and the floor stays at the 40
+    // that COVERAGE_FLOOR and the single-pixel loss pip were judged against —
+    // nothing on this panel has been looked at darker than that. The top is what
+    // the power budget allows: ~0.98 A worst case against the bank's 3 A.
+    for (int i = 1; i < BRIGHTNESS_LEVEL_COUNT; i++)
+      CHECK(BRIGHTNESS_LEVELS[i] > BRIGHTNESS_LEVELS[i - 1]);
+    CHECK(BRIGHTNESS_LEVELS[0] == 40);
+    CHECK(BRIGHTNESS_LEVELS[BRIGHTNESS_LEVEL_COUNT - 1] == 255);
+    printf("  %d levels, %d to %d\n", BRIGHTNESS_LEVEL_COUNT, BRIGHTNESS_LEVELS[0],
+           BRIGHTNESS_LEVELS[BRIGHTNESS_LEVEL_COUNT - 1]);
+  }
+
   printf(failures ? "\n%d CHECK(s) FAILED\n" : "\nall checks passed\n", failures);
   return failures ? 1 : 0;
 }
