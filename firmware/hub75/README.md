@@ -131,7 +131,23 @@ one.
   reference, not a conductor rated to carry a panel's supply current back, so
   each panel takes its own return rather than borrowing the ribbon's.
 - **The controller needs no bracket.** Its 2x10 socket keys straight into panel
-  A's HUB75 port, so it hangs off the back of the panel.
+  A's HUB75 port, so it hangs off the back of the panel. That is Adafruit's own
+  intent and it is why no standoffs appear in the parts list.
+  - **Its two M3-threaded posts are not mounting points.** They are the `+5V` and
+    `GND` screw terminals either side of the HUB75 socket — already spoken for by
+    the panel leads, and live VBUS. Bolting the board down by them would put a
+    fastener through the one unprotected polarity in the build.
+  - **There are four actual mounting holes**, on a **1.60 x 0.78 inch** rectangle
+    (~40.6 x 19.8 mm) read off Adafruit's fab print, which does *not* dimension
+    their diameter. Measure one before ordering: 2.5 mm wants M2.5, 3.2 mm wants
+    M3. **Nylon**, since the underside carries exposed pads next to a 5 V terminal.
+  - **Screwing it down while it is plugged into the panel fights itself.** The
+    socket already locates the board, so a standoff height that isn't exactly the
+    seated height levers the connector — the panel's rear standoffs and the
+    controller's holes are two datums for one part. If it has to be fixed to the
+    backer, put a short 2x8 IDC ribbon between the board and panel A first; the
+    same connector takes one, and that frees its position. Otherwise leave it
+    hanging on the socket and give the USB-C lead a tie for strain relief.
 - **The panels need a backer.** They butt edge to edge and will not stay aligned
   on their own — 6 mm ply at roughly 660 x 180 mm, M3 into the panels' own rear
   mounting holes (not to be confused with the MatrixPortal's power standoffs),
@@ -544,6 +560,15 @@ to it cannot short their rear traces the way a metal backer could.
   provision for; see Power for what this layout actually pulls.
 - **1/16 scan, so no E pin**, and no `VirtualMatrixPanel` remapping. That is the
   reason this panel was chosen over an outdoor 1/8-scan one.
+- **`PIN_LIGHTSENSOR A5` in the board's `pins_arduino.h` is a phantom.** The
+  ALS-PT19 phototransistor is on the schematic but Adafruit say it *"is NOT part of
+  the final design for this board"* — it is not fitted. So the header invites an
+  auto-brightness reading off a floating pin, which would look like a working sensor
+  giving nonsense. Automatic brightness on this board means adding an external
+  sensor on A5 or the STEMMA QT connector, which is why the UP/DOWN buttons are what
+  brightness has. The LIS3DH accelerometer at **0x19** (not the default 0x18) *is*
+  fitted, and the status NeoPixel on GPIO 4 is real but faces the back of the panel
+  once assembled.
 
 ## Spotty signal
 
