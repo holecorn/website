@@ -78,6 +78,20 @@ export function newGame(target = DEFAULT_TARGET) {
 
 export const TEAM_JOIN = ' & ';
 
+// Who a name refers to. Case and padding are folded, so "neil" and "Neil " are
+// one person. This is the only identity the app records — which is why renaming
+// someone is a sweep over stored names rather than a key change — and it lives
+// here so the career fold, the setup fields and the archive rewrite cannot
+// disagree about whether two spellings are the same person.
+export function nameKey(name) {
+  return String(name ?? '').trim().toLowerCase();
+}
+
+// Which board a player slot stands at. The slot index *is* the end in doubles,
+// so this is the only name those positions have; exported rather than held in
+// App.jsx because the stats screen labels an archived lineup with it too.
+export const BOARD_NAME = ['start', 'far'];
+
 // Display name for a team: the single player, or both partners in doubles.
 export function teamLabel(game, team) {
   const p = game.players[team];

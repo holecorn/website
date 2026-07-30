@@ -5,6 +5,8 @@ import {
   matchRecord,
   upsertMatch,
   removeMatch,
+  renamePlayer,
+  setMatchPlayers,
   validRecord,
   mergeMatches,
   unexportedCount,
@@ -109,8 +111,83 @@ describe('validRecord', () => {
   });
 });
 
+describe('setMatchPlayers', () => {
+  const records = [matchRecord(wonGame('m1'), 900), matchRecord(wonGame('m2'), 950)];
+  const fixed = { a: ['Neil', 'Player 2'], b: ['Sigma Q', 'Player 2'] };
+
+  it('replaces the named match and leaves the rest alone', () => {
+    const out = setMatchPlayers(records, 'm1', fixed, 5000);
+    expect(out[0].players.b[0]).toBe('Sigma Q');
+    expect(out[1].players.b[0]).toBe('Sigma');
+  });
+
+  it('stamps the edit, so a stale copy of the match cannot win a merge', () => {
+    const out = setMatchPlayers(records, 'm1', fixed, 5000);
+    expect(out[0].updatedAt).toBe(5000);
+    expect(out[1].updatedAt).toBeUndefined();
+  });
+
+  it('leaves the rounds alone — attribution is by slot, not by name', () => {
+    const out = setMatchPlayers(records, 'm1', fixed, 5000);
+    expect(out[0].rounds).toEqual(records[0].rounds);
+  });
+
+  it('copies the lineup it is handed rather than holding on to it', () => {
+    const players = { a: ['Neil', 'Player 2'], b: ['Sigma Q', 'Player 2'] };
+    const out = setMatchPlayers(records, 'm1', players, 5000);
+    players.b[0] = 'Later';
+    expect(out[0].players.b[0]).toBe('Sigma Q');
+  });
+
+  it('does not mutate the list it was given', () => {
+    setMatchPlayers(records, 'm1', fixed, 5000);
+    expect(records[0].players.b[0]).toBe('Sigma');
+  });
+});
+
+describe('renamePlayer', () => {
+  const records = [
+    matchRecord({ ...wonGame('m1'), players: { a: ['neil ', 'Rho'], b: ['Sigma', 'Tau'] } }, 900),
+    matchRecord({ ...wonGame('m2'), players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] } }, 950),
+  ];
+
+  it('renames every appearance, folding case and padding the way the career does', () => {
+    const out = renamePlayer(records, 'NEIL', 'Neil P', 5000);
+    expect(out[0].players.a[0]).toBe('Neil P');
+    expect(out[0].updatedAt).toBe(5000);
+  });
+
+  it('leaves a match the player never appeared in untouched and unstamped', () => {
+    const out = renamePlayer(records, 'neil', 'Neil P', 5000);
+    expect(out[1]).toBe(records[1]);
+  });
+
+  it('merges onto a name that already exists, because folding is the identity', () => {
+    const out = renamePlayer(records, 'Chi', 'Tau', 5000);
+    expect(out[1].players.b).toEqual(['Phi', 'Tau']);
+    expect(out[1].players.a).toEqual(['Rho', 'Tau']);
+  });
+
+  it('renames across both teams and every slot at once', () => {
+    const out = renamePlayer(records, 'Tau', 'Tau B', 5000);
+    expect(out[0].players.b).toEqual(['Sigma', 'Tau B']);
+    expect(out[1].players.a).toEqual(['Rho', 'Tau B']);
+  });
+
+  it('ignores a blank name in either direction', () => {
+    expect(renamePlayer(records, 'Rho', '   ', 5000)).toBe(records);
+    expect(renamePlayer(records, '  ', 'Rho', 5000)).toBe(records);
+  });
+
+  it('does not mutate the list it was given', () => {
+    renamePlayer(records, 'Rho', 'Rho B', 5000);
+    expect(records[1].players.a[0]).toBe('Rho');
+  });
+});
+
 describe('mergeMatches', () => {
   const mine = [matchRecord(wonGame('m1'), 900)];
+  const renamed = (records, at) => renamePlayer(records, 'Sigma', 'Sigma Q', at);
 
   it('adds matches this device has not seen', () => {
     const theirs = [matchRecord(wonGame('m2'), 950)];
@@ -126,6 +203,29 @@ describe('mergeMatches', () => {
     const merged = mergeMatches(mine, [matchRecord(wonGame('m1'), 5000)]);
     expect(merged).toHaveLength(1);
     expect(merged[0].endedAt).toBe(900);
+  });
+
+  // An export is a snapshot, so the file being imported is routinely older than
+  // what is here. Before edits existed either copy would do; now the one that was
+  // edited last has to win, whichever side of the transfer it is on.
+  it('keeps a local rename when the file predates it', () => {
+    const merged = mergeMatches(renamed(mine, 5000), mine);
+    expect(merged[0].players.b[0]).toBe('Sigma Q');
+  });
+
+  it('takes a rename made on the other device', () => {
+    const merged = mergeMatches(mine, renamed(mine, 5000));
+    expect(merged[0].players.b[0]).toBe('Sigma Q');
+  });
+
+  it('keeps the newer of two renames', () => {
+    const merged = mergeMatches(renamed(mine, 5000), renamePlayer(mine, 'Sigma', 'Sigma R', 4000));
+    expect(merged[0].players.b[0]).toBe('Sigma Q');
+  });
+
+  it('is still idempotent once a match has been edited', () => {
+    const edited = renamed(mine, 5000);
+    expect(mergeMatches(edited, edited)).toEqual(edited);
   });
 
   it('skips unusable entries instead of rejecting the whole file', () => {

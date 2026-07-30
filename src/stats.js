@@ -8,7 +8,7 @@
 // record hold `rounds` in the same shape, which is why `gameStats` can share the
 // per-round accumulation with `playerStats` rather than counting its own.
 
-import { BAGS_PER_SIDE, rawPoints, tierCounts, totals } from './scoring.js';
+import { BAGS_PER_SIDE, nameKey, rawPoints, tierCounts, totals } from './scoring.js';
 
 const TEAMS = ['a', 'b'];
 
@@ -30,16 +30,10 @@ export function rosterFor(match, team) {
     : [match.players[team][0]];
 }
 
-// Players are identified by name — it is all the app records. Case and padding
-// are folded so "neil" and "Neil " are one person. Unnamed slots are dropped
-// rather than collected under a blank heading.
-function nameKey(name) {
-  return String(name ?? '').trim().toLowerCase();
-}
-
 // Deduplicated, because two slots on one team can carry the same name — the
 // default second player is the obvious case — and that must not count as two
-// people playing two matches.
+// people playing two matches. A blank slot is not a person, so it is dropped
+// rather than collected under an empty heading.
 function participants(match, team) {
   const seen = new Set();
   const out = [];

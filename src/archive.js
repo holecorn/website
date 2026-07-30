@@ -9,8 +9,12 @@
 // Storage follows the scoreboard.js split: the record and list helpers are pure
 // and tested, the localStorage read/write is a thin untested wrapper.
 
+import { nameKey } from './scoring.js';
+
 // Its own key, separate from game state, so `New game` can't clear the history.
 const STORAGE_KEY = 'holecorn.matches.v1';
+
+const TEAMS = ['a', 'b'];
 
 // Stamped on every record so the switch to an event log can be told apart from
 // these round-level snapshots without guessing at the shape.
@@ -60,6 +64,58 @@ export function removeMatch(records, id) {
   return records.filter((m) => m.id !== id);
 }
 
+// When a record was last changed after the fact. Absent means "as played",
+// which is every record the app files itself. `mergeMatches` needs it to tell an
+// edit from a stale copy of the same match: without it, an export taken before a
+// rename silently reverts that rename when it is imported back.
+function editStamp(record) {
+  return Number.isFinite(record?.updatedAt) ? record.updatedAt : 0;
+}
+
+function edited(record, at) {
+  return { ...record, updatedAt: at };
+}
+
+// Replace one match's lineup — the fix for a name that was already wrong when
+// Start game was pressed.
+//
+// Attribution is positional: `throwerFor` credits a round to
+// `players[team][slot]` and nothing in `rounds` names anybody, so rewriting
+// these two arrays *is* the reattribution. Slot order therefore matters as much
+// as spelling in doubles.
+export function setMatchPlayers(records, id, players, at) {
+  return records.map((m) =>
+    m.id === id
+      ? edited({ ...m, players: { a: players.a.slice(), b: players.b.slice() } }, at)
+      : m,
+  );
+}
+
+// Rename one person everywhere they appear. Folded by `nameKey`, so it also
+// catches the spellings the career screen was already treating as one player,
+// and renaming onto a name that already exists **merges** the two — which is
+// what name-folding means, and is the way to fix a typo that invented a phantom
+// player.
+export function renamePlayer(records, from, to, at) {
+  const key = nameKey(from);
+  const name = String(to ?? '').trim();
+  if (!key || !name) return records;
+  return records.map((m) => {
+    let hit = false;
+    const players = {};
+    for (const team of TEAMS) {
+      players[team] = (m.players?.[team] ?? []).map((slot) => {
+        if (nameKey(slot) !== key) return slot;
+        hit = true;
+        return name;
+      });
+    }
+    // Only a record that actually changed is stamped, so an unrelated match
+    // can't win a merge it has no claim on.
+    return hit ? edited({ ...m, players }, at) : m;
+  });
+}
+
 export function loadArchive() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -98,6 +154,14 @@ export function restoreMatch(record) {
   return saveArchive(upsertMatch(loadArchive(), record));
 }
 
+export function saveMatchPlayers(id, players, at) {
+  return saveArchive(setMatchPlayers(loadArchive(), id, players, at));
+}
+
+export function savePlayerRename(from, to, at) {
+  return saveArchive(renamePlayer(loadArchive(), from, to, at));
+}
+
 // A record can arrive from a file the user picked, so nothing about it can be
 // assumed. Require the fields stats.js reads without checking, rather than
 // letting one stray file break the whole screen.
@@ -124,11 +188,18 @@ export function validRecord(m) {
 // Merge an import into what is already here. The id is the match, so
 // re-importing the same file, or importing one that overlaps another device's
 // history, adds nothing rather than duplicating everything.
+//
+// Of two copies of the same match the more recently *edited* one wins, and a tie
+// keeps the local copy. Both halves matter: unedited records tie at 0, so an
+// import still can't rewrite local history, while a rename made on one device
+// survives being merged with a file exported from the other before it.
 export function mergeMatches(records, incoming) {
   if (!Array.isArray(incoming)) return records;
-  return incoming
-    .filter(validRecord)
-    .reduce((acc, record) => upsertMatch(acc, record), records);
+  return incoming.filter(validRecord).reduce((acc, record) => {
+    const mine = acc.find((m) => m.id === record.id);
+    if (mine && editStamp(mine) >= editStamp(record)) return acc;
+    return upsertMatch(acc, record);
+  }, records);
 }
 
 // Matches finished since the last export. Measured against the newest end time

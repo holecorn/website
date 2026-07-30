@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
 import GameStats from './GameStats.jsx';
 import Lineup from './Lineup.jsx';
@@ -22,9 +22,11 @@ import {
 import { useScoreboardPublisher } from './useScoreboard.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
 import {
+  BOARD_NAME,
   MAX_TARGET,
   PALETTE,
   clampTarget,
+  nameKey,
   newGame,
   setBag,
   throwFirst,
@@ -121,6 +123,19 @@ function reducer(game, action) {
       const players = game.players[action.team].slice();
       players[action.index] = action.name;
       return { ...game, players: { ...game.players, [action.team]: players } };
+    }
+    case 'renamePlayer': {
+      // Only the lineup waiting on the setup screen, so a corrected spelling
+      // doesn't come back with the next game; the caller rewrites the archive.
+      // Guarded on the game being unstarted rather than trusted to the caller:
+      // renaming a slot mid-game would move rounds already committed to it,
+      // since `throwerFor` credits them by slot.
+      if (gameStarted(game)) return game;
+      const key = nameKey(action.from);
+      const to = String(action.to ?? '').trim();
+      if (!key || !to) return game;
+      const swap = (names) => names.map((n) => (nameKey(n) === key ? to : n));
+      return { ...game, players: { a: swap(game.players.a), b: swap(game.players.b) } };
     }
     case 'setColor':
       return { ...game, colors: { ...game.colors, [action.team]: action.value } };
@@ -319,6 +334,21 @@ export default function App() {
     }
   };
 
+  // Everyone the archive knows, newest spelling last so it is the one offered —
+  // the same rule `playerStats` settles a display name by.
+  const knownNames = useMemo(() => {
+    const seen = new Map();
+    for (const m of [...matches].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0))) {
+      for (const team of ['a', 'b']) {
+        for (const n of m.players?.[team] ?? []) {
+          const key = nameKey(n);
+          if (key) seen.set(key, String(n).trim());
+        }
+      }
+    }
+    return [...seen.values()].sort((x, y) => x.localeCompare(y));
+  }, [matches]);
+
   if (screen === 'stats') {
     // Stats owns its own copy while it is open, because it deletes, restores and
     // imports; re-reading on the way out is what keeps the form panel and the
@@ -330,6 +360,7 @@ export default function App() {
           setScreen('setup');
         }}
         persisted={persisted}
+        onRenamePlayer={(from, to) => dispatch({ type: 'renamePlayer', from, to })}
       />
     );
   }
@@ -367,6 +398,7 @@ export default function App() {
         <TeamsFields
           game={game}
           dispatch={dispatch}
+          knownNames={knownNames}
           onSetFirst={(team, slot) => dispatch({ type: 'throwFirst', team, slot })}
           onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
         />
@@ -590,18 +622,26 @@ export default function App() {
   );
 }
 
-const BOARD_NAME = ['start', 'far'];
-
 // The arrangement is adjusted here, on the players it describes, rather than on
 // the court — which stays a drawing. `onSetFirst` and `onSwapEnds` are what gate
-// it to the setup screen: the play screen's edit dialog renders this component
-// too and passes neither, because both would reorder slots and `throwerFor`
-// credits committed rounds by slot.
-function TeamsFields({ game, dispatch, onSetFirst, onSwapEnds }) {
+// it to the setup screen: both reorder slots, and `throwerFor` credits committed
+// rounds by slot, so a second caller that passed them would silently re-credit
+// every doubles stat.
+function TeamsFields({ game, dispatch, knownNames, onSetFirst, onSwapEnds }) {
   const doubles = game.mode === 'doubles';
   const slots = doubles ? [0, 1] : [0];
   return (
     <div className="teams-fields">
+      {/* Names already in the archive. A returning player is picked rather than
+          retyped, which is where near-duplicate spellings come from. Ignored
+          where datalist is unsupported, leaving a plain field. */}
+      {knownNames.length > 0 && (
+        <datalist id="known-names">
+          {knownNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+      )}
       {['a', 'b'].map((team) => {
         const other = team === 'a' ? 'b' : 'a';
         return (
@@ -635,6 +675,7 @@ function TeamsFields({ game, dispatch, onSetFirst, onSwapEnds }) {
                       className="team-name-input"
                       value={name}
                       maxLength={16}
+                      list={knownNames.length > 0 ? 'known-names' : undefined}
                       style={{ color: game.colors[team] }}
                       onChange={(e) =>
                         dispatch({ type: 'rename', team, index: i, name: e.target.value })

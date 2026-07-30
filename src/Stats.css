@@ -381,9 +381,112 @@
 }
 
 .match-rounds-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 11px;
+}
+
+.match-edit {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* Editing one match's lineup, above the rounds it reattributes. */
+.match-names {
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.match-names-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.match-name-heads,
+.match-name-team {
+  display: flex;
+  gap: 8px;
+}
+
+.match-name-heads {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.match-name-heads span {
+  flex: 1;
+  text-align: center;
+}
+
+.match-name-team + .match-name-team {
+  margin-top: 8px;
+}
+
+.match-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.match-names-note {
+  margin: 10px 0 0;
+  color: #f2c94c;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Looks like the cell it replaces and taps like a button. Underlined rather than
+   coloured, because the row's own name is the only thing here that is a control
+   and nothing else in the table is. */
+.player-rename {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.rename-input {
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.rename-note {
+  margin: 12px 0 0;
+  color: #f2c94c;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .durability {

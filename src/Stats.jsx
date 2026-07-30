@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { totals, teamLabel } from './scoring.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BOARD_NAME, nameKey, totals, teamLabel } from './scoring.js';
 import {
   dropMatch,
   loadArchive,
@@ -9,6 +9,8 @@ import {
   restoreMatch,
   saveArchive,
   saveLastExport,
+  saveMatchPlayers,
+  savePlayerRename,
   unexportedCount,
 } from './archive.js';
 import { playerStats, headToHead, summary, matchRounds, matchDuration } from './stats.js';
@@ -38,13 +40,14 @@ const DURABILITY = {
   null: 'This browser will not say whether it keeps your history, so export from time to time.',
 };
 
-export default function Stats({ onBack, persisted }) {
+export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const [matches, setMatches] = useState(loadArchive);
   const [lastExport, setLastExport] = useState(loadLastExport);
   const [notice, setNotice] = useState(null);
   const [deleted, setDeleted] = useState(null);
   // One match open at a time, so a long history doesn't unroll into a wall.
   const [openId, setOpenId] = useState(null);
+  const [renaming, setRenaming] = useState(null);
 
   const totalsFor = useMemo(() => summary(matches), [matches]);
   const players = useMemo(() => playerStats(matches), [matches]);
@@ -68,6 +71,24 @@ export default function Stats({ onBack, persisted }) {
   const undoDelete = () => {
     setMatches(restoreMatch(deleted));
     setDeleted(null);
+  };
+
+  // A name that was wrong for one game only — a typo caught after Start game, or
+  // the wrong person credited for a doubles end. Confined to that record.
+  const saveNames = (id, players) => {
+    setMatches(saveMatchPlayers(id, players, Date.now()));
+    setNotice(null);
+  };
+
+  // The same person under a new name: every match, and the lineup waiting on the
+  // setup screen, so the old spelling can't walk straight back into the next
+  // game. Safe to touch that lineup because this screen is only reachable from
+  // setup, where nothing has been thrown yet.
+  const renamePlayer = (from, to) => {
+    setMatches(savePlayerRename(from, to, Date.now()));
+    onRenamePlayer?.(from, to);
+    setRenaming(null);
+    setNotice(null);
   };
 
   const exportMatches = () => {
@@ -173,7 +194,15 @@ export default function Stats({ onBack, persisted }) {
                 <tbody>
                   {players.map((p) => (
                     <tr key={p.name}>
-                      <th scope="row">{p.name}</th>
+                      <th scope="row">
+                        <button
+                          className="player-rename"
+                          onClick={() => setRenaming(p)}
+                          aria-label={`Rename ${p.name}`}
+                        >
+                          {p.name}
+                        </button>
+                      </th>
                       <td>{p.matches}</td>
                       <td>
                         {p.wins}–{p.losses}
@@ -250,7 +279,13 @@ export default function Stats({ onBack, persisted }) {
                         ×
                       </button>
                     </div>
-                    {open && <MatchRounds id={`rounds-${m.id}`} match={m} />}
+                    {open && (
+                      <MatchRounds
+                        id={`rounds-${m.id}`}
+                        match={m}
+                        onSavePlayers={(players) => saveNames(m.id, players)}
+                      />
+                    )}
                   </li>
                 );
               })}
@@ -282,13 +317,160 @@ export default function Stats({ onBack, persisted }) {
           {notice && <p className="durability-notice">{notice}</p>}
         </div>
       </section>
+
+      {renaming && (
+        <RenamePlayer
+          player={renaming}
+          players={players}
+          onCancel={() => setRenaming(null)}
+          onSave={(to) => renamePlayer(renaming.name, to)}
+        />
+      )}
     </div>
+  );
+}
+
+// Renaming everywhere, from the career row that shows the wrong name. This is
+// also how two spellings become one person and how a phantom player created by a
+// typo is folded back in — renaming onto an existing name is a merge, because
+// name-folding is the only identity there is.
+function RenamePlayer({ player, players, onCancel, onSave }) {
+  const dialog = useRef(null);
+  const [value, setValue] = useState(player.name);
+  useEffect(() => {
+    if (!dialog.current?.open) dialog.current?.showModal();
+  }, []);
+
+  const to = value.trim();
+  const key = nameKey(to);
+  const changed = Boolean(to) && to !== player.name;
+  const merges = players.find((p) => p.name !== player.name && nameKey(p.name) === key);
+
+  return (
+    <dialog className="modal" ref={dialog} onClose={onCancel}>
+      <p className="modal-title">Rename {player.name}</p>
+      <p className="modal-body">
+        In {matchCount(player.matches)}, and in the lineup for the next game.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (changed) onSave(to);
+        }}
+      >
+        {/* Same 16 as the setup field: it is the cap the scoreboard payload's
+            byte budget was measured against. */}
+        <input
+          className="rename-input"
+          value={value}
+          maxLength={16}
+          autoFocus
+          onChange={(e) => setValue(e.target.value)}
+          aria-label={`New name for ${player.name}`}
+        />
+        {merges && (
+          <p className="rename-note">
+            {merges.name} already has {matchCount(merges.matches)}. They&apos;ll be counted
+            as one player from now on, and this screen can&apos;t split them again.
+          </p>
+        )}
+        <div className="confirm-actions">
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="confirm-primary" disabled={!changed}>
+            {merges ? 'Merge' : 'Rename'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+// One match's lineup. Slot order is half the fix in doubles and not just
+// spelling — `throwerFor` credits a round to a slot — so each row says which
+// board that player threw from all game.
+function MatchNames({ match, onCancel, onSave }) {
+  const doubles = match.mode === 'doubles';
+  const slots = doubles ? [0, 1] : [0];
+  const [draft, setDraft] = useState(() => ({
+    a: match.players.a.slice(),
+    b: match.players.b.slice(),
+  }));
+
+  const set = (team, i, value) =>
+    setDraft((d) => ({ ...d, [team]: d[team].map((n, at) => (at === i ? value : n)) }));
+  const keysFor = (team) => slots.map((i) => nameKey(draft[team][i])).filter(Boolean);
+  const blank = ['a', 'b'].some((team) => keysFor(team).length < slots.length);
+  // One name on both sides of the court is worth saying and not worth refusing:
+  // the default doubles lineup is already like that, so blocking it would leave
+  // exactly the records most in need of editing uneditable.
+  const shared = keysFor('a').filter((k) => keysFor('b').includes(k));
+
+  return (
+    <form
+      className="match-names"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!blank) {
+          onSave({
+            a: draft.a.map((n) => String(n ?? '').trim()),
+            b: draft.b.map((n) => String(n ?? '').trim()),
+          });
+        }
+      }}
+    >
+      <p className="match-names-label">Names in this match only</p>
+      {/* Which column is which end. Otherwise these are two identical boxes and
+          picking the wrong one silently moves half the rounds to the other
+          partner. Hidden from a reader — each field's own label says it. */}
+      {doubles && (
+        <div className="match-name-heads" aria-hidden="true">
+          {BOARD_NAME.map((board) => (
+            <span key={board}>{board} board</span>
+          ))}
+        </div>
+      )}
+      {['a', 'b'].map((team) => (
+        <div className="match-name-team" key={team}>
+          {slots.map((i) => (
+            <input
+              key={i}
+              className="match-name-input"
+              value={draft[team][i] ?? ''}
+              maxLength={16}
+              style={{ color: match.colors?.[team] }}
+              onChange={(e) => set(team, i, e.target.value)}
+              aria-label={
+                doubles
+                  ? `Team ${team.toUpperCase()} player at the ${BOARD_NAME[i]} board`
+                  : `Team ${team.toUpperCase()} player name`
+              }
+            />
+          ))}
+        </div>
+      ))}
+      {shared.length > 0 && (
+        <p className="match-names-note">
+          One name is on both teams, so those throws count for each side.
+        </p>
+      )}
+      <div className="confirm-actions">
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="submit" className="confirm-primary" disabled={blank}>
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 
 // Round-by-round, using the same shorthand as the in-play history (◎ hole,
 // ▬ board) so the two read alike.
-function MatchRounds({ id, match }) {
+function MatchRounds({ id, match, onSavePlayers }) {
+  const [editing, setEditing] = useState(false);
   const rounds = matchRounds(match);
   const doubles = match.mode === 'doubles';
   const span = matchDuration(match);
@@ -301,6 +483,16 @@ function MatchRounds({ id, match }) {
   ];
   return (
     <div className="match-rounds" id={id}>
+      {editing && (
+        <MatchNames
+          match={match}
+          onCancel={() => setEditing(false)}
+          onSave={(players) => {
+            onSavePlayers(players);
+            setEditing(false);
+          }}
+        />
+      )}
       <div className="match-rounds-head">
         <span>Rd</span>
         <span style={{ color: match.colors?.a }}>{teamLabel(match, 'a')}</span>
@@ -329,7 +521,14 @@ function MatchRounds({ id, match }) {
           </span>
         </div>
       ))}
-      <p className="match-rounds-foot">{facts.join(' · ')}</p>
+      <p className="match-rounds-foot">
+        <span>{facts.join(' · ')}</span>
+        {!editing && (
+          <button className="match-edit" onClick={() => setEditing(true)}>
+            Edit names
+          </button>
+        )}
+      </p>
     </div>
   );
 }

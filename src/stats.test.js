@@ -6,7 +6,7 @@ import {
   undoRound,
   courtPositions,
 } from './scoring.js';
-import { matchRecord } from './archive.js';
+import { matchRecord, renamePlayer, setMatchPlayers } from './archive.js';
 import {
   throwerFor,
   throwerSlot,
@@ -199,6 +199,50 @@ describe('playerStats — identity', () => {
   it('drops players left unnamed', () => {
     const m = singles('Neil', '   ', [[[H, H, H, H], [F, F, F, F]]]);
     expect(playerStats([m]).map((p) => p.name)).toEqual(['Neil']);
+  });
+});
+
+// The claim the stats screen's editing rests on: nothing in `rounds` names
+// anybody, so rewriting a record's lineup moves the throws with it. If it ever
+// stops being true, correcting a name would leave the numbers behind under the
+// old one.
+describe('editing a record reattributes it', () => {
+  // Rho throws rounds 0 and 2 and does all the scoring; Tau throws round 1.
+  const doubles = match({
+    mode: 'doubles',
+    players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+    rounds: [
+      [[H, H, H, H], [F, F, F, F]],
+      [[F, F, F, F], [F, F, F, F]],
+      [[H, H, H, H], [F, F, F, F]],
+    ],
+  });
+
+  it('carries a renamed player’s throws and results to the new name', () => {
+    const [fixed] = renamePlayer([doubles], 'rho', 'Rho B', 1);
+    const stats = playerStats([fixed]);
+    expect(find(stats, 'Rho')).toBeUndefined();
+    const rho = find(stats, 'Rho B');
+    expect(rho.rounds).toBe(2);
+    expect(rho.hole).toBe(8);
+    expect(rho.wins).toBe(1);
+  });
+
+  it('follows slot order, so swapping partners swaps who threw what', () => {
+    const [swapped] = setMatchPlayers([doubles], 'm1', { a: ['Tau', 'Rho'], b: ['Phi', 'Chi'] }, 1);
+    const stats = playerStats([swapped]);
+    expect(find(stats, 'Tau').hole).toBe(8);
+    expect(find(stats, 'Rho').hole).toBe(0);
+  });
+
+  it('merges a phantom player created by a typo back into one career', () => {
+    const rounds = [[[H, H, H, H], [F, F, F, F]]];
+    const good = singles('Neil', 'Sigma', rounds, { id: 'm1', endedAt: 1 });
+    const typo = singles('Nei', 'Sigma', rounds, { id: 'm2', endedAt: 2 });
+    const stats = playerStats(renamePlayer([good, typo], 'Nei', 'Neil', 3));
+    expect(stats.filter((p) => p.name === 'Neil')).toHaveLength(1);
+    expect(find(stats, 'Neil').matches).toBe(2);
+    expect(find(stats, 'Neil').rounds).toBe(2);
   });
 });
 

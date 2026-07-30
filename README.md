@@ -21,6 +21,11 @@ colours can match your physical bag sets) and the target score to play to (up to
 99, which is what the external scoreboard can display), then press
 **Start game**.
 
+The names carry over from the last game, so there's usually nothing to fill in.
+Typing in a name field offers everyone your history already knows — worth picking
+from, because a player is only ever identified by their name, so a fresh spelling
+of a familiar one is a new person as far as the stats are concerned.
+
 In **doubles**, each team has two players who share the team's colour, standing at
 opposite boards. Since each end is scored as its own round, the throwing partner
 alternates every round; the scoreboard highlights whoever's up and dims the
@@ -56,7 +61,9 @@ round, staying put on a wash.
 **The play screen only does scoring.** Names, colours, who throws first and where
 everyone stands are all fixed once you press **Start game**, because finished
 matches are credited to players by name and by the board they stood at. If you
-need to change any of it, **New game** takes you back to setup.
+need to change any of it, **New game** takes you back to setup — and a name you
+only notice is wrong after the game can be put right on the stats screen, which
+moves that player's numbers with it.
 
 Both teams stay on screen with live running totals and each team's points so far
 this round, so you can read the score mid-round. **End round** stays disabled
@@ -143,9 +150,8 @@ record for everyone who has played each other, and totals for washes, skunks and
 average match length.
 
 Players are matched up by name, ignoring capitals and stray spaces, so "neil"
-and "Neil " are the same person — but renaming someone starts a new history for
-them. In doubles both partners share the match result, while bag stats go to
-whoever actually threw that round.
+and "Neil " are the same person. In doubles both partners share the match result,
+while bag stats go to whoever actually threw that round.
 
 **Tap a row under Recent matches** to open it up round by round: how each team's
 four bags landed, what the round netted after cancellation, and the score as it
@@ -158,6 +164,34 @@ leave that out).
 Each row also has a **×** to delete that match — handy for a game that was
 mis-scored, or for clearing out test games. Deleting is immediate, with an
 **Undo** offered at the top of the screen until you leave it.
+
+### Fixing a name
+
+Names are the only thing identifying a player, so a typo invents somebody. There
+are two ways to put one right, and which one you want depends on how far the typo
+spread.
+
+**Edit names**, inside an expanded match, changes that match and nothing else.
+Use it for a name that was already wrong when you pressed **Start game**, or when
+the wrong partner got credited for an end — in doubles the fields say which board
+each player threw from all game, and swapping them swaps who is credited with
+which rounds. The rounds themselves aren't touched; players are credited by the
+slot they stood in, so correcting the name is all it takes to move the numbers.
+
+**Tapping a player's name in the Players table** renames them everywhere: in
+every match they appear in, and in the lineup waiting on the setup screen, so the
+old spelling doesn't come straight back with the next game. This is also how you
+tidy up after the fact:
+
+- A typo that created a phantom player — rename it to the real spelling and the
+  two fold into one history. The screen says whose history you're about to merge
+  into, and how many matches it has, because it can't be split again afterwards.
+- Two players who share a first name — rename one of them to something that
+  tells them apart ("Neil P"), and every past match follows. Bear in mind the
+  external scoreboard has room for about eight or nine characters.
+
+Neither one touches a game in progress, and neither is reachable from the play
+screen, so there's no way to move rounds around under a game you're scoring.
 
 ### Form, before a game starts
 
@@ -197,7 +231,9 @@ when there are matches you haven't exported since. **Import JSON** reads one
 back — that's how you move to a new phone, restore after clearing your browser,
 or fold in a history that was scored on someone else's device. Importing merges
 by match, so re-importing the same file, or one that overlaps what you already
-have, adds nothing and can't create duplicates.
+have, adds nothing and can't create duplicates. Where both sides hold the same
+match, whichever copy had its names corrected most recently is the one kept — so
+an export taken before a rename can't undo it.
 
 ## External scoreboard
 

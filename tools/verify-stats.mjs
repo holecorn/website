@@ -420,6 +420,127 @@ check(
   await del.close();
 }
 
+// Correcting a name. The pure helpers are covered in archive.test.js; what only a
+// browser can see is that the two scopes stay different — a per-match fix must not
+// touch the lineup waiting on the setup screen, and a career rename must, or the
+// typo walks straight back into the next game. Neither side of that is reachable
+// from a unit test: `renamePlayer` in archive.js and the reducer case in App.jsx
+// are separately correct whichever way they are wired together.
+{
+  const ren = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const renPage = await ren.newPage();
+  renPage.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  const stored = () => renPage.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]'), KEY);
+
+  await renPage.goto(URL);
+  // Tau entered as "Tua" — the typo this whole feature exists for. Rho throws
+  // rounds 0 and 2 and does the scoring, so which name the throws follow is
+  // visible rather than inferred.
+  await renPage.evaluate(() => {
+    const round = (a, b, na, nb) => ({ a, b, nets: { a: na, b: nb }, first: 'a' });
+    const bags = (t) => Array(4).fill(t);
+    localStorage.clear();
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify([{
+      format: 1, id: 'r1', startedAt: 1.7e12, endedAt: 1.7e12 + 6e5, mode: 'doubles',
+      players: { a: ['Rho', 'Tua'], b: ['Phi', 'Chi'] },
+      colors: { a: '#27ae60', b: '#f2c94c' }, target: 21, winner: 'a',
+      rounds: [
+        round(bags('hole'), bags('floor'), 12, 0),
+        round(bags('floor'), bags('floor'), 0, 0),
+        round(bags('hole'), bags('floor'), 12, 0),
+      ],
+    }]));
+  });
+  await renPage.reload();
+  await renPage.waitForSelector('.setup');
+  await renPage.getByRole('button', { name: 'Doubles' }).click();
+  const renNames = renPage.locator('.team-name-input');
+  for (const [i, name] of ['Rho', 'Tua', 'Phi', 'Chi'].entries()) await renNames.nth(i).fill(name);
+
+  // The suggestions are where a near-duplicate spelling gets prevented rather
+  // than corrected. Only the wiring is checkable — the dropdown itself is the
+  // browser's.
+  check(
+    'the setup fields are wired to the archive name list',
+    (await renNames.nth(0).getAttribute('list')) === 'known-names',
+  );
+  const offered = await renPage.locator('#known-names option').evaluateAll((os) =>
+    os.map((o) => o.value),
+  );
+  check(
+    'everyone in the archive is offered',
+    ['Rho', 'Tua', 'Phi', 'Chi'].every((n) => offered.includes(n)),
+    offered.join(','),
+  );
+
+  await renPage.getByRole('button', { name: 'Stats' }).click();
+  const roundsBefore = JSON.stringify((await stored())[0].rounds);
+
+  await renPage.locator('.recent-open').first().click();
+  await renPage.getByRole('button', { name: 'Edit names' }).click();
+  const slots = renPage.locator('.match-name-input');
+  check('doubles offers a field per player', (await slots.count()) === 4);
+  check(
+    'each field says which board that player threw from',
+    (await slots.nth(1).getAttribute('aria-label'))?.includes('far board'),
+    await slots.nth(1).getAttribute('aria-label'),
+  );
+  await slots.nth(1).fill('Tau');
+  await renPage.locator('.match-names').getByRole('button', { name: 'Save' }).click();
+
+  const throwers = await renPage
+    .locator('.match-round .mr-side:nth-child(2) .mr-thrower')
+    .allInnerTexts();
+  check(
+    'the corrected name is credited with the rounds that slot threw',
+    throwers.join(',') === 'Rho,Tau,Rho',
+    throwers.join(','),
+  );
+  const edited = (await stored())[0];
+  check('rewriting the lineup leaves the rounds alone', JSON.stringify(edited.rounds) === roundsBefore);
+  check('the edit is stamped so a stale export cannot revert it', edited.updatedAt > 0, `${edited.updatedAt}`);
+  const tau = await statsFor(renPage, 'Tau');
+  check('the career table follows', tau.RDS === '1', JSON.stringify(tau));
+  check('and the typo is gone from it', !(await renPage.getByText('Tua').count()));
+
+  // Renaming onto somebody who already has a history is a merge. Said out loud,
+  // because it cannot be undone from this screen.
+  await renPage.locator('.stats-table tbody tr', { hasText: 'Chi' }).locator('.player-rename').click();
+  await renPage.locator('.rename-input').fill('Phi');
+  check('a merge is named as a merge', await renPage.getByText('already has 1 match').isVisible());
+  check(
+    'and the button says so too',
+    await renPage.locator('.modal').getByRole('button', { name: 'Merge' }).isVisible(),
+  );
+  await renPage.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
+
+  await renPage.locator('.stats-table tbody tr', { hasText: 'Phi' }).locator('.player-rename').click();
+  await renPage.locator('.rename-input').fill('Phi B');
+  await renPage.locator('.modal').getByRole('button', { name: 'Rename' }).click();
+  check('a career rename reaches the record', (await stored())[0].players.b[0] === 'Phi B');
+  check('and the career table', (await renPage.locator('.stats-table tbody tr', { hasText: 'Phi B' }).count()) === 1);
+
+  await renPage.getByRole('button', { name: '‹ Back' }).click();
+  await renPage.waitForSelector('.setup');
+  const after = await renNames.evaluateAll((es) => es.map((e) => e.value));
+  check(
+    'a career rename also fixes the lineup waiting for the next game',
+    after[2] === 'Phi B',
+    after.join(','),
+  );
+  // The other half of the same assertion: the two scopes are different. A fix
+  // confined to one match must not quietly rewrite the current lineup.
+  check(
+    'a per-match fix does not touch that lineup',
+    after[1] === 'Tua',
+    after.join(','),
+  );
+  await ren.close();
+}
+
 // The stats screen on a wide screen. It is an `.app` too, so it was picking up the
 // play screen's wide-tier grid: everything landed in the 408px first column while
 // 340px stayed reserved for a rail that never renders, putting the content 196px left

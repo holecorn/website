@@ -33,8 +33,8 @@ project dependency. It starts and stops its own preview server.
   rule change (see Testing).
 - `src/App.jsx` — app shell, reducer, screen (setup/play/stats) and celebration
   state, localStorage persistence.
-- `src/archive.js` — finished matches. Pure record/upsert/remove helpers plus
-  the localStorage wrapper, split the same way as `scoreboard.js`.
+- `src/archive.js` — finished matches. Pure record/upsert/remove/rename helpers
+  plus the localStorage wrapper, split the same way as `scoreboard.js`.
 - `src/stats.js` — career stats over archived matches. Pure, like `scoring.js`;
   tested in `src/stats.test.js`.
 - `src/Stats.jsx` / `src/Stats.css` — the career stats screen.
@@ -247,12 +247,11 @@ project dependency. It starts and stops its own preview server.
   text. `verify-positions.mjs` asserts this as an *absence*, including a list of
   every button the screen may show, because nothing in the components would notice
   a control coming back.
-  - **The known cost, accepted: a name typo noticed after `Start game` is
-    permanent.** Career stats fold by name and a record bakes in the names at
-    archive time, so that match reports a phantom player; `New game` clears the
-    game rather than returning to setup with it. Recovery is deleting the match or
-    export → edit → import. **Renaming on the stats screen is the proper fix and is
-    not built yet.**
+  - **The cost this used to carry is now paid on the stats screen instead.** A typo
+    noticed after `Start game` was permanent — `New game` clears the game rather
+    than returning to setup with it, so recovery was deleting the match. It is now
+    corrected afterwards; see **Editing names** below. That is the whole reason the
+    play screen can stay locked, so don't reopen it here.
   - **`setFirst` survives with no caller of its own.** `throwFirst` composes it, and
     it is the natural way for a test to say "B opens", so the rule stayed in
     `scoring.js` when its reducer case went.
@@ -446,10 +445,12 @@ project dependency. It starts and stops its own preview server.
   there is no way to tell a protected archive from one about to be deleted.
   `null` means the browser wouldn't say; don't collapse it into `false`.
 - **Import merges by match id and is idempotent.** Re-importing the same file,
-  or one that overlaps another device's history, adds nothing. The local copy of
-  a match both devices hold wins, so an import can't rewrite local history.
-  `validRecord` gates every entry because the file came from a picker and could
-  be anything — it checks exactly the fields `stats.js` reads without checking.
+  or one that overlaps another device's history, adds nothing. Of two copies of one
+  match the more recently *edited* one wins and a tie keeps the local copy, so an
+  unedited import can't rewrite local history — see **Editing names** for why that
+  is a comparison and not simply "local wins". `validRecord` gates every entry
+  because the file came from a picker and could be anything — it checks exactly the
+  fields `stats.js` reads without checking.
 - **`Start game` sits at the top beside the mode toggle, and that retired a long
   fight over pixels.** It is the one control pressed every game, the names persist
   between games so there is usually nothing to fill in, and **above everything else
@@ -514,6 +515,87 @@ project dependency. It starts and stops its own preview server.
   file appears. The unexported count is measured against the newest exported
   `endedAt`, not a match count, so pruning the oldest can't make it go
   backwards.
+
+## Editing names
+
+- **Rewriting a record's `players` array *is* the reattribution, and that is the
+  whole feature.** `throwerFor` credits a round to `players[team][slot]` and
+  nothing in `rounds` names anybody, so `setMatchPlayers` and `renamePlayer` in
+  `archive.js` touch two arrays and every derived surface — career table, H2H,
+  `sideRecord`, the Form panel, the summary chips — recomputes on load. Don't add a
+  name index, an id, or a display-name table for this.
+  - **An alias map applied at read time was the alternative and is worse.** It
+    would keep records as-played, but every reader (`playerStats`, `headToHead`,
+    `sideRecord`, `matchRounds`, `lineupStats`) would have to apply it, it needs its
+    own syncing, and it cannot express a fix confined to one match. Moving the data
+    beat adding a lookup in front of it.
+  - **Player *ids* were considered and rejected.** The board and the panel render
+    names — 16 UTF-16 units, 8 characters on the LED strip — so telling two Neils
+    apart means typing "Neil P" as the display name whatever the identity model is.
+    Ids would buy only rename-without-a-sweep, and the sweep is ten lines.
+- **Two scopes, and the difference between them is load-bearing.** A per-match edit
+  (in the expanded match) must **not** touch the lineup waiting on the setup screen,
+  because it is a correction to history; a career rename (from the Players row)
+  **must**, or the typo walks straight back into the next game. `verify-stats.mjs`
+  asserts both directions, and it is the only thing that can: `renamePlayer` and the
+  `renamePlayer` reducer case in `App.jsx` are separately correct however they are
+  wired together. Verified by mutation — dropping the `onRenamePlayer` dispatch, and
+  adding one to the per-match path, each fail exactly one of those two assertions and
+  nothing else.
+- **The career rename reaches live game state, which is only safe because `stats` is
+  reachable only from `setup`.** The reducer case guards on `gameStarted` anyway,
+  because renaming a slot mid-game would move rounds already committed to it. Same
+  reasoning as the arrangement controls: the guard is what makes a second caller
+  safe, not the current call site.
+- **Renaming onto an existing name is a merge and needs no code**, because
+  name-folding already is the identity. What it needs is *saying*: the dialog names
+  whose history is about to absorb which, and how many matches, since this screen
+  can't split them again. Splitting is the per-match edit, one match at a time.
+- **A name on both teams is warned about, not refused.** The default doubles lineup
+  is `Player 2` on both sides, so blocking a clash would leave exactly the records
+  most in need of editing uneditable. (The career fold does credit those throws to
+  both sides — pre-existing, and the warning says so rather than pretending
+  otherwise.)
+- **`nameKey` lives in `scoring.js` now, not `stats.js`.** Three places need the
+  identity rule — the career fold, the archive rewrite and the reducer — and two
+  definitions of "same person" is the failure that has no symptom. `BOARD_NAME`
+  moved for the same reason: the match-edit form labels an archived lineup with it.
+  Both follow the `PALETTE` precedent, since a constant exported from a component
+  file trips the fast-refresh lint.
+- **The doubles edit form captions its two columns**, `aria-hidden` because each
+  field's own label already says the board. Without them it is two identical boxes
+  and picking the wrong one silently moves half the rounds to the other partner —
+  the same trap the setup screen's board chip exists for.
+- **`updatedAt`, and why the merge rule had to change with it.** `upsertMatch` keeps
+  only the local `endedAt` and takes the incoming body, so `mergeMatches` was
+  *last import wins* — this file's claim that "the local copy wins" was only ever
+  true of that one field, and `archive.test.js` only asserted it. Once records are
+  editable that is a live bug: a stale export re-imported reverts a rename. So a
+  record carries `updatedAt` when it is edited, and of two copies of one match the
+  newer edit wins with a tie keeping the local one.
+  - **Both halves matter.** Unedited records tie at 0 — which is every record the
+    app files itself — so an import still can't rewrite local history and stays
+    idempotent, while an edit made on either device survives the merge.
+  - **Only a record that actually changed is stamped**, so an unrelated match can't
+    win a merge it has no claim on.
+  - **The rule is in `mergeMatches`, not `upsertMatch`.** `upsertMatch` is the local
+    write path (archive on win, restore after an undo) and must keep taking the
+    incoming body; a re-win of an edited record can't arise, because the stats screen
+    is only reachable once the live game has a different id.
+  - **Deletion still does not propagate.** A match deleted on one device comes back
+    from the other's export. Tombstones aren't built; export is a snapshot, and this
+    is the known limit rather than an oversight.
+  - This is the piece any cross-device story needs first, whichever it turns out to
+    be — file sharing, a retained archive on the scoreboard broker, or a backend.
+- **The setup fields offer archived names** (`datalist`, so an unsupporting browser
+  degrades to a plain field). Prevention rather than correction: the fields keep the
+  last game's names, so it is a *new* player being typed that goes wrong. Default
+  names show up in the list because they are genuinely in the archive — filtering
+  them would be a lie about the history.
+- **The new markup reuses `.modal` and `.confirm-actions` from `App.css` without
+  redeclaring them**, which matters: `Stats.css` is bundled first, so a redeclaration
+  would lose at equal specificity — the `.app.stats-screen` trap again. Everything
+  else is a new class in `Stats.css`.
 
 ## External scoreboard
 
@@ -1110,7 +1192,10 @@ blobs, so a rules change that breaks attribution surfaces there instead of
 quietly agreeing with a stale fixture. `tools/verify-stats.mjs` covers what the
 unit tests can't: that the effect in `App.jsx` fires on the right transitions.
 That is the part which would otherwise either lose every match or file each one
-twice, with the pure helpers passing throughout.
+twice, with the pure helpers passing throughout. It covers the same gap for
+renaming — that a career rename reaches the setup lineup and a per-match fix does
+not — where both halves of each are individually correct and only the wiring
+between them can be wrong.
 
 It also ends by stripping the secure-context-only APIs and reloading, because
 **every other browser check runs on `localhost`, which is a secure context** —
