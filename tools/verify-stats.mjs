@@ -710,11 +710,23 @@ check(
           slack: Math.round(
             box(top).width - kids.reduce((s, n) => s + box(n).width, 0) - gap * (kids.length - 1),
           ),
+          // What the row would need if nothing shrank, against what it has. The
+          // drawn widths above cannot say this: once a control is clipping, its
+          // box is the squeezed size and the slack reads 0 however far over it is.
+          avail: Math.round(box(top).width),
+          needed: Math.round(
+            kids.reduce((s, n) => s + Math.max(n.scrollWidth, box(n).width), 0) +
+              gap * (kids.length - 1),
+          ),
         };
       });
       const at = `${w}px ${mode.toLowerCase()}`;
       check(`the setup row is one line at ${at}`, r.lines === 1, `${r.slack}px slack`);
-      check(`and nothing in it is squeezed at ${at}`, r.squeezed.length === 0, r.squeezed.join(' '));
+      check(
+        `and nothing in it is squeezed at ${at}`,
+        r.squeezed.length === 0,
+        `${r.squeezed.join(' ')}: needs ${r.needed}px of ${r.avail}px`,
+      );
     }
     await narrow.close();
   }

@@ -66,10 +66,16 @@
   overflow: hidden;
 }
 
+/* 16px, not 20px: this and the Guests chip's 12px are where the row's headroom
+   for a wider UI font comes from. `system-ui` is SF Pro on iOS and Roboto on
+   stock Android, but it is neither on a runner and need not be on an OEM skin —
+   measured, the same row needs 22px more on the deploy runner's font than on a
+   Mac, which put it 12px over at 360px while every check but the squeeze one
+   passed. Vertical padding is untouched, so the tap target keeps its height. */
 .start-game {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 8px 20px;
+  padding: 8px 16px;
   border: none;
   border-radius: 10px;
   background: #27ae60;
@@ -103,10 +109,11 @@
 }
 
 /* Third control in .setup-top, which must not wrap — so it neither grows nor
-   shrinks, and the row's fit is held by tools/verify-stats.mjs. */
+   shrinks, and the row's fit is held by tools/verify-stats.mjs. 12px rather than
+   16px for the same reason .start-game is 16px rather than 20px. */
 .casual-toggle {
   flex: 0 0 auto;
-  padding: 7px 16px;
+  padding: 7px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;

@@ -130,17 +130,32 @@ project dependency. It starts and stops its own preview server.
     height for a control that is off almost always. Three things bought the space and
     all three are load-bearing: the button says **`Start`** rather than `Start game`
     (44px), the mode labels carry **10px** of side padding rather than 22px (48px),
-    and the row's gap is 8px (4px). Measured, the row needs 316px against the 328px a
+    and the row's gap is 8px (4px). Measured, the row needs 302px against the 328px a
     360px Android has and the 343px a 375px SE has. **`Start game` with 22px padding
     overruns the SE by 59px.** At 320px (iPhone 5/SE1) the mode labels clip — they
     did before this change too, at 326px needed against 288px, so that width has
     never fitted and is not a regression.
+    - **Every one of those figures is `system-ui` on a Mac, and that is not what the
+      deploy runner draws.** Measured under `act`: the same row needs **22px more** on
+      Ubuntu's `system-ui` than on SF Pro, which put it 12px over at 360px and left it
+      at *exactly* 0px slack on the SE — a red deploy on a layout that looked fine on
+      every device to hand. So the row now carries 26px of headroom on a Mac rather
+      than 10px, bought from `.start-game`'s side padding (20→16px) and the Guests
+      chip's (16→12px). **Those two are where any future squeeze comes from**, not the
+      mode labels: 10px is the number this row was already cut to once, and it is the
+      one the segmented control can least afford. `system-ui` is SF Pro on iOS and
+      Roboto on stock Android, so the headroom is not for the runner's sake — it is
+      for an OEM skin or a bumped system font size, where the labels would otherwise
+      clip on a real phone.
     - **`verify-stats.mjs` asserts the row is one line *and* that nothing in it is
       squeezed**, because one line alone is worthless here: `.start-game` may shrink
       and `.mode-toggle` clips its labels rather than overflowing the document, so
       restoring the 22px padding leaves the row on one line with 0px slack and passes
       both a wrap check and an overflow check. Verified by mutation — it fails only
-      the squeeze assertion. Same lesson as `verify-lanes.mjs`.
+      the squeeze assertion. Same lesson as `verify-lanes.mjs`. Its failure detail
+      reports **needed against available**, because the drawn widths cannot say it:
+      once a control is clipping, its box *is* the squeezed size and the slack reads
+      0px however far over the row is.
     - **The hint is drawn only while it is on**, so the ordinary case spends nothing;
       it is the one thing the collapsed fields below can't say for themselves.
     - **A third segment inside `.mode-toggle` is still wrong**, even though it would
@@ -1557,6 +1572,16 @@ what `scoreboardPayload()` produces" but was missing a field, and two characters
 passing locally is not evidence they pass in CI. `act` covers that gap for the
 `build` and `firmware` jobs; the `deploy` job can't run locally at all. See
 `tools/README.md`.
+
+**The browser binary is the smaller half of that gap; the *fonts* are the bigger
+one.** `system-ui` is SF Pro on a Mac and whatever fontconfig picks on the runner,
+so every check that measures a text-sized box reads a different number there —
+measured, 22px across `.setup-top`, which is what turned a row with 10px of slack
+into a failed deploy. Nothing about that is visible from a local run, in either
+browser, because both use the Mac's fonts. **So `act` is the only way to check a
+layout change, not merely a workflow change** — run it before pushing anything that
+moves a width, and treat a local pass as saying nothing. `--with-deps` is kept in
+the workflow for the same reason: part of what it installs is those fonts.
 
 CI runs `npm test`, the build and `npm run test:browser` in one job, and
 `npm run test:firmware` in a parallel one. All of them gate the deploy —
