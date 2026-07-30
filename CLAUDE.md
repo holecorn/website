@@ -141,7 +141,14 @@ project dependency. It starts and stops its own preview server.
       at *exactly* 0px slack on the SE — a red deploy on a layout that looked fine on
       every device to hand. So the row now carries 26px of headroom on a Mac rather
       than 10px, bought from `.start-game`'s side padding (20→16px) and the Guests
-      chip's (16→12px). **Those two are where any future squeeze comes from**, not the
+      chip's (16→12px). On the runner's own font that is **328px of 328px — it fits
+      with nothing spare**, and the 4px of headroom the change was predicted to leave
+      there never materialised, because `.start-game` was already being shrunk by the
+      flex line so 4px of the 16px was money the row had spent anyway. Fine on any
+      real device (302px on SF Pro, and Roboto is narrower still than the runner's
+      face), but **the CI figure has no margin**, so the next thing that widens this
+      row fails the deploy rather than eating slack.
+      **Those two paddings are where any future squeeze comes from**, not the
       mode labels: 10px is the number this row was already cut to once, and it is the
       one the segmented control can least afford. `system-ui` is SF Pro on iOS and
       Roboto on stock Android, so the headroom is not for the runner's sake — it is
