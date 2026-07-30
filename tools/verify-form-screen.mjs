@@ -407,6 +407,76 @@ await new Promise((r) => setTimeout(r, 1500));
   await display.screenshot({ path: `${dir}/form-zero-rate.png` });
 }
 
+// Everything above publishes from a synthetic client. This block is the only one
+// that drives the scoring app itself, because the failure it covers lives in the
+// wiring between two halves that are each correct: a career rename reaches the
+// live lineup at once, but `App` holds its own copy of the archive that `Stats`
+// only refreshes on the way out. In between, the board drew the corrected name
+// against nobody's history — 0-0, "no matches yet" — and stayed that way for as
+// long as the stats screen was open. Nothing hermetic can see it: while `Stats`
+// is open the setup screen's own Form panel is not on screen, so the published
+// lineup is the only surface the disagreement reaches.
+console.log('\na career rename does not publish the new name with an empty record');
+{
+  const renCode = 'ren' + Math.floor(Math.random() * 1e6);
+  const renLink = `broker=${encodeURIComponent(broker)}&code=${renCode}`;
+  const board = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  board.on('pageerror', (e) => errors.push(e.message));
+  await board.goto(`${BASE}?display=1&${renLink}`);
+
+  const scorer = await browser.newPage({ viewport: { width: 430, height: 932 } });
+  scorer.on('pageerror', (e) => errors.push(e.message));
+  await scorer.goto(BASE);
+  await scorer.evaluate(([renCode, broker]) => {
+    const bags = (t) => Array(4).fill(t);
+    const round = (a, b, na, nb) => ({ a, b, nets: { a: na, b: nb }, first: 'a' });
+    localStorage.clear();
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify([{
+      format: 1, id: 'r1', startedAt: 1.7e12, endedAt: 1.7e12 + 6e5, mode: 'singles',
+      players: { a: ['Rho'], b: ['Phi'] },
+      colors: { a: '#27ae60', b: '#f2c94c' }, target: 21, winner: 'a',
+      rounds: [
+        round(bags('hole'), bags('floor'), 12, 0),
+        round(bags('hole'), bags('floor'), 12, 0),
+      ],
+    }]));
+    localStorage.setItem('holecorn.scoreboard.v1', JSON.stringify({
+      broker, username: '', password: '', code: renCode, enabled: true, layout: 'full',
+    }));
+  }, [renCode, broker]);
+  await scorer.reload();
+  await scorer.waitForSelector('.setup');
+  const renNames = scorer.locator('.team-name-input');
+  await renNames.nth(0).fill('Rho');
+  await renNames.nth(1).fill('Phi');
+  await new Promise((r) => setTimeout(r, 5000));
+
+  const rows = () => board.locator('.form-record').allInnerTexts();
+  const before = await rows();
+  check('the board has the roster before the rename', before[0]?.replace(/\s/g, '') === '1–0',
+    JSON.stringify(before));
+
+  await scorer.getByRole('button', { name: 'Stats' }).click();
+  await scorer.locator('.stats-table tbody tr', { hasText: 'Rho' }).locator('.player-rename').click();
+  await scorer.locator('.rename-input').fill('Rho B');
+  await scorer.locator('.modal').getByRole('button', { name: 'Rename' }).click();
+  await new Promise((r) => setTimeout(r, 2500));
+
+  // Still on the stats screen. Leaving it re-reads the archive and would hide the
+  // bug, so the assertion has to be made here.
+  const names = await board.locator('.form-name').allInnerTexts();
+  check('the board follows the new spelling', names[0]?.toLowerCase() === 'rho b', names.join(','));
+  const after = await rows();
+  check(
+    'and keeps the history behind it, without leaving the stats screen',
+    after[0]?.replace(/\s/g, '') === '1–0',
+    JSON.stringify(after),
+  );
+  await board.screenshot({ path: `${dir}/form-after-rename.png` });
+  await board.close();
+  await scorer.close();
+}
+
 check('no uncaught errors in either view', errors.length === 0, errors.join(' | '));
 
 pub.close();

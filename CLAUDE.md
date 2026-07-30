@@ -639,6 +639,16 @@ project dependency. It starts and stops its own preview server.
   open — it deletes, restores and imports — and `App` re-reads on the way back;
   without that a deleted match keeps appearing in the form panel until a reload,
   which is what `verify-stats.mjs`'s deletion context covers.
+  - **A career rename is the exception and re-reads at once, not on the way back.**
+    Every other mutation on that screen only changes the archive, so a stale copy is
+    merely old; a rename also reaches the live lineup through the `renamePlayer`
+    dispatch, so between the two the app holds a name its archive has never heard of
+    — and publishes it to the board as 0-0, "no matches yet", for as long as the
+    stats screen stays open. `savePlayerRename` has already written by the time
+    `onRenamePlayer` runs, so `loadArchive()` there is the whole fix.
+    `verify-form-screen.mjs` is the only place that can hold it: leaving the screen
+    hides it, and while `Stats` is open the setup screen's own Form panel isn't
+    rendered, so the published lineup is the sole surface the disagreement reaches.
 - **Export/import is the only route off a device** until there's a backend, so
   `verify-stats.mjs` drives the whole round trip rather than just asserting a
   file appears. The unexported count is measured against the newest exported
@@ -1557,7 +1567,10 @@ set: they need a real broker, and a deploy should not fail because a third party
 down. `verify-form-screen` covers the one thing nothing hermetic can — publish →
 retain → subscribe → override the chosen layout → clear → back to the score, on
 both `?display=1` and `?panel=1`, plus a display opened late recovering the
-retained roster. Everything either side of that is covered without a broker: the
+retained roster. It is also the only place a career rename can be watched reaching
+the board while the stats screen is still open, which is the window the app's own
+copy of the archive used to be stale in — see **Editing names**. Everything either
+side of that is covered without a broker: the
 payload and the clear in `scoreboard.test.js`, the retain-and-re-assert behaviour
 against a fake client in `scoreboardLink.test.js`, and the drawing itself by the
 pixel check.

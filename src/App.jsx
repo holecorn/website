@@ -392,7 +392,15 @@ export default function App() {
           setScreen('setup');
         }}
         persisted={persisted}
-        onRenamePlayer={(from, to) => dispatch({ type: 'renamePlayer', from, to })}
+        onRenamePlayer={(from, to) => {
+          // Re-read here as well as on the way out, because this is the one
+          // mutation that also reaches the live lineup: the slot takes the new
+          // name at once, so an archive still holding the old spelling publishes
+          // the new name with nobody's history behind it. Stats has already
+          // written by the time this runs.
+          dispatch({ type: 'renamePlayer', from, to });
+          setMatches(loadArchive());
+        }}
       />
     );
   }
