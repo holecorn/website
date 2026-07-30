@@ -351,14 +351,15 @@ refuses to pass unless some scene carries a lineup.
 
 ### And a fourth: the wordmark at power-on
 
-For `SPLASH_MS` (2.5 s) after `panel->begin()` the board shows the Holecorn
+For `SPLASH_MS` (3.3 s) after `panel->begin()` the board shows the Holecorn
 wordmark, in **two of the app's four team colours picked at random each boot**, with
 a 2x2 connect indicator in the top-right corner: red for no WiFi, amber for WiFi but
-no broker, green once subscribed.
+no broker, green once subscribed. **HOLE slides in from the left and CORN from the
+right** over the first `SPLASH_SLIDE_MS` (0.8 s), meeting where the masks put them.
 
 | | value |
 | --- | --- |
-| duty | **24.5%**, against `DUTY_CEILING`'s 30% |
+| duty | **24.5%**, against `DUTY_CEILING`'s 30% — the slide only ever lights less |
 | flash | 4 kB of coverage maps, 2 kB per word |
 | brightnesses | 18 on screen, faintest 96 of 242 |
 | mark | 111 x 28 px of the 128 x 32, against 82 px wide as the app once authored it |
@@ -374,11 +375,45 @@ no broker, green once subscribed.
   preference the scorer keeps, and this is the first few seconds of a boot. Nothing on
   the wire selects it, so `tools/test-firmware.mjs` has a second standalone assertion
   that some scene carries a splash.
-- **The two colours are arguments to `drawSplash`, not chosen inside it.** `render.h`
-  host-compiles and the pixel check needs the same inputs to produce the same frame, so
-  the randomness lives in `sketch.ino` — `esp_random()`, not `random()`, which is seeded
-  identically every boot and would show the same pair every time. The second index steps
-  past the first over the remaining colours, so it cannot repeat it without a retry loop.
+- **The two colours and the clock are arguments to `drawSplash`, not read inside it.**
+  `render.h` host-compiles and the pixel check needs the same inputs to produce the same
+  frame, so the randomness lives in `sketch.ino` — `esp_random()`, not `random()`, which
+  is seeded identically every boot and would show the same pair every time. The second
+  index steps past the first over the remaining colours, so it cannot repeat it without a
+  retry loop. `elapsed` arrives the same way, from `millis() - splashStart`.
+- **The slide travels a whole panel width per word, not the distance to its own edge.**
+  The masks are panel-sized and carry their own placement, so `PANEL_W` is the one figure
+  that is off-screen whatever `generate_logo.mjs` last produced. The cost is that the
+  first ~130 ms draws nothing, because that much of the travel happens before either word
+  reaches an edge — invisible at boot, where the panel has been dark anyway. The words
+  rest side by side and so never cross, which is why the moving frames need no ordering
+  rule that the settled one doesn't.
+- **`splashSlide` eases out, and is integer in both languages.** The offset is a cubic on
+  the time left, so the entry is fast and the arrival slow: the board redraws in tens of
+  milliseconds, and those few frames are better spent on the arrival than shared evenly
+  with a stretch of empty panel. 64-bit in the C++ because travel x span³ overruns a
+  `uint32_t`; the JS mirror is exact because the widest product is still whole in a double.
+- **The curve is pinned millisecond by millisecond, not by the scenes.** `test_render.cpp`
+  writes `out/splash-curve.json` and `tools/test-firmware.mjs` compares every entry
+  against `src/panelRender.js`. Dumped frames cannot do this job and it is worth knowing
+  why before trimming it: a curve that differs *between* two sample times draws an
+  identical frame at each of them. Verified by mutation — a JS curve off by one
+  millisecond passes all four slide scenes and fails only this.
+- **Nothing above can see where the slide ends**, because every frame is rendered through
+  the same offset, so a slide that settled a pixel off its mark would shift the PPMs with
+  it and still match. Hence two assertions on the ends of the curve, and one in
+  `tools/verify-panel.mjs` that the settled mark is clear of both edges.
+- **`SPLASH_RENDER_INTERVAL` is 25 ms against `RENDER_INTERVAL`'s 100 ms.** A score
+  changes once a round; a slide needs frames, and can have them because rendering does
+  not block and there is no traffic to keep up with yet. At 100 ms the whole animation is
+  eight frames, six of which show movement. **`?panel=1` steps its clock in the same
+  increments**, so the emulator shows the board's cadence rather than the browser's 60 Hz
+  — see `Panel.jsx`, and CLAUDE.md for why no check covers that.
+- **Whether the slide can stutter on real hardware is untested**, since nothing has run on
+  a board. `ensureWifi()` cannot block, and the blocking call — `client.connect()` — is
+  reached only once WiFi is up, which typically takes 1-3 s, so the 800 ms slide should be
+  over first. A warm reconnect that associates in under 800 ms and then meets an
+  unreachable broker is the case that would freeze it mid-arrival.
 - **The indicator is only on the splash.** Once a score is up, a dropped link is
   already said by the whole panel dimming, so a corner dot would be repeating it. The
   four pixels would fit the `score` layout's margins but not `full`, whose name row

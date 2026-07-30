@@ -1088,7 +1088,58 @@ project dependency. It starts and stops its own preview server.
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at
   random each boot**, with a 2x2 connect indicator in the corner. 24.5% duty against the
-  30% ceiling. The parts that are easy to undo:
+  30% ceiling. **HOLE slides in from the left and CORN from the right** over the first
+  `SPLASH_SLIDE_MS` of the 3.3s. The parts that are easy to undo:
+  - **The slide is one integer function and a clock argument, and both halves are load-
+    bearing.** `splashSlide` lives in `render.h` — it is drawing, so the pixel check has to
+    own it, unlike `SPLASH_MS`, which is the sketch's the way `WINNER_BLINK` is. `elapsed`
+    is passed *in*, so the same inputs still give the same frame; the masks are **sampled**
+    at an offset rather than drawn at one, so a word half off the panel is clipped by the
+    read and nothing is written outside it.
+    - **The travel is a whole panel width per word**, not the distance to each word's own
+      edge, because the masks are panel-sized and carry their own placement — so `PANEL_W`
+      is off-screen whatever `generate_logo.mjs` last produced. Measured cost: the first
+      ~130ms draws nothing, which at boot follows a dark panel and reads as nothing at all.
+    - **Duty is unaffected**, because a clipped word lights *less* than a settled one —
+      measured, 0.1%, 4.4% and 21.0% through the slide against 24.6% at rest. So this is
+      not a screen `DUTY_CEILING` needed re-checking for, which the form screen was.
+  - **The scenes cannot pin an easing curve, and four of them nearly shipped pretending
+    to.** A curve that differs *between* two sample times draws an identical frame at each,
+    so `test_render.cpp` writes `out/splash-curve.json` — every offset the slide passes
+    through — and `test-firmware.mjs` compares the JS against all 802 of them. Verified by
+    mutation: a JS curve off by one millisecond passes all four slide scenes and fails only
+    the curve. **Don't replace the curve dump with more scenes.**
+    - **Where the slide *ends* is unpinned by any frame**, because every frame renders
+      through the same offset, so a slide settling a pixel off its mark shifts the PPMs
+      with it and still matches. Hence the two assertions on the ends of the curve, and
+      the browser check's "clear of both edges".
+  - **The emulator steps the slide's clock in `SPLASH_RENDER_INTERVAL`s, not per animation
+    frame**, so it draws the frames the board draws: a browser gets through half again as
+    many (60Hz against the board's 25ms tick), and how smooth 30 frames of slide look is
+    the question the emulator exists to answer. Repeating a value is a render React drops,
+    so it also repaints only on the ticks.
+    - **Nothing checks this, and no cheap check can.** Removing the quantisation fails no
+      assertion — verified by mutation. Telling 25ms steps from 16ms ones through the
+      canvas needs a count of distinct frames over ~40 clock steps against a threshold
+      tuned to Playwright's own rAF period, which is a tool detail. So it is recorded here
+      instead: **if you simplify it back to `setElapsed(t)`, the emulator quietly stops
+      answering that question.**
+  - **`verify-panel.mjs` is the only thing that can see the emulator hand over a moving
+    clock**, and it needed two fixes to be able to:
+    - **`page.clock.install()` leaves the clock ticking with real time** — measured, 503ms
+      of it for a 500ms wait — so the frames landed wherever the round trips left them. The
+      old block's comment claimed the opposite and was harmless only because nothing moved.
+      It now `pauseAt`s as well, and the mid-slide read went from 2px-from-settled to the
+      frame it asks for. **A `runFor` step is not a step unless the clock is paused.**
+    - **Brightness is thresholded against a measured constant, not the row's own minimum.**
+      That minimum wobbles by a pixel of antialiasing, and when it landed on 71 rather than
+      72 every unlit LED counted as lit: the old "lit across the middle" assertion was
+      passing on **122 LEDs of noise**. An unlit dot reads 72, a neighbour's halo lifts one
+      to ~95, the faintest coverage pixel reads ~200, so the bar is 150.
+    - **The mark's position is measured as a column *span* over every row**, not as a count
+      on one row. A single row crosses letters wherever the words are, so both the count and
+      the edge test read almost the same mid-slide as settled — which is how the first
+      version of this check passed while measuring nothing.
   - **The mark is re-spaced for the panel and is not the app's geometry.** Fitted as
     authored it used 82 of 128 columns and the letters came out at 10px, where Bebas
     Neue's condensed R and N run into themselves. `generate_logo.mjs` eases the tilt to 8°,
@@ -1167,7 +1218,8 @@ project dependency. It starts and stops its own preview server.
     `Panel.jsx` shows it at all and then gets out of the way.
   - **Measured cost: +1.72 kB gzipped** of the main chunk (85.66 → 87.38) and 4 kB of
     flash, on top of what the emulator already costs. Coverage is 0.82 kB of that over a
-    1-bit mask. Re-measure rather than assuming.
+    1-bit mask. Re-measure rather than assuming — the slide added 0.15 kB (89.54 → 89.69),
+    which is what a curve and an offset should cost.
 - ESP32-class hardware is 2.4GHz-only; iPhone hotspots default to 5GHz, so
   **Maximize Compatibility** has to be on. Expect this to be the first thing that
   goes wrong when the hardware board arrives.

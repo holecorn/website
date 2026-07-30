@@ -19,6 +19,8 @@ import {
   PANEL_H,
   PANEL_W,
   SPLASH_MS,
+  SPLASH_RENDER_INTERVAL,
+  SPLASH_SLIDE_MS,
   WINNER_BLINK,
   boardLiveness,
   boardState,
@@ -93,14 +95,34 @@ function splashPair() {
 // it is the only way to see the splash without the hardware. The indicator reads the
 // same three-step progress the board's does; a browser has no WiFi state of its own,
 // so a connecting socket stands in for the middle one.
+//
+// `elapsed` drives the two words in from the edges, and drawSplash turns it into an
+// offset — so the curve is the firmware's and this only holds the clock. Animated
+// for the slide and then left alone: after it nothing moves until the splash goes.
+//
+// The clock is stepped in SPLASH_RENDER_INTERVALs rather than per animation frame, so
+// the emulator draws the frames the board draws. A browser gets through half again as
+// many, which would make this smoother here than on the panel — and how smooth 30
+// frames of slide look is the question the emulator exists to answer. Repeating a value
+// is also a render React drops, so the canvas is repainted only on the ticks.
 function useSplash(status) {
   const [showing, setShowing] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
+    const start = Date.now();
+    let frame = requestAnimationFrame(function step() {
+      const t = Date.now() - start;
+      setElapsed(Math.floor(t / SPLASH_RENDER_INTERVAL) * SPLASH_RENDER_INTERVAL);
+      if (t < SPLASH_SLIDE_MS) frame = requestAnimationFrame(step);
+    });
     const id = setTimeout(() => setShowing(false), SPLASH_MS);
-    return () => clearTimeout(id);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(id);
+    };
   }, []);
   const connect = status === 'connected' ? 2 : status === 'connecting' ? 1 : 0;
-  return { showing, connect };
+  return { showing, elapsed, connect };
 }
 
 function useCell(ref) {
@@ -147,7 +169,7 @@ export default function Panel() {
     if (!canvasRef.current) return;
     const fb = createFramebuffer();
     if (splash.showing) {
-      drawSplash(fb, splashColors[0], splashColors[1], splash.connect);
+      drawSplash(fb, splashColors[0], splashColors[1], splash.connect, splash.elapsed);
     } else {
       renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn);
     }

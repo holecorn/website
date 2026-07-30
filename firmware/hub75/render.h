@@ -131,6 +131,28 @@ static const int SPLASH_DOT = 2;
 static const int SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
 static const int SPLASH_DOT_Y = 0;
 
+// HOLE arrives from the left and CORN from the right, meeting where the masks put
+// them. Travel is a whole panel width per word rather than the distance from each
+// word's own edge to its resting place: the masks are panel-sized and carry their own
+// placement, so a full width is the one figure that is off-screen whatever
+// generate_logo.mjs last produced. The two words never cross — they rest side by side
+// — so no ordering rule is needed for the moving frames that isn't needed at rest.
+static const uint32_t SPLASH_SLIDE_MS = 800;
+static const int SPLASH_TRAVEL = PANEL_W;
+
+// How far each word still has to travel. Eased out rather than linear because the
+// board redraws in tens of milliseconds, so the slide gets few frames and they are
+// better spent on the arrival than shared evenly with a stretch of empty panel.
+//
+// 64-bit because travel x span^3 overruns a uint32_t, and integer throughout so
+// src/panelRender.js can mirror it exactly.
+inline int splashSlide(uint32_t elapsed) {
+  if (elapsed >= SPLASH_SLIDE_MS) return 0;
+  const uint64_t left = SPLASH_SLIDE_MS - elapsed;
+  const uint64_t span = SPLASH_SLIDE_MS;
+  return int(SPLASH_TRAVEL * left * left * left / (span * span * span));
+}
+
 // No wifi yet, wifi but no broker, subscribed. Three of the app's own team colours,
 // which means a randomly coloured wordmark can share a hue with the indicator — it
 // stays readable because of where it is, not what colour it is.
@@ -553,25 +575,37 @@ inline Rgb covered(Rgb c, uint8_t level) {
 // decided here rather than baked into the asset. CORN is tested first because it owns
 // the overlap where the two boxes cross, which is the order the SVG paints them in.
 //
-// `connect` indexes SPLASH_CONNECT, or is out of range for no indicator at all. The
-// colours are arguments and the randomness lives in the sketch: this file
-// host-compiles and the pixel check needs the same inputs to give the same frame.
+// `connect` indexes SPLASH_CONNECT, or is out of range for no indicator at all.
+// `elapsed` is milliseconds since the board came up, which is all the animation needs:
+// the colours and the clock are arguments and the randomness lives in the sketch,
+// because this file host-compiles and the pixel check needs the same inputs to give
+// the same frame.
+//
+// The masks are sampled at an offset rather than drawn at one, so a word half off the
+// panel is clipped by the read and nothing is written outside it.
 template <typename Canvas>
-void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect) {
+void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed) {
   const Rgb hole = chalk(colorA);
   const Rgb corn = chalk(colorB);
+  const int slide = splashSlide(elapsed);
   for (int y = 0; y < LOGO_H; y++) {
     for (int x = 0; x < LOGO_W; x++) {
-      const uint8_t cornLevel = logoLevel(LOGO_CORN[y], x);
-      if (cornLevel > 0) {
-        const Rgb p = covered(corn, cornLevel);
-        c.px(x, y, p.r, p.g, p.b);
-        continue;
+      const int cornX = x - slide;
+      if (cornX >= 0 && cornX < LOGO_W) {
+        const uint8_t cornLevel = logoLevel(LOGO_CORN[y], cornX);
+        if (cornLevel > 0) {
+          const Rgb p = covered(corn, cornLevel);
+          c.px(x, y, p.r, p.g, p.b);
+          continue;
+        }
       }
-      const uint8_t holeLevel = logoLevel(LOGO_HOLE[y], x);
-      if (holeLevel > 0) {
-        const Rgb p = covered(hole, holeLevel);
-        c.px(x, y, p.r, p.g, p.b);
+      const int holeX = x + slide;
+      if (holeX >= 0 && holeX < LOGO_W) {
+        const uint8_t holeLevel = logoLevel(LOGO_HOLE[y], holeX);
+        if (holeLevel > 0) {
+          const Rgb p = covered(hole, holeLevel);
+          c.px(x, y, p.r, p.g, p.b);
+        }
       }
     }
   }

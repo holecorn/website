@@ -221,12 +221,24 @@ static std::string lineupJson(const LineupState* l) {
   return out + "]}";
 }
 
-// `splash` is null for an ordinary scene and the indicator state for a splash one,
-// which is what tells tools/test-firmware.mjs which renderer to replay it through.
-// The two colours ride in colorA/colorB, so a splash scene needs no other new field.
+// `splash` is null for an ordinary scene and the indicator state plus the animation
+// clock for a splash one, which is what tells tools/test-firmware.mjs which renderer to
+// replay it through. The two colours ride in colorA/colorB, so a splash scene needs no
+// other new field.
+struct SplashScene {
+  int connect;
+  uint32_t elapsed;
+};
+
+static std::string splashJson(const SplashScene* splash) {
+  if (!splash) return "null";
+  return "{\"connect\":" + std::to_string(splash->connect) +
+         ",\"elapsed\":" + std::to_string(splash->elapsed) + "}";
+}
+
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
                    bool blinkOn, PanelLayout layout, const LineupState* lineup,
-                   const int* splash = nullptr) {
+                   const SplashScene* splash = nullptr) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
       "{\"name\":" + quoted(name.c_str()) +
@@ -238,7 +250,27 @@ static void record(const std::string& name, const BoardState& s, bool haveState,
       ",\"teamB\":" + quoted(s.teamB) + ",\"colorA\":" + colorJson(s.colorA) +
       ",\"colorB\":" + colorJson(s.colorB) + ",\"haveState\":" + flag(haveState) +
       ",\"live\":" + flag(live) + ",\"blinkOn\":" + flag(blinkOn) +
-      ",\"splash\":" + (splash ? std::to_string(*splash) : "null") + "}");
+      ",\"splash\":" + splashJson(splash) + "}");
+}
+
+// Every offset the slide passes through, for tools/test-firmware.mjs to compare against
+// src/panelRender.js. A handful of scenes cannot do this job: they pin the frames at the
+// times they were dumped, and an easing curve that differs anywhere between them draws
+// an identical frame at each sample. Verified by mutation — a curve off by one
+// millisecond passes every scene here and fails this. Runs one millisecond past the end,
+// so the settled tail is covered too.
+static void writeSplashCurve() {
+  FILE* f = fopen("out/splash-curve.json", "wb");
+  if (!f) {
+    printf("  cannot write out/splash-curve.json — run `mkdir -p out` first\n");
+    exit(1);
+  }
+  fprintf(f, "[");
+  for (uint32_t t = 0; t <= SPLASH_SLIDE_MS + 1; t++) {
+    fprintf(f, "%s%d", t ? "," : "", splashSlide(t));
+  }
+  fprintf(f, "]\n");
+  fclose(f);
 }
 
 static void writeScenes() {
@@ -270,18 +302,21 @@ static Framebuffer shot(const std::string& name, const BoardState& s, bool haveS
 }
 
 // The splash has no layout id and no board state, so it needs its own shot(). The
-// colour pair is an argument here for the same reason it is one in drawSplash: the
-// sketch picks it at random and this check needs the same inputs twice.
+// colour pair and the clock are arguments here for the same reason they are ones in
+// drawSplash: the sketch picks the pair at random and reads the clock, and this check
+// needs the same inputs twice. `elapsed` defaults to the settled frame, which is the
+// one the rest of the assertions are about.
 static Framebuffer splashShot(const std::string& name, const char* hexA, const char* hexB,
-                              int connect) {
+                              int connect, uint32_t elapsed = SPLASH_SLIDE_MS) {
   BoardState s = makeState(0, 0, 0, "", "");
   parseColor(hexA, s.colorA);
   parseColor(hexB, s.colorB);
 
   Framebuffer fb;
-  drawSplash(fb, s.colorA, s.colorB, connect);
+  drawSplash(fb, s.colorA, s.colorB, connect, elapsed);
   fb.write(name);
-  record(name, s, false, true, true, PANEL_FULL, nullptr, &connect);
+  const SplashScene scene = {connect, elapsed};
+  record(name, s, false, true, true, PANEL_FULL, nullptr, &scene);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -422,7 +457,17 @@ int main() {
   splashShot("splash-wifi-only", "#f2c94c", "#27ae60", 1);
   const Framebuffer splashBare = splashShot("splash-no-dot", "#2f80ed", "#eb5757", -1);
 
+  // The slide in. The frames worth dumping are the one before either word has appeared,
+  // one with a sliver of each on screen, one near the end — and one long after, which is
+  // where the animation has to have stopped.
+  const Framebuffer slideStart = splashShot("splash-slide-start", "#2f80ed", "#eb5757", 2, 0);
+  const Framebuffer slideEdges = splashShot("splash-slide-edges", "#2f80ed", "#eb5757", -1, 200);
+  const Framebuffer slideNear = splashShot("splash-slide-near", "#2f80ed", "#eb5757", 2, 400);
+  const Framebuffer slideHeld =
+      splashShot("splash-slide-held", "#2f80ed", "#eb5757", 2, SPLASH_SLIDE_MS * 10);
+
   writeScenes();
+  writeSplashCurve();
 
   printf("\nchecks\n");
   // segments.js has no dash — the browser never shows one — so the generator
@@ -455,6 +500,27 @@ int main() {
         "the indicator must be drawn where the constants put it");
   check(!splashBare.litRow(SPLASH_DOT_Y, SPLASH_DOT_X, PANEL_W),
         "an out-of-range connect state must draw no indicator");
+
+  // The slide. Everything here is measured off the frames rather than off splashSlide,
+  // so it is about what got drawn: the masks are sampled at an offset, and an unguarded
+  // read would either wrap a word onto the wrong module or drop it entirely.
+  check(slideStart.lit() == SPLASH_DOT * SPLASH_DOT,
+        "before the slide the wordmark must be off the panel, indicator aside");
+  check(slideEdges.lit() > 0 && slideEdges.lit() < splashBare.lit(),
+        "mid-slide must draw part of the mark — not all of it, and not none");
+  // Clipped by *opposite* edges, which is the assertion a slide from one side, or from
+  // the wrong sides, fails. Both words are cut at once for most of the animation.
+  check(slideEdges.litSpan(0, 1) > 0 && slideEdges.litSpan(PANEL_W - 1, PANEL_W) > 0,
+        "mid-slide the two words must be clipped by opposite edges");
+  check(slideNear.lit() > slideEdges.lit() && slideNear.lit() < splashDefault.lit(),
+        "the mark must keep arriving, and still be short of settled");
+  check(memcmp(splashDefault.px_, slideHeld.px_, sizeof splashDefault.px_) == 0,
+        "the slide must finish and then stay finished");
+  // The ends of the curve, because nothing above can see them: every frame here is
+  // rendered through the same offset, so a slide that settled a pixel off its mark
+  // would shift the PPMs with it and pass the comparison against them.
+  check(splashSlide(SPLASH_SLIDE_MS) == 0, "the slide must settle where the masks put it");
+  check(splashSlide(0) == SPLASH_TRAVEL, "the slide must start a whole panel out");
 
   // The wordmark is antialiased, which no count of lit pixels can see: a hard-masked
   // asset would satisfy every check above. Its whole purpose is the tilted strokes, and

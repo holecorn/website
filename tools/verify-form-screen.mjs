@@ -15,6 +15,7 @@
 // pixel-identical to render.h over six form scenes.
 
 import { chromium } from 'playwright';
+import { SPLASH_MS } from '../src/panelRender.js';
 import { openScoreboardLink } from '../src/scoreboardLink.js';
 
 const dir = new URL('out/', import.meta.url).pathname;
@@ -60,11 +61,14 @@ await new Promise((r) => setTimeout(r, 1000));
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
 const errors = [];
 
+// The wait has to outlast the broker round trip *and* the emulator's splash, which
+// covers the canvas while it slides in — derived from SPLASH_MS rather than left as a
+// number that happened to be longer than it.
 async function open(query, viewport) {
   const page = await browser.newPage({ viewport });
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${BASE}${query}${link}`);
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(SPLASH_MS + 1500);
   return page;
 }
 

@@ -69,7 +69,16 @@ const FORM_PPR_MAX = 4;
 
 // How long the board shows the wordmark at power-on. Mirrored in sketch.ino, the
 // same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
-export const SPLASH_MS = 2500;
+// The slide is the other way round — it is drawing, so render.h owns it and this is
+// the copy the pixel check holds.
+export const SPLASH_MS = 3300;
+export const SPLASH_SLIDE_MS = 800;
+const SPLASH_TRAVEL = PANEL_W;
+
+// The board's redraw rate while the splash is up, mirrored from sketch.ino for the same
+// reason SPLASH_MS is. The emulator steps the slide's clock in these increments, so it
+// draws the frames the panel draws rather than the ones a 60Hz browser could.
+export const SPLASH_RENDER_INTERVAL = 25;
 
 export const SPLASH_DOT = 2;
 const SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
@@ -557,18 +566,34 @@ const covered = (c, level) => ({
   b: idiv(c.b * level, LOGO_LEVELS),
 });
 
-export function drawSplash(fb, colorA, colorB, connect) {
+// Integer, and exact: the widest product here is travel x span^3, which is 6.6e10 and
+// so still whole in a double, where the C++ needs 64 bits to hold it.
+export function splashSlide(elapsed) {
+  const t = elapsed > 0 ? elapsed : 0;
+  if (t >= SPLASH_SLIDE_MS) return 0;
+  const left = SPLASH_SLIDE_MS - t;
+  return idiv(SPLASH_TRAVEL * left * left * left, SPLASH_SLIDE_MS * SPLASH_SLIDE_MS * SPLASH_SLIDE_MS);
+}
+
+export function drawSplash(fb, colorA, colorB, connect, elapsed) {
   const hole = chalk(colorA);
   const corn = chalk(colorB);
+  const slide = splashSlide(elapsed);
   for (let y = 0; y < LOGO_H; y += 1) {
     for (let x = 0; x < LOGO_W; x += 1) {
-      const cornLevel = logoLevel(LOGO_CORN[y], x);
-      if (cornLevel > 0) {
-        px(fb, x, y, covered(corn, cornLevel));
-        continue;
+      const cornX = x - slide;
+      if (cornX >= 0 && cornX < LOGO_W) {
+        const cornLevel = logoLevel(LOGO_CORN[y], cornX);
+        if (cornLevel > 0) {
+          px(fb, x, y, covered(corn, cornLevel));
+          continue;
+        }
       }
-      const holeLevel = logoLevel(LOGO_HOLE[y], x);
-      if (holeLevel > 0) px(fb, x, y, covered(hole, holeLevel));
+      const holeX = x + slide;
+      if (holeX >= 0 && holeX < LOGO_W) {
+        const holeLevel = logoLevel(LOGO_HOLE[y], holeX);
+        if (holeLevel > 0) px(fb, x, y, covered(hole, holeLevel));
+      }
     }
   }
   if (connect >= 0 && connect < SPLASH_CONNECT.length) {

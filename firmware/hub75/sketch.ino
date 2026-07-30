@@ -51,8 +51,14 @@ const uint32_t WINNER_BLINK = 500;
 
 // The wordmark at power-on. Nothing waits for it — WiFi and MQTT connect underneath —
 // so it costs only the seconds the board would otherwise spend on the no-state dashes.
-// Mirrored in src/panelRender.js for the emulator.
-const uint32_t SPLASH_MS = 2500;
+// Long enough for the two words to slide in (SPLASH_SLIDE_MS in render.h) and then be
+// read. Mirrored in src/panelRender.js for the emulator.
+const uint32_t SPLASH_MS = 3300;
+
+// Redraw rate while the splash is up. RENDER_INTERVAL is sized for a score that
+// changes once a round; the slide needs frames, and it can have them because
+// rendering does not block and there is no traffic to keep up with yet.
+const uint32_t SPLASH_RENDER_INTERVAL = 25;
 
 // The board's own UP and DOWN buttons, which step panel brightness through
 // BRIGHTNESS_LEVELS. Neither has a pull-up fitted, so they read low when pressed,
@@ -84,7 +90,7 @@ uint32_t lastWifiAttempt = 0;
 uint32_t lastRender = 0;
 uint32_t lastLive = 0;
 bool wifiWasUp = false;
-uint32_t splashUntil = 0;
+uint32_t splashStart = 0;
 Rgb splashA, splashB;
 int brightnessStep = BRIGHTNESS_DEFAULT_STEP;
 
@@ -159,6 +165,8 @@ int connectState() {
   return client.connected() ? 2 : 1;
 }
 
+bool splashing() { return millis() - splashStart < SPLASH_MS; }
+
 void render() {
   // The grace period covers a dropped socket, not a phone that said goodbye:
   // an explicit will or "0" is authoritative, so dim at once and match what
@@ -174,8 +182,8 @@ void render() {
   // After the liveness bookkeeping above, not before it: a link that came up during
   // the splash and dropped straight after would otherwise have no stamp to run its
   // grace period from, and the board would dim the instant the splash cleared.
-  if (millis() < splashUntil) {
-    drawSplash(canvas, splashA, splashB, connectState());
+  if (splashing()) {
+    drawSplash(canvas, splashA, splashB, connectState(), millis() - splashStart);
     return;
   }
 
@@ -304,7 +312,7 @@ void setup() {
   panel->clearScreen();
 
   pickSplashColors();
-  splashUntil = millis() + SPLASH_MS;
+  splashStart = millis();
   render();
 
   snprintf(stateTopic, sizeof stateTopic, "holecorn/%s/state", GAME_CODE);
@@ -341,7 +349,7 @@ void loop() {
     }
   }
 
-  if (millis() - lastRender > RENDER_INTERVAL) {
+  if (millis() - lastRender > (splashing() ? SPLASH_RENDER_INTERVAL : RENDER_INTERVAL)) {
     lastRender = millis();
     render();
   }

@@ -177,9 +177,15 @@ if (!ran['test_render.cpp']) {
       const fb = panel.createFramebuffer();
       const state = panel.boardState(scene);
       if (scene.splash !== null) {
-        // The splash carries its colour pair in the state's two colours, so it needs
-        // no fields of its own beyond which indicator state was drawn.
-        panel.drawSplash(fb, state.colorA, state.colorB, scene.splash);
+        // The splash carries its colour pair in the state's two colours, so it needs no
+        // fields of its own beyond the indicator state and the clock the slide is at.
+        panel.drawSplash(
+          fb,
+          state.colorA,
+          state.colorB,
+          scene.splash.connect,
+          scene.splash.elapsed,
+        );
       } else {
         panel.renderBoard(
           fb,
@@ -215,12 +221,29 @@ if (!ran['test_render.cpp']) {
       }
     }
 
+    // The splash's easing curve, every millisecond of it, for the reason
+    // writeSplashCurve in test_render.cpp gives: the scenes above cannot pin it.
+    const curve = JSON.parse(readFileSync(resolve(dir, 'splash-curve.json'), 'utf8'));
+    if (curve.length < 2 || curve[0] !== panel.PANEL_W || curve[curve.length - 1] !== 0) {
+      throw new Error(
+        `out/splash-curve.json does not run from off-panel to settled (${curve.length} points)`,
+      );
+    }
+    const off = curve.findIndex((slide, t) => slide !== panel.splashSlide(t));
+    if (off >= 0) {
+      problems.push(
+        `splashSlide(${off}) is ${panel.splashSlide(off)} in JS, ${curve[off]} in render.h`,
+      );
+    }
+
     if (problems.length > 0) {
       throw new Error(
         `src/panelRender.js has drifted from firmware/hub75/render.h:\n     ${problems.join('\n     ')}`,
       );
     }
-    process.stdout.write(`   ${scenes.length} scenes identical, pixel for pixel\n`);
+    process.stdout.write(
+      `   ${scenes.length} scenes identical, pixel for pixel; ${curve.length} splash offsets agree\n`,
+    );
   });
 }
 
