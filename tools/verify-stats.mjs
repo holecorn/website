@@ -720,13 +720,13 @@ check(
   }
 }
 
-// Nobody can play themselves. `duplicateNames` is unit tested; what only a browser
-// can see is that Start is really held shut on it — and, the half that would go
-// unnoticed, that it opens again for every lineup that is fine. A rule that never
-// lets go is the same bug as one that never bites, so this block spends most of its
-// checks on the lineups that must start: the defaults the app opens on, a save
-// written when both teams defaulted to the same two names, and a guest game, whose
-// slots still hold whatever the last real game typed.
+// Nobody can play themselves, and nobody plays nameless. `lineupFaults` is unit
+// tested; what only a browser can see is that Start is really held shut on it —
+// and, the half that would go unnoticed, that it opens again for every lineup that
+// is fine. A rule that never lets go is the same bug as one that never bites, so
+// this block spends most of its checks on the lineups that must start: the defaults
+// the app opens on, a save written when both teams defaulted to the same two names,
+// and a guest game, whose slots still hold whatever the last real game typed.
 {
   const dup = await browser.newContext({ viewport: { width: 430, height: 932 } });
   const dp = await dup.newPage();
@@ -736,7 +736,8 @@ check(
   });
   const start = dp.getByRole('button', { name: 'Start', exact: true });
   const fields = dp.locator('.team-name-input');
-  const hint = dp.locator('.clash-hint');
+  const hint = dp.locator('.lineup-hint');
+  const marked = () => dp.locator('.team-name-input[aria-invalid="true"]').count();
   const fill = async (names) => {
     for (const [i, name] of names.entries()) await fields.nth(i).fill(name);
   };
@@ -754,18 +755,34 @@ check(
     (await hint.innerText()).startsWith('Rho is in the lineup twice'),
     await hint.innerText(),
   );
-  check(
-    'both fields are marked, so it is clear which two',
-    (await dp.locator('.team-name-input[aria-invalid="true"]').count()) === 2,
-  );
+  check('both fields are marked, so it is clear which two', (await marked()) === 2);
 
   await fields.nth(1).fill('Tau');
   check('a second name lets it start again', await start.isEnabled());
   check('and the hint goes with it', (await hint.count()) === 0);
 
+  // A nameless slot is credited to nobody, so the rounds get archived and the
+  // numbers go nowhere. An empty field has only its underline to be marked by.
+  await fill(['Rho', '   ']);
+  check('an empty name holds Start shut as well', await start.isDisabled());
+  check(
+    'and the hint asks for one',
+    (await hint.innerText()).includes('Everyone playing needs a name'),
+    await hint.innerText(),
+  );
+  check('with only that field marked', (await marked()) === 1);
+
   await dp.getByRole('button', { name: 'Doubles' }).click();
   await fill(['Rho', 'Rho', 'Phi', 'Chi']);
   check('nor can a player partner themselves', await start.isDisabled());
+  await fill(['Rho', '', 'Rho', 'Chi']);
+  check(
+    'both faults are reported at once rather than one at a time',
+    (await hint.innerText()).startsWith('Rho is in the lineup twice') &&
+      (await hint.innerText()).endsWith('Everyone playing needs a name.') &&
+      (await marked()) === 3,
+    `${await hint.innerText()} · ${await marked()} marked`,
+  );
   await fill(['Rho', 'Tau', 'Phi', 'Chi']);
   check('four different people in doubles can start', await start.isEnabled());
 

@@ -79,8 +79,8 @@
   white-space: nowrap;
 }
 
-/* Off while a name is in the lineup twice. Loses the green rather than fading it,
-   so it doesn't read as a button waiting to finish loading. */
+/* Off while the lineup has a name missing or one name twice. Loses the green
+   rather than fading it, so it doesn't read as a button waiting to load. */
 .start-game:disabled {
   background: var(--panel);
   color: var(--muted);
@@ -133,7 +133,7 @@
    is off until it goes, so it carries the colour the rest of the app uses to
    mean stop. Both are drawn only when they apply, so neither costs the ordinary
    screen any height. */
-.clash-hint {
+.lineup-hint {
   margin: 0;
   color: #eb5757;
   font-size: 12px;
@@ -245,7 +245,8 @@
 }
 
 /* The name keeps its team colour — recolouring it would say the wrong team owns
-   the bags — so the underline is what marks the two fields the hint is about. */
+   the bags — so the underline is what marks the fields the hint is about. An
+   empty field has nothing but its underline to carry it. */
 .team-name-input[aria-invalid='true'] {
   border-bottom-color: #eb5757;
 }

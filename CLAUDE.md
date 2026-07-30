@@ -158,15 +158,34 @@ project dependency. It starts and stops its own preview server.
     records mean `playerStats`, `sideRecord` and `headToHead` all folding over holes.
     The existing route for a mixed game is to play it normally and delete the match
     afterwards.
-- **Nobody can play themselves, and `duplicateNames` is the whole rule.** A name is
-  the only identity the app has, so one name in two slots of a lineup is one person
-  on both sides of the court — `playerStats` folds a win and a loss for the same
-  match into one career, `sideRecord` reports no matchup at all, and in doubles
-  somebody is their own partner. `Start` is disabled while it holds.
-  - **It refuses where the archive's editor warns**, which is not an inconsistency:
-    a lineup is about to be played and costs a keystroke to fix, whereas a record is
-    history and the ones needing the edit most are exactly the clashing ones. The
-    two notes point at each other; don't unify them.
+- **Nobody can play themselves and nobody plays nameless, and `lineupFaults` is the
+  whole rule.** It returns one entry per slot at fault, `twice` or `blank`, and
+  `Start` is disabled while it returns anything.
+  - **`twice`:** a name is the only identity the app has, so one name in two slots is
+    one person on both sides of the court — `playerStats` folds a win and a loss for
+    the same match into one career, `sideRecord` reports no matchup at all, and in
+    doubles somebody is their own partner.
+  - **`blank`:** a nameless slot is not a person either, so `participants` drops it
+    and `playerStats` credits its throws to nobody. **That is worse than either
+    alternative**: the rounds are archived, the numbers go nowhere, and nothing on
+    any screen says so. The setup screen was the last door left open on this — the
+    match-names editor already disables Save on a blank, `RenamePlayer` needs a
+    non-empty name, and the `renamePlayer` reducer bails on one.
+    - **Refused rather than defaulted.** Restoring `Player 1` on blur was the
+      alternative and it silently files a stranger under a name nobody chose, which
+      is the guest-game bug in miniature. Being told costs a keystroke.
+  - **Faults are per slot, not per name**, because the button and the fields need
+    different halves of the same answer: the hint says which name is doubled, the
+    fields say which boxes. A blank has no name to report, and doesn't need one —
+    an empty box is visible. That is also why `TeamsFields` no longer matches on
+    `nameKey` to decide what to mark.
+  - **Both faults are reported together**, one sentence each. A lineup with an empty
+    box *and* a repeat is one fix, not two rounds of being told off.
+  - **It refuses a repeat where the archive's editor warns about one**, which is not
+    an inconsistency: a lineup is about to be played and costs a keystroke to fix,
+    whereas a record is history and the ones needing the edit most are exactly the
+    clashing ones. Blanks are refused in both places. The two notes point at each
+    other; don't unify them.
   - **`newGame`'s defaults are numbered across the lineup, not within each team.**
     `a: [1, 3]`, `b: [2, 4]`, so the app cannot open on a lineup it would refuse to
     start — and singles, the common case, still reads Player 1 against Player 2. Any
@@ -176,19 +195,17 @@ project dependency. It starts and stops its own preview server.
     somebody with a blocked `Start` over names they never typed. Anything typed is
     left alone, and the rewrite is keyed off the *old* default for that slot rather
     than off the clash, so it can't touch a real name.
-  - **Only the slots the mode plays**, so the default partner is not a clash in
-    singles — and a guest game has nothing to clash, since every slot is the team's
-    colour and `players` still holds the last real lineup. That casual guard is the
-    one a mutation proves: without it the toggle can't rescue a repeated lineup.
+  - **Only the slots the mode plays**, so the default partner is neither a repeat nor
+    a missing name in singles — and a guest game has no faults at all, since every
+    slot is the team's colour and `players` still holds the last real lineup. That
+    casual guard is the one a mutation proves: without it the toggle can't rescue a
+    repeated lineup.
   - **The hint carries the reason and the fields carry the location.** The
     `.setup-top` row has no room for a longer button label (see the `Start` bullet
-    under casual), so the button is `aria-describedby` the hint, and the two
-    offending inputs take `aria-invalid` and a red underline — four boxes and one
-    sentence otherwise leaves you counting. The name keeps its team colour; only the
-    underline changes.
-  - **Blank slots are not people** and never clash, the same rule `participants`
-    folds by. Leaving a name blank is still allowed — a separate question, and one
-    this rule deliberately doesn't answer.
+    under casual), so the button is `aria-describedby` the hint, and the offending
+    inputs take `aria-invalid` and a red underline — four boxes and one sentence
+    otherwise leaves you counting. The name keeps its team colour; only the underline
+    changes, which is also all an empty field has to be marked by.
 - **Bag positions:** `'unthrown' | 'floor' | 'board' | 'hole'`. Bags start
   `unthrown`; once thrown they can move between floor/board/hole but can never
   return to `unthrown` (`setBag` enforces this).
@@ -1351,13 +1368,19 @@ fails the first, and latching it in a ref — the plausible mistake, since the e
 already keeps `archivedId` that way — fails only the second. Guarding
 unconditionally is caught by the checks at the top of the file instead.
 
-The self-play block spends most of its checks on the lineups that must *start*,
-not on the one that must not: a rule that never lets go is the same bug as one
-that never bites, and `duplicateNames` is already unit tested. So it covers the
-defaults the app opens on, a save written when both teams defaulted alike, four
-different people in doubles, and a guest game. Verified by mutation — dropping the
-`disabled`, the `casual` guard, the `loadGame` rewrite and the new defaults each
-fail only their own assertions.
+The lineup-faults block spends most of its checks on the lineups that must
+*start*, not on the ones that must not: a rule that never lets go is the same bug
+as one that never bites, and `lineupFaults` is already unit tested. So it covers
+the defaults the app opens on, a save written when both teams defaulted alike,
+four different people in doubles, and a guest game. Verified by mutation —
+dropping the `disabled`, the `casual` guard, the blank fault, the joined hint, the
+`loadGame` rewrite and the new defaults each fail only their own assertions.
+
+That run also found an inert line: **whether blanks are counted alongside names
+changes nothing**, because which fault a slot gets reads off its key rather than
+off the count. The comment there says what the code does instead of implying that
+line is the guard — the unit test still pins the rule, since deriving the fault
+from the count is a plausible rewrite that would break it.
 
 It also ends by stripping the secure-context-only APIs and reloading, because
 **every other browser check runs on `localhost`, which is a secure context** —

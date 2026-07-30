@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   MAX_TARGET,
   clampTarget,
-  duplicateNames,
   emptyPositions,
+  lineupFaults,
   rawPoints,
   tierCounts,
   roundNets,
@@ -244,63 +244,82 @@ describe('casual games', () => {
   });
 });
 
-// Nobody can play themselves. One name in two slots is one person on both sides
-// of the court, and the career fold would credit them the win and the loss for
-// the same match.
-describe('duplicateNames', () => {
+// Nobody can play themselves, and nobody plays nameless. One name in two slots is
+// one person on both sides of the court, and the career fold would credit them the
+// win and the loss for the same match; a blank slot is credited to nobody at all.
+describe('lineupFaults', () => {
   const singles = { ...newGame(), players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] } };
   const doubles = { ...singles, mode: 'doubles' };
+  const lineup = (players, extra = {}) => ({ ...doubles, players, ...extra });
+  const at = (faults) => faults.map((f) => `${f.team}${f.slot}:${f.fault}`);
 
   it('passes a lineup of four different people', () => {
-    expect(duplicateNames(doubles)).toEqual([]);
+    expect(lineupFaults(doubles)).toEqual([]);
   });
 
   it('passes the defaults, which is the lineup the app opens on', () => {
-    expect(duplicateNames(newGame())).toEqual([]);
-    expect(duplicateNames({ ...newGame(), mode: 'doubles' })).toEqual([]);
+    expect(lineupFaults(newGame())).toEqual([]);
+    expect(lineupFaults({ ...newGame(), mode: 'doubles' })).toEqual([]);
   });
 
-  it('catches one player on both teams', () => {
-    expect(duplicateNames({ ...singles, players: { a: ['Rho', 'Tau'], b: ['Rho', 'Chi'] } })).toEqual(
-      ['Rho'],
-    );
+  it('catches one player on both teams, on both of their slots', () => {
+    const faults = lineupFaults({ ...singles, players: { a: ['Rho', 'Tau'], b: ['Rho', 'Chi'] } });
+    expect(at(faults)).toEqual(['a0:twice', 'b0:twice']);
+    expect(faults.map((f) => f.name)).toEqual(['Rho', 'Rho']);
   });
 
   it('catches someone partnering themselves', () => {
-    expect(duplicateNames({ ...doubles, players: { a: ['Rho', 'Rho'], b: ['Phi', 'Chi'] } })).toEqual(
-      ['Rho'],
-    );
+    expect(at(lineupFaults(lineup({ a: ['Rho', 'Rho'], b: ['Phi', 'Chi'] })))).toEqual([
+      'a0:twice',
+      'a1:twice',
+    ]);
   });
 
   it('folds spelling the same way the career does', () => {
-    expect(duplicateNames({ ...singles, players: { a: [' rho ', 'Tau'], b: ['Rho', 'Chi'] } })).toEqual(
-      ['Rho'],
-    );
+    expect(at(lineupFaults({ ...singles, players: { a: [' rho ', 'Tau'], b: ['Rho', 'Chi'] } })))
+      .toEqual(['a0:twice', 'b0:twice']);
   });
 
   // Singles never reads the second slot, so the default partner sitting on both
-  // teams is not a clash until doubles is chosen.
+  // teams is not a fault until doubles is chosen.
   it('only looks at the slots the mode plays', () => {
     const shared = { ...singles, players: { a: ['Rho', 'Sigma'], b: ['Phi', 'Sigma'] } };
-    expect(duplicateNames(shared)).toEqual([]);
-    expect(duplicateNames({ ...shared, mode: 'doubles' })).toEqual(['Sigma']);
+    expect(lineupFaults(shared)).toEqual([]);
+    expect(at(lineupFaults({ ...shared, mode: 'doubles' }))).toEqual(['a1:twice', 'b1:twice']);
   });
 
-  it('reports both names when a whole pair is repeated', () => {
-    expect(
-      duplicateNames({ ...doubles, players: { a: ['Rho', 'Tau'], b: ['Rho', 'Tau'] } }),
-    ).toEqual(['Rho', 'Tau']);
+  it('names both when a whole pair is repeated', () => {
+    const faults = lineupFaults(lineup({ a: ['Rho', 'Tau'], b: ['Rho', 'Tau'] }));
+    expect(at(faults)).toEqual(['a0:twice', 'a1:twice', 'b0:twice', 'b1:twice']);
+    expect([...new Set(faults.map((f) => f.name))]).toEqual(['Rho', 'Tau']);
   });
 
-  it('leaves blank slots alone, because a blank is not a person', () => {
-    expect(duplicateNames({ ...doubles, players: { a: ['Rho', ''], b: ['Phi', '  '] } })).toEqual([]);
+  it('catches a slot with no name, whitespace included', () => {
+    expect(at(lineupFaults(lineup({ a: ['Rho', ''], b: ['Phi', '  '] })))).toEqual([
+      'a1:blank',
+      'b1:blank',
+    ]);
   });
 
-  // A guest game has no names to clash: every slot is the team's colour, and the
+  // Two of them are two missing names, not one name entered twice — a blank is
+  // nobody, so there is no person to be on both sides.
+  it('does not read two blanks as the same player', () => {
+    const faults = lineupFaults(lineup({ a: ['Rho', ''], b: ['Phi', ''] }));
+    expect(faults.every((f) => f.fault === 'blank')).toBe(true);
+  });
+
+  it('reports a blank and a repeat in the same lineup', () => {
+    expect(at(lineupFaults(lineup({ a: ['Rho', ''], b: ['Rho', 'Chi'] })))).toEqual([
+      'a0:twice',
+      'a1:blank',
+      'b0:twice',
+    ]);
+  });
+
+  // A guest game has nothing to find: every slot is the team's colour, and the
   // slots still hold whatever was typed for the last real game.
   it('has nothing to say about a guest game', () => {
-    const guests = { ...doubles, casual: true, players: { a: ['Rho', 'Rho'], b: ['Rho', 'Rho'] } };
-    expect(duplicateNames(guests)).toEqual([]);
+    expect(lineupFaults(lineup({ a: ['Rho', 'Rho'], b: ['', ''] }, { casual: true }))).toEqual([]);
   });
 });
 

@@ -26,7 +26,7 @@ import {
   MAX_TARGET,
   PALETTE,
   clampTarget,
-  duplicateNames,
+  lineupFaults,
   nameKey,
   newGame,
   playerLabel,
@@ -398,7 +398,15 @@ export default function App() {
   }
 
   if (screen === 'setup') {
-    const clashes = duplicateNames(game);
+    const faults = lineupFaults(game);
+    // One sentence per fault the lineup actually has: which name is doubled is
+    // worth saying, which box is empty is not — you can see that.
+    const twice = [...new Set(faults.filter((f) => f.fault === 'twice').map((f) => f.name))];
+    const hint = [
+      twice.length > 0 &&
+        `${twice.join(' and ')} ${twice.length === 1 ? 'is' : 'are'} in the lineup twice. Two players need two names.`,
+      faults.some((f) => f.fault === 'blank') && 'Everyone playing needs a name.',
+    ].filter(Boolean);
     return (
       <div className="app setup">
         <Logo className="setup-logo" colorA={game.colors.a} colorB={game.colors.b} />
@@ -438,8 +446,8 @@ export default function App() {
               reason sits under it and the button points at it. */}
           <button
             className="start-game"
-            disabled={clashes.length > 0}
-            aria-describedby={clashes.length > 0 ? 'lineup-clash' : undefined}
+            disabled={faults.length > 0}
+            aria-describedby={faults.length > 0 ? 'lineup-fault' : undefined}
             onClick={() => {
               dispatch({ type: 'start', at: Date.now() });
               setScreen('play');
@@ -452,17 +460,16 @@ export default function App() {
             collapsed fields below say the colours are the teams; what they can't
             say is that the match won't be filed. */}
         {game.casual && <p className="casual-hint">This game won&rsquo;t be recorded.</p>}
-        {clashes.length > 0 && (
-          <p className="clash-hint" id="lineup-clash">
-            {clashes.join(' and ')} {clashes.length === 1 ? 'is' : 'are'} in the lineup
-            twice. Two players need two names.
+        {hint.length > 0 && (
+          <p className="lineup-hint" id="lineup-fault">
+            {hint.join(' ')}
           </p>
         )}
         <TeamsFields
           game={game}
           dispatch={dispatch}
           knownNames={knownNames}
-          clashes={clashes}
+          faults={faults}
           onSetFirst={(team, slot) => dispatch({ type: 'throwFirst', team, slot })}
           onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
         />
@@ -701,13 +708,13 @@ export default function App() {
 // swatches are the only thing on the setup screen that still matters — but the name
 // fields become the colour as text and the board chip goes: with both partners
 // labelled alike, reordering the pair changes nothing anybody can see.
-function TeamsFields({ game, dispatch, knownNames, clashes = [], onSetFirst, onSwapEnds }) {
+function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSwapEnds }) {
   const doubles = game.mode === 'doubles';
   const casual = game.casual;
   const slots = doubles && !casual ? [0, 1] : [0];
-  // Which name is doubled is the hint's job; this is which two fields hold it,
-  // because four boxes and one sentence leaves you counting.
-  const clashed = new Set(clashes.map(nameKey));
+  // The hint says what is wrong; this says where, because four boxes and one
+  // sentence leaves you counting.
+  const faulted = new Set(faults.map((f) => `${f.team}${f.slot}`));
   return (
     <div className="teams-fields">
       {/* Names already in the archive. A returning player is picked rather than
@@ -727,7 +734,7 @@ function TeamsFields({ game, dispatch, knownNames, clashes = [], onSetFirst, onS
             <div className="field-rows">
               {slots.map((i) => {
                 const name = playerLabel(game, team, i);
-                const clash = clashed.has(nameKey(name));
+                const fault = faulted.has(`${team}${i}`);
                 const here = BOARD_NAME[i];
                 const there = BOARD_NAME[1 - i];
                 const first = game.nextFirst === team && i === 0;
@@ -763,8 +770,8 @@ function TeamsFields({ game, dispatch, knownNames, clashes = [], onSetFirst, onS
                         value={name}
                         maxLength={16}
                         list={knownNames.length > 0 ? 'known-names' : undefined}
-                        aria-invalid={clash || undefined}
-                        aria-describedby={clash ? 'lineup-clash' : undefined}
+                        aria-invalid={fault || undefined}
+                        aria-describedby={fault ? 'lineup-fault' : undefined}
                         style={{ color: game.colors[team] }}
                         onChange={(e) =>
                           dispatch({ type: 'rename', team, index: i, name: e.target.value })

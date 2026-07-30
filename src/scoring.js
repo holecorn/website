@@ -124,30 +124,40 @@ export function playerLabel(game, team, slot) {
   return game.casual ? colorName(game, team) : game.players[team][slot];
 }
 
-// The names this lineup holds more than once, as typed. A name is the only
-// identity the app has, so one name in two slots is one person on both sides of
-// the court: `playerStats` folds a win and a loss for the same match into one
-// career, `sideRecord` reports no matchup at all, and in doubles someone is
-// their own partner. Nobody can play themselves, so the setup screen refuses to
-// start on it — unlike the archive's editor, which warns instead, because
-// records already filed that way have to stay editable.
+// Why this lineup can't be played, one entry per slot at fault:
 //
-// A casual game has nothing to clash: every slot is the team's colour. A blank
-// slot is not a person, the same rule `participants` folds by.
-export function duplicateNames(game) {
+//   'twice' — a name is the only identity the app has, so one name in two slots
+//     is one person on both sides of the court. `playerStats` folds a win and a
+//     loss for the same match into one career, `sideRecord` reports no matchup at
+//     all, and in doubles somebody is their own partner.
+//   'blank' — a nameless slot is not a person either, so `participants` drops it
+//     and `playerStats` credits its throws to nobody. The rounds are archived and
+//     the numbers go nowhere, which is worse than either being told or losing the
+//     match, because nothing says it happened.
+//
+// Per slot rather than per name because both the button and the fields need this:
+// the hint says which name, the fields say which two boxes. Only the slots the
+// mode plays, so an unused doubles partner is nobody's problem.
+//
+// A casual game has no faults to find: every slot is the team's colour, and
+// `players` still holds whatever the last real game typed.
+export function lineupFaults(game) {
   if (game.casual) return [];
-  const seen = new Set();
-  const twice = new Map();
+  const slots = [];
+  const counts = new Map();
   for (const team of ['a', 'b']) {
     for (const slot of game.mode === 'doubles' ? [0, 1] : [0]) {
       const name = String(game.players[team][slot] ?? '').trim();
       const key = nameKey(name);
-      if (!key) continue;
-      if (seen.has(key)) twice.set(key, name);
-      seen.add(key);
+      slots.push({ team, slot, name, key });
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   }
-  return [...twice.values()];
+  // Which fault reads off the key, not off the count, so two blank slots are two
+  // missing names rather than one nameless person entered twice.
+  return slots
+    .filter(({ key }) => !key || counts.get(key) > 1)
+    .map(({ team, slot, name, key }) => ({ team, slot, name, fault: key ? 'twice' : 'blank' }));
 }
 
 // Display name for a team: the single player, or both partners in doubles.
