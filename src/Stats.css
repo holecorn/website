@@ -211,8 +211,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Fixed, so the team names line up down the list rather than stepping in and out
+   with the length of the date. 64px is what "30 Sept 25" needs (63px measured) —
+   the widest the format gets, since Sept is the long month abbreviation. */
 .recent-date {
-  width: 52px;
+  width: 64px;
   flex: none;
   color: var(--muted);
   font-size: 12px;

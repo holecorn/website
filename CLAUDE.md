@@ -786,6 +786,22 @@ project dependency. It starts and stops its own preview server.
       mode's roster, the same rule `playerStats` credits by, so a singles record's
       unused second slot does not list a match for somebody who never threw in it.
       One unit test covers exactly that.
+    - **It is also why the recent list shows the year, always.** A scoped list
+      spans years — Tau's reads `10 May, 18 Dec, 23 Nov` — and crossed a boundary
+      silently. Showing it only outside the current year was considered and
+      rejected twice over: the meaning would sit in its *absence*, which you have
+      to know the rule to read (the same fault as the shaded nemesis row), and the
+      width has to be reserved either way or the names step in and out, so the
+      conditional version pays the full cost and buys an inconsistent format with
+      it. It would also key the text off `Date.now()`, so a match grows a year in
+      January and any check on it passes by season.
+      - **Measured, it costs one clipped label at 375px** (1 of 12 to 2) and
+        nothing at 360 or 320, which already clip. `.recent-date` went 52 to 64px,
+        which is what `30 Sept 25` needs — `Sept` is the widest month abbreviation.
+      - **`verify-stats.mjs`'s fixture spans three years with dates of differing
+        width on purpose.** With uniform dates the fixed-width assertion cannot
+        fail, because a content-sized column would be uniform too — verified by
+        mutation, which is how that was caught after it was written.
     - **The summary chips stay archive-wide on purpose.** They are totals over the
       whole history, and the per-player versions of most of them already sit in the
       career table — scoping them would duplicate it. The ones with no per-player

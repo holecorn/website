@@ -183,7 +183,8 @@ having played nobody.
 **Recent matches** narrows to that player at the same time. This matters more than
 it sounds: the list only ever shows the twelve newest matches, so anyone who
 hasn't played lately had no visible history at all — picking them out is the only
-way to see their games. Tap the name again to put both back.
+way to see their games — and it is why every date carries its year. Tap the name
+again to put both back.
 
 Players are matched up by name, ignoring capitals and stray spaces, so "neil"
 and "Neil " are the same person. In doubles both partners share the match result,

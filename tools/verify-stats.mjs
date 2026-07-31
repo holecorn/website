@@ -719,19 +719,23 @@ check(
   // split is the thing being fixed, so the fixture has to contain both.
   await sp.evaluate(() => {
     localStorage.clear();
-    const beat = (w, l, id) => ({
-      format: 1, id, endedAt: 1.7e12 + id.length * 1000, mode: 'singles',
+    // Dates deliberately span three years and vary in rendered width — "1 May 24"
+    // against "30 Sept 25". Uniform dates make the fixed-width assertion below
+    // unfailable, since a content-sized column would then be uniform too.
+    const beat = (w, l, id, y, mo, d) => ({
+      format: 1, id, endedAt: Date.UTC(y, mo, d, 12), mode: 'singles',
       players: { a: [w, ''], b: [l, ''] },
       colors: { a: '#2f80ed', b: '#eb5757' }, target: 21, winner: 'a',
       final: { a: 21, b: 11 }, rounds: [],
     });
     localStorage.setItem('holecorn.matches.v1', JSON.stringify([
-      beat('Sigma', 'Tau', 'a'), beat('Sigma', 'Tau', 'aa'), beat('Tau', 'Sigma', 'aaa'),
-      beat('Chi', 'Sigma', 'b'), beat('Chi', 'Sigma', 'bb'), beat('Chi', 'Sigma', 'bbb'),
-      beat('Neil', 'Sigma', 'c'), beat('Sigma', 'Neil', 'cc'),
+      beat('Sigma', 'Tau', 'a', 2024, 4, 1), beat('Sigma', 'Tau', 'aa', 2024, 8, 30),
+      beat('Tau', 'Sigma', 'aaa', 2025, 0, 9), beat('Chi', 'Sigma', 'b', 2025, 2, 15),
+      beat('Chi', 'Sigma', 'bb', 2025, 8, 30), beat('Chi', 'Sigma', 'bbb', 2025, 11, 18),
+      beat('Neil', 'Sigma', 'c', 2026, 0, 5), beat('Sigma', 'Neil', 'cc', 2026, 3, 2),
       // One match without Sigma in it, or filtering the recent list below is
       // unobservable — every other fixture match has them.
-      beat('Chi', 'Tau', 'dddd'),
+      beat('Chi', 'Tau', 'dddd', 2026, 5, 20),
     ]));
   });
   await sp.reload();
@@ -787,6 +791,23 @@ check(
   const teams = await sp.$$eval('.recent-teams', (es) => es.map((e) => e.innerText));
   check('every row is one of their matches', teams.every((t) => t.includes('Sigma')),
     JSON.stringify(teams));
+
+  // Scoping the list is what made it span years, so the year has to be on every
+  // row — a filtered list otherwise reads 10 May, 18 Dec, 23 Nov and crosses a
+  // boundary silently. Not conditional on the current year: that would put the
+  // meaning in its absence and key the text off Date.now().
+  const stamps = await sp.$$eval('.recent-date', (es) => es.map((e) => e.textContent.trim()));
+  check('every date carries its year', stamps.every((d) => /\b\d{2}$/.test(d)),
+    JSON.stringify(stamps));
+  // The motivating case: a scoped list really does cross a year boundary.
+  check('and the list spans more than one of them',
+    new Set(stamps.map((d) => d.slice(-2))).size > 1, JSON.stringify(stamps));
+  // The column is fixed width so the names line up down the list instead of
+  // stepping in and out with the length of the date.
+  const widths = await sp.$$eval('.recent-date', (es) =>
+    [...new Set(es.map((e) => Math.round(e.getBoundingClientRect().width)))]);
+  check('and the date column is one width for every row', widths.length === 1,
+    JSON.stringify(widths));
 
   await sp.getByRole('button', { name: 'Sigma', exact: true }).click();
   check('picking the same player again clears it', (await sp.locator('.h2h').count()) === 0);

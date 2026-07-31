@@ -39,8 +39,20 @@ const matchCount = (n) => `${n} ${plural(n, 'match', 'matches')}`;
 // margin that has to be eyeballed against it.
 const DOT = ' · ';
 
+// The year is always shown, never only on dates outside this one. Scoping the
+// recent list to a player made it span years — a filtered list reads 10 May, 18
+// Dec, 23 Nov and crosses a boundary silently — and a conditional year would make
+// its absence the thing carrying "this year", which you have to know the rule to
+// read. It would also key the rendering off Date.now(), so the same match grows a
+// year in January and any check on the text passes by season.
 const shortDate = (ms) =>
-  ms ? new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+  ms
+    ? new Date(ms).toLocaleDateString(undefined, {
+        day: 'numeric',
+        month: 'short',
+        year: '2-digit',
+      })
+    : '';
 
 function minutes(ms) {
   if (!ms) return '—';
