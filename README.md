@@ -178,7 +178,12 @@ worst first, with the two ends of it called out: their **nemesis** — the oppon
 with the biggest gap between losses and wins — and whoever they **dominate**, the
 same thing the other way round. Both need at least three meetings, so one bad
 afternoon doesn't make a rivalry. Either can be missing, which is different from
-having played nobody. Tap the name again to close it.
+having played nobody.
+
+**Recent matches** narrows to that player at the same time. This matters more than
+it sounds: the list only ever shows the twelve newest matches, so anyone who
+hasn't played lately had no visible history at all — picking them out is the only
+way to see their games. Tap the name again to put both back.
 
 Players are matched up by name, ignoring capitals and stray spaces, so "neil"
 and "Neil " are the same person. In doubles both partners share the match result,

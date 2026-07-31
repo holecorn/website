@@ -53,6 +53,15 @@ function participants(match, team) {
   return out;
 }
 
+// Whether a player took part, by the same rule playerStats credits them by: the
+// mode's roster only. A singles record still holds a second slot, and counting it
+// would list a match for somebody who never threw in it.
+export function playedIn(match, name) {
+  const key = nameKey(name);
+  if (!key) return false;
+  return TEAMS.some((team) => participants(match, team).some((p) => p.key === key));
+}
+
 function ratio(n, d) {
   return d > 0 ? n / d : 0;
 }

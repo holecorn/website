@@ -777,6 +777,20 @@ project dependency. It starts and stops its own preview server.
     name the same opponent — one needs a positive deficit and the other a negative
     one, and nobody qualifies at zero. Deficit for the same reason: beating somebody
     five times out of thirty is not dominating them.
+  - **The recent match list is scoped to the same selection, and that is a fix
+    rather than a flourish.** It is hard capped at 12, so anyone outside the newest
+    twelve had *no* visible history at all — measured on the sample archive, four
+    of eleven players, one of them with **37 matches played**. Selecting them now
+    shows their twelve.
+    - **`playedIn` decides, not the record's `players` arrays.** It reads the
+      mode's roster, the same rule `playerStats` credits by, so a singles record's
+      unused second slot does not list a match for somebody who never threw in it.
+      One unit test covers exactly that.
+    - **The summary chips stay archive-wide on purpose.** They are totals over the
+      whole history, and the per-player versions of most of them already sit in the
+      career table — scoping them would duplicate it. The ones with no per-player
+      equivalent (washes, skunks, average length) would be a new feature rather
+      than a scoping of an existing one.
   - **The two are *named* on their rows, not shaded.** A darker row says something
     is special without saying what, and the row has the space for the word. The tag
     is a **sibling** of the name rather than inside it, so a long name ellipsises

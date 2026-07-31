@@ -15,6 +15,7 @@ import {
 } from './archive.js';
 import {
   playerStats,
+  playedIn,
   opponentRecords,
   nemesis,
   dominates,
@@ -83,10 +84,14 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   );
   const worst = nemesis(rivals);
   const best = dominates(rivals);
-  const recent = useMemo(
-    () => [...matches].sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0)).slice(0, 12),
-    [matches],
-  );
+  // Scoped to the selected player, and that is not a nicety: the list is capped,
+  // so measured on the sample archive four of eleven players appear in none of the
+  // twelve newest matches — Tau with 37 played — and had no way to see any of their
+  // games at all.
+  const recent = useMemo(() => {
+    const mine = subject ? matches.filter((m) => playedIn(m, subject.name)) : matches;
+    return [...mine].sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0)).slice(0, 12);
+  }, [matches, subject]);
   const pending = unexportedCount(matches, lastExport);
 
   // One tap deletes and offers an undo, rather than asking first. The undo bar
@@ -350,7 +355,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
           )}
 
           <section className="stats-section">
-            <h2>Recent matches</h2>
+            <h2>{subject ? `${subject.name}${DOT}recent matches` : 'Recent matches'}</h2>
             <ul className="recent">
               {recent.map((m) => {
                 const final = finalScore(m);

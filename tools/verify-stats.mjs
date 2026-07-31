@@ -729,6 +729,9 @@ check(
       beat('Sigma', 'Tau', 'a'), beat('Sigma', 'Tau', 'aa'), beat('Tau', 'Sigma', 'aaa'),
       beat('Chi', 'Sigma', 'b'), beat('Chi', 'Sigma', 'bb'), beat('Chi', 'Sigma', 'bbb'),
       beat('Neil', 'Sigma', 'c'), beat('Sigma', 'Neil', 'cc'),
+      // One match without Sigma in it, or filtering the recent list below is
+      // unobservable — every other fixture match has them.
+      beat('Chi', 'Tau', 'dddd'),
     ]));
   });
   await sp.reload();
@@ -772,8 +775,22 @@ check(
     JSON.stringify(rows.find((r) => r[0] === 'Neil')?.slice(0, 2)) === '["Neil","1–1"]',
     JSON.stringify(rows));
 
+  // The recent list is capped at 12, so a player outside the newest twelve had no
+  // visible history at all — measured on the sample archive, four of eleven
+  // players, one of them with 37 matches played.
+  check('the recent list is scoped to them too',
+    (await sp.locator('.recent li').count()) === 8,
+    `${await sp.locator('.recent li').count()} rows`);
+  check('and its heading says whose it is',
+    (await sp.locator('.stats-section').nth(2).locator('h2').innerText()).includes('SIGMA'),
+    await sp.locator('.stats-section').nth(2).locator('h2').innerText());
+  const teams = await sp.$$eval('.recent-teams', (es) => es.map((e) => e.innerText));
+  check('every row is one of their matches', teams.every((t) => t.includes('Sigma')),
+    JSON.stringify(teams));
+
   await sp.getByRole('button', { name: 'Sigma', exact: true }).click();
   check('picking the same player again clears it', (await sp.locator('.h2h').count()) === 0);
+  check('and the recent list is everyone again', (await sp.locator('.recent li').count()) === 9);
 
   // Nobody has beaten them enough to count — a real state, not a zero.
   await sp.getByRole('button', { name: 'Neil', exact: true }).click();

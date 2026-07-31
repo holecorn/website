@@ -21,6 +21,7 @@ import {
   matchDuration,
   finalScore,
   hasRounds,
+  playedIn,
   opponentRecords,
   nemesis,
   RIVAL_MIN_MEETINGS,
@@ -1033,5 +1034,42 @@ describe('dominates', () => {
     // One opponent, one-sided: they are a nemesis and nothing else.
     expect(both(meetings('Sigma', 'Chi', 0, 4, 'c'), 'Sigma')).toEqual(['Chi', null]);
     expect(both(meetings('Sigma', 'Eta', 4, 0, 'e'), 'Sigma')).toEqual([null, 'Eta']);
+  });
+});
+
+// Which matches belong to a player, by the rule that credits them rather than by
+// what the record happens to hold. Used to scope the recent list, where the cap
+// means anyone missing from the newest twelve otherwise has no visible history.
+describe('playedIn', () => {
+  const won = [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]];
+
+  it('ignores the unused slot of a singles record', () => {
+    const m = singles('Neil', 'Sigma', won);
+    expect(playedIn(m, 'Neil')).toBe(true);
+    expect(playedIn(m, 'Sigma')).toBe(true);
+    // The slot is really there in the record — it just was not played.
+    expect(m.players.a[1]).toBe('Player 2');
+    expect(playedIn(m, 'Player 2')).toBe(false);
+  });
+
+  it('counts both partners in doubles', () => {
+    const m = match({
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+      rounds: won,
+    });
+    for (const name of ['Rho', 'Tau', 'Phi', 'Chi']) expect(playedIn(m, name)).toBe(true);
+    expect(playedIn(m, 'Neil')).toBe(false);
+  });
+
+  it('folds the spelling the way the career does, and refuses a blank', () => {
+    const m = singles('Neil', 'Sigma', won);
+    expect(playedIn(m, '  nEIL ')).toBe(true);
+    expect(playedIn(m, '   ')).toBe(false);
+    expect(playedIn(m, '')).toBe(false);
+  });
+
+  it('works on a record with no rounds behind it', () => {
+    expect(playedIn(oldSingles('Rho', 'Phi', { a: 21, b: 13 }), 'Phi')).toBe(true);
   });
 });
