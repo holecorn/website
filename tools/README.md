@@ -10,10 +10,22 @@ those outputs are current, so a stale `firmware/hub75/glyphs.h` or
 `src/panelGlyphs.js` is left rewritten in your working tree along with the
 failure. That is the fix, so commit it.
 
-`import-legacy.mjs` needs nothing at all — it turns a text file of written-down results into an archive
+Two scripts need nothing at all:
+
+`import-legacy.mjs` turns a text file of written-down results into an archive
 file the stats screen can import, and validates it with the app's own
 `validRecord` rather than a copy of it. See **Games played before the app** in
 `README.md` for the line format.
+
+`make-sample-archive.mjs` writes `fixtures/sample-archive.json` — three years of
+made-up history to import when working on anything that reads the archive. Both
+kinds of record, both modes, all four colours, and one player whose whole career
+is result-only. The played games go through `src/scoring.js` bag by bag and the
+transcribed ones through `import-legacy.mjs`, so a fixture can't disagree with
+the rules it exists to exercise. Seeded and dated absolutely, so re-running
+produces no diff; the dates will age, and `FIRST`/`LAST` are where to bump them.
+`src/archive.test.js` holds the committed file to `validRecord`, because
+`mergeMatches` drops a bad record silently.
 
 Everything else here drives a browser and needs Playwright, which is deliberately
 **not** a project dependency:

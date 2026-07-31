@@ -721,6 +721,45 @@ project dependency. It starts and stops its own preview server.
     directions at once. The loser's score is also bounded below the target, since
     the match ends when the first side reaches it; the winner's is not, because a
     round nets up to 12.
+- **`tools/fixtures/sample-archive.json` is checked in, and it is generated, not
+  written.** `make-sample-archive.mjs` plays the modern half through `scoring.js`
+  bag by bag and puts the legacy half through `import-legacy.mjs` — the same rule
+  `stats.test.js` follows, so the fixture cannot disagree with the rules it exists
+  to exercise. That is also why `parseGames` is exported from `import-legacy.mjs`
+  rather than the shape being written out twice.
+  - **Seeded and absolutely dated**, so re-running is byte-identical; a checked-in
+    file that regenerates differently is a permanent diff. Nothing in it calls
+    `Date.now()` or `Math.random()`.
+  - **The skill spread is narrow on purpose.** Under cancellation the losing side
+    scores nothing in a round it doesn't win, so a wide spread shuts people out at
+    a rate nobody would recognise — measured, Neil on 0.34 against 0.14 skunked
+    **11 of 78** played games. It is 6 of 124 now.
+  - **`Upsilon` stops at the cutover**, which is what gives the career table a row
+    that is all record and no rates. Without it nothing in the fixture shows the
+    dashes, and they are the thing most likely to regress.
+  - **`src/archive.test.js` holds the committed file to `validRecord`**, because
+    the generator only validates at the moment it writes and `mergeMatches` drops
+    a bad record *silently* — the fixture would half-import with nothing to say so.
+  - **It also asserts no record puts one colour on both teams.** The app's swatches
+    make that unreachable by playing, so a fixture showing one would be showing a
+    state nobody can get to. See the next bullet for why the *importer* doesn't
+    refuse it.
+- **An imported record may carry the same colour on both teams, and that is left
+  alone deliberately.** `validRecord` gates the fields `stats.js` reads without
+  checking, and colour is not one of them — refusing a whole match over decoration
+  would destroy real history, which is the archive's standing rule (the records
+  most in need of an edit are the malformed ones). Neither `import-legacy.mjs` nor
+  the sample generator can emit one; a clash means a hand-edited file.
+  - **Nothing becomes ambiguous, and that is why it needs no fix.** Measured on a
+    seeded clash: the Recent row still reads `Neil v Rho`, the expanded table's
+    column heads are still `NEIL` and `RHO`, and the columns are positional — the
+    colour is never the sole identifier the way it is in a casual game. It just
+    looks wrong.
+  - **The one genuinely ambiguous case needs two hand edits, not one.** With
+    `casual: true` *and* an in-palette clash, `teamLabel` returns the colour name
+    for both sides and the match reads `Blue v Blue`. A casual game is never
+    archived, so that flag can only arrive by hand. An *off*-palette clash is
+    already safe — `playerLabel` falls back to `Team A`/`Team B`.
 - **Export/import is the only route off a device** until there's a backend, so
   `verify-stats.mjs` drives the whole round trip rather than just asserting a
   file appears. The unexported count is measured against the newest exported

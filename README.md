@@ -296,6 +296,17 @@ a dash where a rate would be, and the average round length ignores it. Someone
 whose whole history is imported results shows a record and dashes; play one
 scored game and the rates start from that game alone.
 
+### Sample history for testing
+
+`tools/fixtures/sample-archive.json` is a made-up history — three years, 124
+matches, singles and doubles, all four colours — to **Import JSON** when you want
+the stats screens populated without playing a hundred games. It mixes both kinds
+of record, so the result-only behaviour above is visible in it.
+
+Regenerate with `node tools/make-sample-archive.mjs`. It's a fixture, not real
+history: importing it into a browser you actually score in will mix it into your
+own career, so use a separate browser or clear it afterwards.
+
 ## External scoreboard
 
 Holecorn can mirror the score onto a second screen — a spare tablet or laptop

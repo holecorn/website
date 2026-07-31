@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { newGame, setBag, endRound } from './scoring.js';
 import {
   RECORD_FORMAT,
@@ -260,5 +261,40 @@ describe('unexportedCount', () => {
 
   it('does not go backwards if the oldest match is pruned away', () => {
     expect(unexportedCount(records.slice(1), 200)).toBe(1);
+  });
+});
+
+// The checked-in sample archive (tools/fixtures/sample-archive.json), which is
+// imported by hand when working on anything that reads history. `mergeMatches`
+// drops an invalid record *silently*, so a change to `validRecord` would leave the
+// fixture half-importing with nothing to say so — and the generator only validates
+// at the moment it writes.
+describe('the sample archive fixture', () => {
+  const sample = JSON.parse(
+    readFileSync(new URL('../tools/fixtures/sample-archive.json', import.meta.url), 'utf8'),
+  );
+
+  it('is a list every record of which the app would accept', () => {
+    expect(sample.length).toBeGreaterThan(0);
+    expect(sample.filter((m) => !validRecord(m))).toEqual([]);
+  });
+
+  it('carries both kinds of record, which is the point of it', () => {
+    expect(sample.some((m) => m.rounds.length > 0)).toBe(true);
+    expect(sample.some((m) => m.rounds.length === 0 && m.final)).toBe(true);
+  });
+
+  // Not something `validRecord` refuses — a clash is only decoration, and the
+  // names carry the identity on every screen a record's colours reach. But the
+  // app's swatches make it unreachable by playing, so a fixture that showed one
+  // would be showing a state nobody can get to.
+  it('never puts one colour on both teams, as the app cannot', () => {
+    expect(sample.filter((m) => m.colors.a === m.colors.b)).toEqual([]);
+  });
+
+  it('imports whole, and again adds nothing', () => {
+    const once = mergeMatches([], sample);
+    expect(once).toHaveLength(sample.length);
+    expect(mergeMatches(once, sample)).toHaveLength(sample.length);
   });
 });
