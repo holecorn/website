@@ -19,6 +19,8 @@ import {
   summary,
   matchRounds,
   matchDuration,
+  finalScore,
+  hasRounds,
 } from './stats.js';
 
 const H = 'hole';
@@ -52,6 +54,35 @@ function match({
 
 const singles = (a, b, rounds, extra = {}) =>
   match({ players: { a: [a, 'Player 2'], b: [b, 'Player 2'] }, rounds, ...extra });
+
+// A match with no round detail — a game played before the app existed, imported
+// from a score written down at the time. Hand-built on purpose: unlike the
+// fixtures above there are no rounds to play through the scoring functions, and
+// this is exactly the shape tools/import-legacy.mjs writes.
+function result({
+  id = 'old-1',
+  mode = 'singles',
+  players,
+  final,
+  winner = final.a > final.b ? 'a' : 'b',
+  endedAt = 1000,
+}) {
+  return {
+    format: 1,
+    id,
+    endedAt,
+    mode,
+    players,
+    colors: { a: '#2f80ed', b: '#eb5757' },
+    target: 21,
+    winner,
+    final,
+    rounds: [],
+  };
+}
+
+const oldSingles = (a, b, final, extra = {}) =>
+  result({ players: { a: [a, 'Player 2'], b: [b, 'Player 2'] }, final, ...extra });
 
 function find(stats, name) {
   return stats.find((p) => p.name === name);
@@ -580,6 +611,92 @@ describe('summary', () => {
     expect(summary([])).toMatchObject({ matches: 0, rounds: 0, avgRounds: 0 });
     expect(playerStats([])).toEqual([]);
     expect(headToHead([])).toEqual([]);
+  });
+});
+
+// Matches imported from a written-down result: a date, the people, the score,
+// and nothing else. Everything that needs only the outcome has to fold them in;
+// everything that needs thrown bags has to leave them out rather than read their
+// absence as a zero.
+describe('a match with no round detail', () => {
+  // 12, then 18, then exactly 21 — three rounds, so the round count is a number
+  // the assertions below can be read against.
+  const won = [
+    [[H, H, H, H], [F, F, F, F]],
+    [[H, B, B, B], [F, F, F, F]],
+    [[H, F, F, F], [F, F, F, F]],
+  ];
+
+  it('reports the score it carries', () => {
+    expect(finalScore(oldSingles('Rho', 'Phi', { a: 21, b: 13 }))).toEqual({ a: 21, b: 13 });
+    expect(hasRounds(oldSingles('Rho', 'Phi', { a: 21, b: 13 }))).toBe(false);
+  });
+
+  // `final` is a fallback, never an override, so a record can't contradict its
+  // own rounds.
+  it('prefers the rounds wherever there are any', () => {
+    const played = singles('Neil', 'Sigma', won);
+    expect(finalScore({ ...played, final: { a: 99, b: 99 } })).toEqual(finalScore(played));
+    expect(hasRounds(played)).toBe(true);
+  });
+
+  it('reports no score at all rather than 0–0 when it has neither', () => {
+    expect(finalScore({ ...oldSingles('Rho', 'Phi', { a: 21, b: 13 }), final: undefined })).toBeNull();
+  });
+
+  // The bug this guards: `totals()` over no rounds is 0–0, so the loser's total
+  // is zero and every imported match files itself as a skunk.
+  it('is not a skunk merely because it has no rounds', () => {
+    expect(summary([oldSingles('Rho', 'Phi', { a: 21, b: 13 })]).skunks).toBe(0);
+    expect(summary([oldSingles('Rho', 'Phi', { a: 21, b: 0 })]).skunks).toBe(1);
+  });
+
+  // Dividing by every match instead would report a 12-round game as a 6-round one.
+  it('is left out of the average round count', () => {
+    const s = summary([
+      singles('Neil', 'Sigma', won, { id: 'm1' }),
+      oldSingles('Neil', 'Sigma', { a: 21, b: 13 }, { id: 'old-1' }),
+    ]);
+    expect(s.matches).toBe(2);
+    expect(s.rounds).toBe(3);
+    expect(s.avgRounds).toBe(3);
+  });
+
+  it('counts towards a record, a streak and a head to head', () => {
+    const stats = playerStats([
+      oldSingles('Rho', 'Phi', { a: 21, b: 13 }, { id: 'old-1', endedAt: 1000 }),
+      oldSingles('Rho', 'Phi', { a: 21, b: 9 }, { id: 'old-2', endedAt: 2000 }),
+    ]);
+    expect(find(stats, 'Rho')).toMatchObject({ matches: 2, wins: 2, currentStreak: 2 });
+    expect(find(stats, 'Phi')).toMatchObject({ matches: 2, losses: 2, form: [false, false] });
+    // Pairs are keyed low-name-first, so Phi leads and Rho's win is bWins.
+    expect(headToHead([oldSingles('Rho', 'Phi', { a: 21, b: 13 })])[0]).toMatchObject({
+      a: 'Phi',
+      b: 'Rho',
+      aWins: 0,
+      bWins: 1,
+    });
+  });
+
+  // The property that makes importing them safe at all: they add no rounds, so
+  // they cannot move a rate that was measured off thrown bags.
+  it('leaves the rates of a career it joins untouched', () => {
+    const real = [singles('Neil', 'Sigma', won, { id: 'm1' })];
+    const mixed = [...real, oldSingles('Neil', 'Sigma', { a: 21, b: 4 }, { id: 'old-1' })];
+    expect(find(playerStats(mixed), 'Neil')).toMatchObject({
+      ppr: find(playerStats(real), 'Neil').ppr,
+      holePct: find(playerStats(real), 'Neil').holePct,
+      matches: 2,
+      wins: 2,
+    });
+  });
+
+  // What the Form panel and the board key their blank rate column off. `played`
+  // says there is history; only `rounds` says it has thrown bags in it.
+  it('gives a lineup a record but no rounds to rate', () => {
+    const game = { ...newGame(21), players: { a: ['Rho', 'x'], b: ['Phi', 'y'] } };
+    const row = lineupStats([oldSingles('Rho', 'Phi', { a: 21, b: 13 })], game)[0];
+    expect(row).toMatchObject({ played: true, wins: 1, rounds: 0, ppr: 0 });
   });
 });
 

@@ -10,6 +10,11 @@ those outputs are current, so a stale `firmware/hub75/glyphs.h` or
 `src/panelGlyphs.js` is left rewritten in your working tree along with the
 failure. That is the fix, so commit it.
 
+`import-legacy.mjs` needs nothing at all — it turns a text file of written-down results into an archive
+file the stats screen can import, and validates it with the app's own
+`validRecord` rather than a copy of it. See **Games played before the app** in
+`README.md` for the line format.
+
 Everything else here drives a browser and needs Playwright, which is deliberately
 **not** a project dependency:
 

@@ -569,8 +569,8 @@ inline FormLayout formLayout(const LineupState& l) {
     formatRecord(l.rows[i].wins, l.rows[i].losses, buf);
     const int n = cStrLen(buf);
     if (n > f.wlChars) f.wlChars = n;
-    // Only rows that have played contribute a rate, matching what drawForm draws.
-    if (l.rows[i].wins + l.rows[i].losses > 0) {
+    // Only rows with a rate contribute a width, matching what drawForm draws.
+    if (hasRate(l.rows[i])) {
       char rate[FORM_PPR_MAX + 1];
       formatTenths(l.rows[i].ppr, rate);
       const int p = cStrLen(rate);
@@ -625,11 +625,10 @@ void drawForm(Canvas& c, const BoardState& s, const LineupState& l, uint8_t leve
     formatRecord(r.wins, r.losses, record);
     drawTextRight(c, record, f.wlRight, y, grey, f.wlChars);
 
-    // Empty only for somebody with no history at all, never for a rate that
-    // happens to be zero: 0.0 PPR is a real average — every bag on the floor —
-    // and blanking it reads as missing data rather than a miserable Saturday. A
-    // newcomer is 0-0 by construction, which is what tells the two apart.
-    if (r.wins + r.losses > 0) {
+    // Empty only where there is no rate to give, never for a rate that happens
+    // to be zero: 0.0 PPR is a real average — every bag on the floor — and
+    // blanking it reads as missing data rather than a miserable Saturday.
+    if (hasRate(r)) {
       char ppr[FORM_PPR_MAX + 1];
       formatTenths(r.ppr, ppr);
       drawTextRight(c, ppr, f.pprRight, y, grey, f.pprChars);

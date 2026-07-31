@@ -489,6 +489,21 @@ int main() {
   setRow(formZero.rows[0], "Neil", 6, 4, 72, "LWLWW");
   setRow(formZero.rows[1], "Eta", 0, 5, 0, "LLLLL");
 
+  // A record with no rate behind it — a match imported from a written-down
+  // result, where the app omits "p" and parseLineup gives -1. The record and the
+  // pips draw; the rate column is left to the row beside it, which is what makes
+  // this different from formZero above.
+  LineupState formImported;
+  formImported.count = 2;
+  setRow(formImported.rows[0], "Neil", 6, 4, -1, "LWLWW");
+  setRow(formImported.rows[1], "Sigma", 4, 6, 60, "WLWLL");
+
+  // Nobody with a rate at all, so the column costs no width and the names get it.
+  LineupState formNoRates;
+  formNoRates.count = 2;
+  setRow(formNoRates.rows[0], "Neil", 6, 4, -1, "LWLWW");
+  setRow(formNoRates.rows[1], "Sigma", 4, 6, -1, "WLWLL");
+
   const Framebuffer formS = shot("form-singles", play, true, true, true, PANEL_FULL, &singles);
   const Framebuffer formD = shot("form-doubles", play, true, true, true, PANEL_FULL, &doubles);
   shot("form-stale", play, true, false, true, PANEL_FULL, &doubles);
@@ -511,6 +526,10 @@ int main() {
 
   const Framebuffer formZ = shot("form-zero-rate", play, true, true, true, PANEL_FULL, &formZero);
   const Framebuffer formB = shot("form-big-record", play, true, true, true, PANEL_FULL, &formBig);
+  const Framebuffer formI =
+      shot("form-no-rate", play, true, true, true, PANEL_FULL, &formImported);
+  const Framebuffer formNR =
+      shot("form-no-rates", play, true, true, true, PANEL_FULL, &formNoRates);
 
   // The splash. Like the form screen it has no layout id, so tools/test-firmware.mjs
   // has a separate assertion that some scene carries one. Two colour pairs because
@@ -807,6 +826,24 @@ int main() {
         "a played player averaging 0.0 still shows a rate");
   check(band(formZ, zeroRateY, FORM_PIPS_X, PANEL_W) > 0, "and their losing run of pips");
 
+  // The other half of that distinction: a record with no rounds behind it — a
+  // match imported from a written-down result — has no rate to give, so the
+  // column stays empty while the record and the pips draw as usual. Without this
+  // the board reports somebody who has played a dozen games as averaging 0.0.
+  const FormLayout lyI = formLayout(formImported);
+  check(band(formI, formNY, lyI.pprRight - (lyI.pprChars * FONT_ADVANCE - 1), lyI.pprRight) == 0,
+        "a record with no rate behind it shows no PPR");
+  check(band(formI, formNY, FORM_PIPS_X, PANEL_W) > 0, "but keeps its form pips");
+  check(band(formI, formNY + FORM_ROW_H, lyI.pprRight - (lyI.pprChars * FONT_ADVANCE - 1),
+             lyI.pprRight) > 0,
+        "and the row that does have one still draws it");
+  // With nobody supplying a rate the column costs no width at all, so the names
+  // get it — the same trade formLayout makes for a narrower record.
+  const FormLayout lyNR = formLayout(formNoRates);
+  check(lyNR.pprChars == 0, "no rates anywhere means no rate column");
+  check(lyNR.nameChars > lyI.nameChars, "and the names take the width it gives up");
+  check(band(formNR, formNY, lyNR.wlRight - (lyNR.wlChars * FONT_ADVANCE - 1), lyNR.wlRight) > 0,
+        "and the records still draw");
 
   Rgb c;
   parseColor("#2f80ed", c);

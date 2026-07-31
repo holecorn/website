@@ -671,6 +671,56 @@ project dependency. It starts and stops its own preview server.
     `verify-form-screen.mjs` is the only place that can hold it: leaving the screen
     hides it, and while `Stats` is open the setup screen's own Form panel isn't
     rendered, so the published lineup is the sole surface the disagreement reaches.
+- **A record can carry a result and no rounds, and `final` is the only field that
+  buys.** Games played before the app existed are transcribed from a written-down
+  score by `tools/import-legacy.mjs`; they have a date, the people and the score.
+  - **The score has nowhere else to live, which is the exception that justifies the
+    field.** Everything else `stats.js` reports is derivable, but `totals()` sums
+    `round.nets`, so a record with no rounds loses the one number it actually has.
+    `finalScore()` reads `final` **only when `rounds` is empty**, so it is a
+    fallback and never an override — a real record cannot contradict its own detail.
+  - **Synthesising a round to carry the score was the obvious alternative and is
+    worse.** Rates are per thrown bag, so fabricated tiers would put invented hole
+    and board counts into every career figure; one fake round also makes `avgRounds`
+    read 1 and PPR read 0.0 over a round that was never thrown. Empty `rounds` is
+    the honest shape, and `validRecord` already accepts it — `[].every()` is true —
+    so nothing was needed to *store* these.
+  - **Three things went wrong quietly rather than loudly**, and all three are the
+    same mistake: reading a zero derived from no data as a real zero.
+    - `summary` took the loser's total from `totals()`, got 0, and filed **every
+      imported match as a skunk**. Hence `finalScore` returning null rather than
+      0–0 for a record with neither rounds nor `final`.
+    - `avgRounds` divided by every match, so twenty imports beside five real games
+      reported a 12-round game as a 2.4-round one. It divides by the matches that
+      have rounds.
+    - The Form panel, the career table, `?display=1` and the LED panel all keyed
+      their rate off "has history", which an imported result has — so somebody with
+      a dozen games read **0.0 PPR**. See the next bullet.
+  - **The rates of anyone who also plays are untouched, and that is the property
+    that makes importing safe at all.** A rate is per round thrown and these add no
+    rounds, so an import moves only the win/loss side of a career. `stats.test.js`
+    asserts it directly rather than leaving it to be inferred.
+  - **Dates only need to be in the right order.** `endedAt` drives `chronological`,
+    which is what streaks and form read; the absolute value shows only in Recent
+    matches. The script stamps local noon plus a minute per game that day.
+  - **Ids are a hash of the line, not random.** `mergeMatches` keys on the id, so
+    re-running the script and re-importing has to add nothing. Counted per identical
+    match rather than per line, so inserting a game later doesn't renumber the rest
+    into new records. No `updatedAt`, so a name fixed on the phone survives a
+    re-import.
+  - **The unused singles slot is left empty, not filled with `Player 2`.**
+    `participants` drops a blank; a default name would collect every singles
+    opponent under one phantom career.
+  - **A name on both sides is refused by the script**, which is the setup screen's
+    rule rather than the archive editor's — the source is a file that can be
+    corrected, so it costs a keystroke. See **Nobody can play themselves**.
+  - **A draw is refused too, and a null winner is not the tolerant option.**
+    `playerStats` credits a loss to whichever side isn't the winner, so a
+    winnerless record puts a loss and an `L` against *both* names, while
+    `headToHead` and `sideRecord` skip the match entirely — wrong in two
+    directions at once. The loser's score is also bounded below the target, since
+    the match ends when the first side reaches it; the winner's is not, because a
+    round nets up to 12.
 - **Export/import is the only route off a device** until there's a backend, so
   `verify-stats.mjs` drives the whole round trip rather than just asserting a
   file appears. The unexported count is measured against the newest exported
@@ -1018,13 +1068,24 @@ project dependency. It starts and stops its own preview server.
   - **A loss pip is a single pixel, not a dim block.** On a real panel an
     unlit-but-not-off LED is indistinguishable from off, so a loss has to be drawn
     as *something* rather than as a darker something.
-  - **The empty rate column keys off the 0-0 *record*, never off the rate.** A PPR
-    of 0.0 is a real average — every bag on the floor — and blanking it reads as
-    missing data rather than a bad run. A newcomer is 0-0 by construction, which is
-    what tells the two apart without a `played` field on the wire. Gating on
-    `ppr > 0` shipped once and made the board disagree with the phone, which shows
-    0.0; `form-zero-rate` in `test_render.cpp` and one assertion each in
-    `verify-stats.mjs` and `verify-form-screen.mjs` cover the three surfaces.
+  - **The empty rate column never keys off the rate.** A PPR of 0.0 is a real
+    average — every bag on the floor — and blanking it reads as missing data rather
+    than a bad run. Gating on `ppr > 0` shipped once and made the board disagree
+    with the phone, which shows 0.0. There are two ways to have no rate and
+    `hasRate` in `board_logic.h` is where both live, mirrored by `panelRender.js`
+    and `Display.jsx`:
+    - **`p` is omitted from the row**, which parses to `-1`. That is a record with
+      no thrown bags behind it — a match imported from a written-down result, or a
+      newcomer. Absent-means-unknown is the contract `winner` already uses, and it
+      only ever shortens a packet, so the 423-byte worst case is unmoved.
+    - **The record is 0-0**, which is only still needed for a lineup *retained* from
+      before the omission existed: it sends `p: 0` for a newcomer, and there the
+      record is the sole thing telling that from a real 0.0. Same reasoning as the
+      legacy explicit-null `winner`.
+    - Four surfaces, four checks: `form-zero-rate` and `form-no-rate` in
+      `test_render.cpp`, and one assertion each in `verify-stats.mjs` and
+      `verify-form-screen.mjs`. The display one is worth its keep — it divided
+      `undefined` by ten and drew **NaN**, which no unit test saw.
   - **`form-worst` measures 28.5% duty against `DUTY_CEILING`'s 30%** — the densest
     screen the panel has, against the full layout's 19.8% and the score layout's
     23.6%. It passes, and the power case still holds (~1.4 A for both panels at full
@@ -1526,6 +1587,7 @@ twice, with the pure helpers passing throughout. It covers the same gap for
 renaming — that a career rename reaches the setup lineup and a per-match fix does
 not — where both halves of each are individually correct and only the wiring
 between them can be wrong.
+
 
 The same is true of the guest-game guard, and both ways round of getting it wrong
 are silent: either a stranger is folded into somebody's career, or every real match

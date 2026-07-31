@@ -676,6 +676,89 @@ check(
   await one.close();
 }
 
+// A match imported from a written-down result — a score and no rounds. Every
+// screen here reads it correctly or wrongly with nothing in the unit suite
+// noticing: reading the score off `totals()` shows 0–0, and reading a rate off
+// `played` rather than `rounds` reports somebody's whole career as 0.0 PPR.
+// Seeded next to a real match, because both must be true at once.
+{
+  const legacy = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const lp = await legacy.newPage();
+  await lp.goto(URL);
+  await lp.evaluate(() => {
+    localStorage.clear();
+    const four = ['hole', 'hole', 'hole', 'hole'];
+    const none = ['floor', 'floor', 'floor', 'floor'];
+    const aWins = { a: four, b: none, nets: { a: 12, b: 0 }, first: 'a' };
+    const bWins = { a: none, b: four, nets: { a: 0, b: 12 }, first: 'a' };
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify([
+      // 24–12, deliberately not a skunk, so the chip below reads zero and the
+      // guard is what is being measured rather than the real match's own result.
+      {
+        format: 1, id: 'played', startedAt: 1.7e12, endedAt: 1.7e12 + 6e5, mode: 'singles',
+        players: { a: ['Neil', 'P2'], b: ['Sigma', 'P2'] },
+        colors: { a: '#2f80ed', b: '#eb5757' }, target: 21, winner: 'a',
+        rounds: [aWins, bWins, aWins],
+      },
+      // Named for the setup screen's own defaults, so the Form panel below draws
+      // it without anything having to be typed.
+      {
+        format: 1, id: 'imported', endedAt: 1.7e12 + 9e5, mode: 'singles',
+        players: { a: ['Player 1', ''], b: ['Player 2', ''] },
+        colors: { a: '#2f80ed', b: '#eb5757' }, target: 21, winner: 'a',
+        final: { a: 21, b: 13 }, rounds: [],
+      },
+    ]));
+  });
+  await lp.reload();
+  await lp.waitForSelector('.lineup');
+
+  // The Form panel. A record with no thrown bags behind it has no rate to give,
+  // and `played` is true for it, so the blank has to come from the round count.
+  const formCells = await lp.$$eval('.lineup-table tbody tr:first-child td', (tds) =>
+    tds.map((t) => t.textContent.trim()));
+  check('an imported result gives a lineup a record', formCells[0] === '1–0', formCells.join('|'));
+  check('but no rate to show', formCells[2] === '—' && formCells[3] === '—', formCells.join('|'));
+
+  await lp.getByRole('button', { name: 'Stats' }).click();
+  await lp.waitForSelector('.stat-chips');
+
+  const scores = await lp.$$eval('.recent-score', (s) => s.map((e) => e.textContent.trim()));
+  check('an imported match shows the score it was given', scores[0] === '21–13', scores.join(' '));
+  check('and a played one still shows its own', scores[1] === '24–12', scores.join(' '));
+
+  const chips = Object.fromEntries(
+    await lp.$$eval('.stat-chip', (cs) => cs.map((c) => [
+      c.querySelector('.stat-chip-label').textContent,
+      c.querySelector('.stat-chip-value').textContent,
+    ])));
+  // A 0–0 fold over no rounds makes the loser's total zero, so without the guard
+  // every imported match files itself as a skunk.
+  check('an imported match is no skunk', chips.skunks === '0', JSON.stringify(chips));
+  // Two matches, two rounds, and the average is over the one that has any.
+  check('and is left out of the average', chips['avg rounds'] === '3.0', JSON.stringify(chips));
+
+  const career = Object.fromEntries(await lp.$$eval('.stats-table tbody tr', (rows) =>
+    rows.map((r) => [
+      r.querySelector('th').textContent.trim(),
+      [...r.querySelectorAll('td')].map((t) => t.textContent.trim()),
+    ])));
+  check('a career of imported results rates nothing', career['Player 1']?.[3] === '—',
+    JSON.stringify(career['Player 1']));
+  check('while one with rounds behind it still does', career.Neil?.[3] === '8.0',
+    JSON.stringify(career.Neil));
+
+  // Expanding it: no round table to show, and the footer says so rather than
+  // reading "0 rounds".
+  await lp.locator('.recent-open').first().click();
+  await lp.waitForSelector('.match-rounds');
+  check('an expanded import says it has no rounds',
+    (await lp.locator('.match-rounds-foot span').first().innerText()).includes('no rounds'),
+    await lp.locator('.match-rounds-foot span').first().innerText());
+  check('and draws no round rows', (await lp.locator('.match-round').count()) === 0);
+  await legacy.close();
+}
+
 // The setup row holds three controls now, and it must stay on one line at every
 // width the app is used at — a second line puts `Start` back below the fold, which
 // is the whole thing moving it up here escaped. One line is not enough to assert on

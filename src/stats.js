@@ -150,6 +150,30 @@ function chronological(matches) {
   return [...matches].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0));
 }
 
+// The score a match ended on, or null if it can't be known.
+//
+// `rounds` is the source wherever there is one, so a record the app filed itself
+// can never disagree with its own detail. `final` is for the other kind: a game
+// played before any of this existed, imported from a written-down result, which
+// has a score and nothing behind it. That is the one number about such a match
+// that genuinely isn't derivable — everything else stats.js reports is.
+//
+// Null rather than 0–0 for a record with neither, because `summary` reads a zero
+// here as a skunk and would file every detail-less match as one.
+export function finalScore(match) {
+  if (match?.rounds?.length) return totals(match);
+  const given = match?.final;
+  if (!Number.isFinite(given?.a) || !Number.isFinite(given?.b)) return null;
+  return { a: given.a, b: given.b };
+}
+
+// Whether a match carries its round-by-round detail. What separates the stats
+// that need only a result — record, streak, head to head — from the ones that
+// need thrown bags.
+export function hasRounds(match) {
+  return (match?.rounds?.length ?? 0) > 0;
+}
+
 export function playerStats(matches) {
   const acc = new Map();
   // Chronological so streaks read in play order and the display name settles on
@@ -357,19 +381,19 @@ export function summary(matches) {
   let fourBaggers = 0;
   let durationMs = 0;
   let timed = 0;
+  let detailed = 0;
 
   for (const match of matches) {
     rounds += match.rounds.length;
+    if (hasRounds(match)) detailed += 1;
     for (const round of match.rounds) {
       if (round.nets.a === 0 && round.nets.b === 0) washes += 1;
       for (const team of TEAMS) {
         if (tierCounts(round[team]).hole === BAGS_PER_SIDE) fourBaggers += 1;
       }
     }
-    // A record keeps `rounds` in the game's shape, so the scoring helpers read
-    // it directly rather than this file recounting the totals.
-    const final = totals(match);
-    const loser = match.winner === 'a' ? final.b : final.a;
+    const final = finalScore(match);
+    const loser = match.winner === 'a' ? final?.b : final?.a;
     if (match.winner && loser === 0) skunks += 1;
     const span = matchDuration(match);
     if (span !== null) {
@@ -384,7 +408,10 @@ export function summary(matches) {
     washes,
     skunks,
     fourBaggers,
-    avgRounds: ratio(rounds, matches.length),
+    // Over the matches that have rounds, not over all of them: an imported
+    // result contributes no rounds, and dividing by it drags the average toward
+    // zero rather than reporting how long a game actually runs.
+    avgRounds: ratio(rounds, detailed),
     avgDurationMs: ratio(durationMs, timed),
   };
 }

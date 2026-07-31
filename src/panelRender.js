@@ -268,6 +268,10 @@ const intOf = (v) => {
   return Number.isFinite(n) ? Math.trunc(n) + 0 : 0;
 };
 
+// ArduinoJson's `row["p"] | -1`: a missing key yields the default. Distinct from
+// intOf's 0, which here would be a real average rather than an absent one.
+const pprOf = (v) => (v === undefined || v === null ? -1 : intOf(v));
+
 // Only the first character is looked at, as the firmware does, so "away" is
 // team 'a' on both sides rather than a winner on one and none on the other.
 const teamOf = (v) => {
@@ -349,7 +353,7 @@ export function lineupState(payload) {
         name: bytes.subarray(0, Math.min(bytes.length, LINEUP_NAME_MAX - 1)),
         wins: clampInt(intOf(row?.w), 0, 999),
         losses: clampInt(intOf(row?.l), 0, 999),
-        ppr: clampInt(intOf(row?.p), 0, 999),
+        ppr: clampInt(pprOf(row?.p), -1, 999),
         form: Uint8Array.from(
           Array.from(form).slice(0, LINEUP_FORM_MAX),
           (c) => (c === 'W' || c === 'w' ? 0x57 : 0x4c),
@@ -533,13 +537,16 @@ function drawPips(fb, form, y, win, loss) {
   }
 }
 
+// Mirrors hasRate in board_logic.h, which is where both halves are explained.
+const hasRate = (r) => r.ppr >= 0 && r.wins + r.losses > 0;
+
 function formLayout(l) {
   let wlChars = 3;
   let pprChars = 0;
   for (let i = 0; i < l.count && i < LINEUP_MAX; i += 1) {
     const n = Math.min(formatRecord(l.rows[i].wins, l.rows[i].losses).length, FORM_WL_MAX);
     if (n > wlChars) wlChars = n;
-    if (l.rows[i].wins + l.rows[i].losses > 0) {
+    if (hasRate(l.rows[i])) {
       const p = Math.min(formatTenths(l.rows[i].ppr).length, FORM_PPR_MAX);
       if (p > pprChars) pprChars = p;
     }
@@ -565,7 +572,7 @@ function drawForm(fb, s, l, level) {
 
     drawText(fb, r.name, 0, y, color, f.nameChars);
     drawTextRight(fb, formatRecord(r.wins, r.losses), f.wlRight, y, grey, f.wlChars);
-    if (r.wins + r.losses > 0) {
+    if (hasRate(r)) {
       drawTextRight(fb, formatTenths(r.ppr), f.pprRight, y, grey, f.pprChars);
     }
     drawPips(fb, r.form, y, color, grey);

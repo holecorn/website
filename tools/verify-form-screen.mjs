@@ -407,6 +407,28 @@ await new Promise((r) => setTimeout(r, 1500));
   await display.screenshot({ path: `${dir}/form-zero-rate.png` });
 }
 
+// The other way a rate can be absent: a record built from matches imported with
+// no round detail. The app omits `p` entirely for those, so the display has to
+// read a missing key as "no rate" rather than dividing undefined by ten — which
+// puts "NaN" on the board with every unit test still passing.
+console.log('\na record with no rate behind it draws the record and no rate');
+pub.sendLineup({
+  rows: [
+    { n: 'Phi', w: 6, l: 4, f: 'LWLWW' },
+    { n: 'Rho', w: 2, l: 2, p: 73, f: 'WLLW' },
+  ],
+});
+await new Promise((r) => setTimeout(r, 1500));
+{
+  const pprs = await display.locator('.form-ppr').allInnerTexts();
+  const records = await display.locator('.form-record').allInnerTexts();
+  check('an omitted rate draws nothing at all', pprs[0] === '', JSON.stringify(pprs));
+  check('and not NaN', !pprs.join(' ').includes('NaN'), JSON.stringify(pprs));
+  check('the record is still there', records[0].replace(/\s/g, '') === '6–4', records[0]);
+  check('and the row beside it keeps its rate', pprs[1] === '7.3', JSON.stringify(pprs));
+  await display.screenshot({ path: `${dir}/form-no-rate.png` });
+}
+
 // Everything above publishes from a synthetic client. This block is the only one
 // that drives the scoring app itself, because the failure it covers lives in the
 // wiring between two halves that are each correct: a career rename reaches the

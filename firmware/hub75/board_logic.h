@@ -107,9 +107,16 @@ struct LineupRow {
   char name[LINEUP_NAME_MAX] = {0};
   int wins = 0;
   int losses = 0;
-  int ppr = 0;                            // tenths, so 72 draws as "7.2"
+  int ppr = -1;                           // tenths, so 72 draws as "7.2"; -1 is unknown
   char form[LINEUP_FORM_MAX + 1] = {0};   // 'W'/'L', oldest first
 };
+
+// Whether a row has a rate to draw. Both halves are load-bearing. The app omits
+// "p" for a player with no thrown bags behind their record — a result imported
+// from a game played before the app existed — and that parses to -1. A lineup
+// *retained* from before that change sends 0 instead, and there a 0-0 record is
+// the only thing separating a newcomer from a genuine 0.0 average.
+inline bool hasRate(const LineupRow& r) { return r.ppr >= 0 && r.wins + r.losses > 0; }
 
 struct LineupState {
   int count = 0;  // 0 means nothing to draw
@@ -192,7 +199,7 @@ inline bool parseLineup(const char* json, size_t length, LineupState& out) {
     r.losses = clampInt(row["l"] | 0, 0, 999);
     // 999 tenths, so the widest it can draw is "99.9" — the four characters the
     // form layout reserves. A real PPR caps at 12.0 (four bags in the hole).
-    r.ppr = clampInt(row["p"] | 0, 0, 999);
+    r.ppr = clampInt(row["p"] | -1, -1, 999);
     const char* form = row["f"].as<const char*>();
     if (form) {
       int j = 0;

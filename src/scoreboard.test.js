@@ -327,9 +327,33 @@ describe('the pre-game lineup', () => {
     expect(lineupPayload(strangers, archive)).toBeNull();
   });
 
+  // No `p` at all for a newcomer: absent means "no rate", which is what keeps a
+  // genuine 0.0 average drawable on both consumers.
   it('still publishes when only one of them has played', () => {
     const mixed = { ...setup(), players: { a: ['Neil', 'P2'], b: ['Psi', 'P2'] } };
-    expect(lineupPayload(mixed, archive).rows[1]).toEqual({ n: 'Psi', w: 0, l: 0, p: 0, f: '' });
+    expect(lineupPayload(mixed, archive).rows[1]).toEqual({ n: 'Psi', w: 0, l: 0, f: '' });
+  });
+
+  // A career made only of imported results — a written-down score with no rounds
+  // behind it — has a record and no rate. Sending 0 would put "0.0" on the board
+  // for somebody who has played a dozen games.
+  it('omits the rate for a record with no rounds behind it', () => {
+    const legacy = [
+      {
+        id: 'old-1',
+        endedAt: 1,
+        mode: 'singles',
+        players: { a: ['Phi', 'P2'], b: ['Neil', 'P4'] },
+        winner: 'a',
+        final: { a: 21, b: 13 },
+        rounds: [],
+      },
+    ];
+    const game = { ...setup(), players: { a: ['Phi', 'P2'], b: ['Neil', 'P4'] } };
+    const rows = lineupPayload(game, [...archive, ...legacy]).rows;
+    expect(rows[0]).toEqual({ n: 'Phi', w: 1, l: 0, f: 'W' });
+    // The opponent has real rounds elsewhere in the archive, so theirs survives.
+    expect(rows[1].p).toBeGreaterThan(0);
   });
 
   it('sends four rows in doubles, team A first', () => {

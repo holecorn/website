@@ -259,6 +259,43 @@ have, adds nothing and can't create duplicates. Where both sides hold the same
 match, whichever copy had its names corrected most recently is the one kept — so
 an export taken before a rename can't undo it.
 
+### Games played before the app
+
+Results written down somewhere else can be brought in, so a career doesn't start
+from zero. All that's needed per game is the date, who played and the final
+score. Put them in a text file, one per line:
+
+```
+# seafront, summer 2024
+2024-05-18  Neil v Sigma  21-13
+2024-05-18  Neil & Rho v Sigma & Tau  21-9
+2024-06-02  Neil v Rho  9-15  to 15
+```
+
+Partners are separated by `&` or a comma, and `to N` covers a game that wasn't
+played to 21. The loser's score has to be below the target — both sides reaching
+it isn't a game that could have been played, since the match ends the moment the
+first one gets there. The winner's may exceed it, because a round scores up to
+12 at once. A draw is rejected too: somebody has to have finished, and a match
+with no winner would put a loss against both names. Then:
+
+```bash
+node tools/import-legacy.mjs games.txt > legacy.json
+```
+
+and **Import JSON** on the stats screen. Running it again produces the same file,
+so importing twice adds nothing.
+
+These count as matches in every way that only needs the result — win–loss, win
+rate, streaks, form and head to head all include them, and the score shows in
+Recent matches. What they can't do is contribute to anything measured off the
+bags themselves. PPR, hole rate, in-play rate, best round and four baggers all
+need to know where each bag landed, and that isn't recoverable from a final
+score, so those are left out rather than guessed at. A game with no rounds shows
+a dash where a rate would be, and the average round length ignores it. Someone
+whose whole history is imported results shows a record and dashes; play one
+scored game and the rates start from that game alone.
+
 ## External scoreboard
 
 Holecorn can mirror the score onto a second screen — a spare tablet or laptop

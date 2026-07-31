@@ -65,8 +65,12 @@ export default function Lineup({ game, colors, matches }) {
                   <td>
                     <Form results={p.form} color={colors[p.team]} />
                   </td>
-                  <td>{p.ppr.toFixed(1)}</td>
-                  <td>{pct(p.holePct)}</td>
+                  {/* Rates need thrown bags, and a record made only of
+                      imported results has none — a real 0.0 average and no data
+                      at all must not read alike. `played` is the wrong test for
+                      this: it says they have history, not that it has rounds. */}
+                  <td>{p.rounds > 0 ? p.ppr.toFixed(1) : '—'}</td>
+                  <td>{p.rounds > 0 ? pct(p.holePct) : '—'}</td>
                 </>
               ) : (
                 <td className="lineup-first" colSpan={4}>

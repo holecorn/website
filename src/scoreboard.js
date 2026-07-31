@@ -109,8 +109,12 @@ export function lineupPayload(game, matches) {
       // earns it.
       w: Math.min(p.wins, 999),
       l: Math.min(p.losses, 999),
-      // Tenths, so the board formats "7.2" without carrying a float.
-      p: Math.min(Math.round(p.ppr * 10), 999),
+      // Tenths, so the board formats "7.2" without carrying a float. Omitted
+      // rather than sent as 0 when no thrown bags sit behind the record — an
+      // imported result, or a newcomer — because 0.0 is a real average and the
+      // board has to keep drawing that. Absent means unknown, the same contract
+      // `winner` uses in the score payload, and it only ever shortens a packet.
+      ...(p.rounds > 0 ? { p: Math.min(Math.round(p.ppr * 10), 999) } : {}),
       // A string rather than a bitmask: the same bytes, and both ends read it
       // without needing to agree on which bit is the oldest result.
       f: p.form

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BOARD_NAME, nameKey, totals, teamLabel } from './scoring.js';
+import { BOARD_NAME, nameKey, teamLabel } from './scoring.js';
 import {
   dropMatch,
   loadArchive,
@@ -13,7 +13,15 @@ import {
   savePlayerRename,
   unexportedCount,
 } from './archive.js';
-import { playerStats, headToHead, summary, matchRounds, matchDuration } from './stats.js';
+import {
+  playerStats,
+  headToHead,
+  summary,
+  matchRounds,
+  matchDuration,
+  finalScore,
+  hasRounds,
+} from './stats.js';
 import './Stats.css';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
@@ -212,9 +220,12 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                         {p.wins}–{p.losses}
                       </td>
                       <td>{p.rounds}</td>
-                      <td>{one(p.ppr)}</td>
-                      <td>{pct(p.holePct)}</td>
-                      <td>{pct(p.inPlayPct)}</td>
+                      {/* A rate over no rounds is undefined, not zero. Only a
+                          career made entirely of imported results reaches this,
+                          and 0.0 PPR beside 0 rounds reads as a bad run. */}
+                      <td>{p.rounds > 0 ? one(p.ppr) : '—'}</td>
+                      <td>{p.rounds > 0 ? pct(p.holePct) : '—'}</td>
+                      <td>{p.rounds > 0 ? pct(p.inPlayPct) : '—'}</td>
                       <td>{p.fourBaggers}</td>
                       <td>{p.bestRound}</td>
                       <td>{p.currentStreak > 1 ? `${p.currentStreak}W` : '—'}</td>
@@ -246,7 +257,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
             <h2>Recent matches</h2>
             <ul className="recent">
               {recent.map((m) => {
-                const final = totals(m);
+                const final = finalScore(m);
                 const open = openId === m.id;
                 const label = `${teamLabel(m, 'a')} v ${teamLabel(m, 'b')} on ${shortDate(m.endedAt)}`;
                 return (
@@ -265,7 +276,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                           <span style={{ color: m.colors?.b }}>{teamLabel(m, 'b')}</span>
                         </span>
                         <span className="recent-score">
-                          {final.a}–{final.b}
+                          {final ? `${final.a}–${final.b}` : '—'}
                         </span>
                         {/* Rotated rather than swapped for ⌃: the two
                             arrowheads are unrelated codepoints and render at
@@ -501,23 +512,30 @@ function MatchNames({ match, onCancel, onSave }) {
 // ▬ board) so the two read alike.
 function MatchRounds({ id, match, onEdit }) {
   const rounds = matchRounds(match);
+  const detailed = hasRounds(match);
   const doubles = match.mode === 'doubles';
   const span = matchDuration(match);
   // Left out rather than shown as a dash when it can't be known — a match saved
   // before start times existed simply doesn't have one.
   const facts = [
-    `${rounds.length} round${rounds.length === 1 ? '' : 's'}${span ? ` in ${minutes(span)}` : ''}`,
+    detailed
+      ? `${rounds.length} round${rounds.length === 1 ? '' : 's'}${span ? ` in ${minutes(span)}` : ''}`
+      : 'result only, no rounds recorded',
     `played to ${match.target}`,
     ...(doubles ? ['doubles'] : []),
   ];
   return (
     <div className="match-rounds" id={id}>
-      <div className="match-rounds-head">
-        <span>Rd</span>
-        <span style={{ color: match.colors?.a }}>{teamLabel(match, 'a')}</span>
-        <span style={{ color: match.colors?.b }}>{teamLabel(match, 'b')}</span>
-        <span>Score</span>
-      </div>
+      {/* No column headings over an empty table: for an imported result the
+          footer below is the whole of what is known. */}
+      {detailed && (
+        <div className="match-rounds-head">
+          <span>Rd</span>
+          <span style={{ color: match.colors?.a }}>{teamLabel(match, 'a')}</span>
+          <span style={{ color: match.colors?.b }}>{teamLabel(match, 'b')}</span>
+          <span>Score</span>
+        </div>
+      )}
       {rounds.map((r) => (
         <div className={`match-round${r.wash ? ' is-wash' : ''}`} key={r.n}>
           <span className="mr-n">

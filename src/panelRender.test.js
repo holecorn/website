@@ -163,8 +163,17 @@ describe('lineupState', () => {
 
   it('fills a missing field with zero rather than NaN', () => {
     const l = lineupState({ rows: [{ n: 'Psi' }, { n: 'Eta' }] });
-    expect(l.rows[0]).toMatchObject({ wins: 0, losses: 0, ppr: 0 });
+    expect(l.rows[0]).toMatchObject({ wins: 0, losses: 0 });
     expect(l.rows[0].form).toHaveLength(0);
+  });
+
+  // The rate is the exception, mirroring `row["p"] | -1` in board_logic.h: 0.0 is
+  // a real average, so an omitted rate — a record with no thrown bags behind it —
+  // cannot arrive as the same value.
+  it('reads a missing rate as -1, not as an average of zero', () => {
+    const l = lineupState({ rows: [{ n: 'Psi', w: 6, l: 4 }, { n: 'Eta', w: 0, l: 5, p: 0 }] });
+    expect(l.rows[0].ppr).toBe(-1);
+    expect(l.rows[1].ppr).toBe(0);
   });
 
   // A name is UTF-8 bytes because that is what reaches the board, and it is cut

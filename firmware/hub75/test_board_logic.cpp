@@ -230,13 +230,34 @@ int main() {
     const char* NONE = "{\"rows\":[]}";
     CHECK(!parseLineup(NONE, strlen(NONE), l) && l.count == 4);
 
-    // Missing fields are zeroes, not garbage: a newcomer publishes 0-0 with no
-    // rate and no results, and render.h reads the 0-0 *record* — not the zero
-    // rate — as "never played", because 0.0 PPR is a real average.
+    // Missing fields are zeroes, not garbage — except the rate, which is -1,
+    // because 0.0 PPR is a real average and has to stay distinguishable from
+    // having none.
     const char* SPARSE = "{\"rows\":[{\"n\":\"Psi\"},{\"n\":\"Eta\"}]}";
     CHECK(parseLineup(SPARSE, strlen(SPARSE), l));
-    CHECK(l.count == 2 && l.rows[0].wins == 0 && l.rows[0].ppr == 0);
+    CHECK(l.count == 2 && l.rows[0].wins == 0 && l.rows[0].ppr == -1);
     CHECK(l.rows[0].form[0] == '\0');
+    CHECK(!hasRate(l.rows[0]));
+
+    // A record with no rate behind it: a match imported from a written-down
+    // result, which has a winner and no rounds. The app omits "p" for it, and
+    // the board must draw the record and no rate rather than "0.0".
+    const char* IMPORTED =
+        "{\"rows\":[{\"n\":\"Neil\",\"w\":6,\"l\":4,\"f\":\"LWLWW\"},"
+        "{\"n\":\"Rho\",\"w\":2,\"l\":2,\"p\":73,\"f\":\"WLLW\"}]}";
+    CHECK(parseLineup(IMPORTED, strlen(IMPORTED), l));
+    CHECK(l.rows[0].wins == 6 && l.rows[0].ppr == -1 && !hasRate(l.rows[0]));
+    CHECK(l.rows[1].ppr == 73 && hasRate(l.rows[1]));
+
+    // A lineup retained from before the rate could be omitted sends 0 for a
+    // newcomer, so a 0-0 record still has to read as "no rate" on its own — and
+    // a real 0.0 average, which comes with a record, still has to draw.
+    const char* LEGACY =
+        "{\"rows\":[{\"n\":\"Psi\",\"w\":0,\"l\":0,\"p\":0,\"f\":\"\"},"
+        "{\"n\":\"Eta\",\"w\":0,\"l\":5,\"p\":0,\"f\":\"LLLLL\"}]}";
+    CHECK(parseLineup(LEGACY, strlen(LEGACY), l));
+    CHECK(l.rows[0].ppr == 0 && !hasRate(l.rows[0]));
+    CHECK(l.rows[1].ppr == 0 && hasRate(l.rows[1]));
 
     // Clamped to what formatRecord and formatTenths can write into their buffers.
     // Three digits a side, not two: at 99 the board silently drew "99" while the phone

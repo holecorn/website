@@ -296,6 +296,9 @@ function FormTable({ lineup, colorA, colorB }) {
         const color = i < half ? colorA : colorB;
         const form = typeof row.f === 'string' ? row.f : '';
         const played = (row.w ?? 0) + (row.l ?? 0) > 0;
+        // Mirrors hasRate in board_logic.h — both halves, for the reasons given
+        // there. An absent `p` reaching toFixed draws NaN.
+        const rate = played && Number.isFinite(row.p) ? (row.p / 10).toFixed(1) : '';
         return (
           <div className="form-row" key={i}>
             <span className="form-name" style={{ color }}>
@@ -321,9 +324,9 @@ function FormTable({ lineup, colorA, colorB }) {
               ))}
             </span>
             {/* Tenths on the wire, so the board needs no float formatter. Empty
-                only for a newcomer — a 0.0 average is a real one and has to show,
-                or it reads as missing data. */}
-            <span className="form-ppr">{played ? (row.p / 10).toFixed(1) : ''}</span>
+                only where there is no rate to give — a 0.0 average is a real one
+                and has to show, or it reads as missing data. */}
+            <span className="form-ppr">{rate}</span>
           </div>
         );
       })}
