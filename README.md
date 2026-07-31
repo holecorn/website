@@ -168,9 +168,17 @@ the share of bags that went in the hole and the share that stayed in play,
 four-baggers, best single round, and the current win streak. Rounds sits next to
 PPR because it's the number PPR is averaged over — and in doubles it's the more
 honest measure of how much someone actually played, since partners alternate and
-only throw half the rounds of a match. Alongside that there's a head-to-head
-record for everyone who has played each other, and totals for washes, skunks and
-average match length.
+only throw half the rounds of a match. There are also totals for washes, skunks
+and average match length.
+
+**Tap a player's name** to see how they get on against everyone else. The list is
+theirs — every row is an opponent, and the score is that player's won–lost against
+them — so you never have to hunt for your own name down a column of pairs. It runs
+worst first, with the two ends of it called out: their **nemesis** — the opponent
+with the biggest gap between losses and wins — and whoever they **dominate**, the
+same thing the other way round. Both need at least three meetings, so one bad
+afternoon doesn't make a rivalry. Either can be missing, which is different from
+having played nobody. Tap the name again to close it.
 
 Players are matched up by name, ignoring capitals and stray spaces, so "neil"
 and "Neil " are the same person. In doubles both partners share the match result,
@@ -193,6 +201,12 @@ mis-scored, or for clearing out test games. Deleting is immediate, with an
 Names are the only thing identifying a player, so a typo invents somebody. There
 are two ways to put one right, and which one you want depends on how far the typo
 spread.
+
+**Rename**, in the panel that opens when you tap a player, changes that name
+everywhere — every match they appear in, and the lineup waiting on the setup
+screen so the typo can't walk into the next game. It's the only way to rename
+somebody, deliberately: with no rename control in the table itself, tapping a row
+can only ever select it.
 
 **Edit names**, inside an expanded match, changes that match and nothing else.
 Use it for a name that was already wrong when you pressed **Start**, or when

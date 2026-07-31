@@ -333,6 +333,79 @@ export function headToHead(matches) {
   );
 }
 
+// How many meetings before a one-sided record counts as a rivalry rather than a
+// bad afternoon. Exported so the screen can say why somebody has neither yet.
+export const RIVAL_MIN_MEETINGS = 3;
+
+// One player's record against everyone they have faced, from *their* point of
+// view. Built on headToHead rather than folding the matches again, so there is
+// one definition of who beat whom.
+//
+// The flip is the whole point. headToHead keys a pair low-name-first, so a given
+// player is on the left of some rows and the right of others — which on a screen
+// means checking both columns of every row to find yourself, and there is no
+// usable find-in-page on a phone. Here they are always `wins`/`losses`.
+//
+// No threshold: this lists everyone. `nemesis` is where the bound belongs.
+export function opponentRecords(matches, name) {
+  const key = nameKey(name);
+  if (!key) return [];
+  const out = [];
+  for (const pair of headToHead(matches)) {
+    const mine = nameKey(pair.a) === key ? 'a' : nameKey(pair.b) === key ? 'b' : null;
+    if (!mine) continue;
+    const wins = mine === 'a' ? pair.aWins : pair.bWins;
+    const losses = mine === 'a' ? pair.bWins : pair.aWins;
+    out.push({
+      name: mine === 'a' ? pair.b : pair.a,
+      wins,
+      losses,
+      met: wins + losses,
+      // Netted, which is what makes it a rivalry measure rather than an
+      // attendance one — see `nemesis`.
+      deficit: losses - wins,
+    });
+  }
+  return out.sort(
+    (x, y) => y.deficit - x.deficit || y.met - x.met || x.name.localeCompare(y.name),
+  );
+}
+
+// Who has beaten this player most, or null if nobody has beaten them enough to
+// count. Reads the sorted list above, so the pick is its first qualifying row.
+//
+// **Deficit, not raw losses**, and the difference is not cosmetic: raw losses
+// cannot tell "beats me" from "plays me a lot", so in a group with one regular it
+// returns that regular for nearly everybody — and worse, it can name somebody you
+// hold a winning record against. Measured on the sample archive: most-losses made
+// Neil the nemesis of 7 of the 9 eligible players, and made Sigma's nemesis Neil,
+// a matchup Sigma leads 18–13. A positive deficit cannot do that.
+//
+// Worst win *rate* was the other candidate and is worse still — it rewards tiny
+// samples, so it needs a threshold high enough to exclude newcomers outright.
+//
+// With the deficit tied, more meetings is the same ordering as more losses
+// (losses = (met + deficit) / 2), so the sort above already breaks the tie the
+// intended way and there is no extra comparator here.
+export function nemesis(records) {
+  return records.find((o) => o.met >= RIVAL_MIN_MEETINGS && o.deficit > 0) ?? null;
+}
+
+// The other end of the same list: who this player has the better of. Deficit for
+// the same reason as `nemesis` — beating somebody five times out of thirty is not
+// dominating them — and the list is sorted worst-first, so the most one-sided win
+// is at the far end rather than the near one.
+//
+// The two can never name the same opponent: one needs a positive deficit and the
+// other a negative one, and nobody qualifies at zero.
+export function dominates(records) {
+  for (let i = records.length - 1; i >= 0; i -= 1) {
+    const o = records[i];
+    if (o.met >= RIVAL_MIN_MEETINGS && o.deficit < 0) return o;
+  }
+  return null;
+}
+
 // How long a match took, or null if it can't be known. Both stamps are
 // required: a match archived before `startedAt` existed — a game already in
 // play when the field shipped never passes through Start game — would otherwise

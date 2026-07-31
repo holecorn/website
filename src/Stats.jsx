@@ -15,7 +15,10 @@ import {
 } from './archive.js';
 import {
   playerStats,
-  headToHead,
+  opponentRecords,
+  nemesis,
+  dominates,
+  RIVAL_MIN_MEETINGS,
   summary,
   matchRounds,
   matchDuration,
@@ -30,6 +33,10 @@ const one = (v) => v.toFixed(1);
 // "round" takes "s", so anything that guesses gets one of them wrong.
 const plural = (n, one, many) => (n === 1 ? one : many);
 const matchCount = (n) => `${n} ${plural(n, 'match', 'matches')}`;
+// One separator for every join in the rivals heading, so the gap after the
+// player's name matches the gap between the two rivalries rather than being a
+// margin that has to be eyeballed against it.
+const DOT = ' · ';
 
 const shortDate = (ms) =>
   ms ? new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
@@ -59,10 +66,23 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // edited and the dialog opens by being mounted.
   const [editing, setEditing] = useState(null);
   const [renaming, setRenaming] = useState(null);
+  // Whose stats the screen is showing below the table, or null for nobody. Held
+  // as a nameKey rather than a display name so it survives the fold that
+  // playerStats already applies, and transient like openId — a scope you set
+  // while looking, not a setting.
+  const [selected, setSelected] = useState(null);
 
   const totalsFor = useMemo(() => summary(matches), [matches]);
   const players = useMemo(() => playerStats(matches), [matches]);
-  const pairs = useMemo(() => headToHead(matches), [matches]);
+  // Resolved from the list rather than held alongside it, so a player who has
+  // just lost their last match to a deletion takes the panel with them.
+  const subject = players.find((p) => nameKey(p.name) === selected) ?? null;
+  const rivals = useMemo(
+    () => (subject ? opponentRecords(matches, subject.name) : []),
+    [matches, subject],
+  );
+  const worst = nemesis(rivals);
+  const best = dominates(rivals);
   const recent = useMemo(
     () => [...matches].sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0)).slice(0, 12),
     [matches],
@@ -101,6 +121,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
     onRenamePlayer?.(from, to);
     setRenaming(null);
     setNotice(null);
+    // Follow the rename, or the panel closes under whoever is being looked at —
+    // and on a merge it follows them into the career they were folded into.
+    setSelected(nameKey(to));
   };
 
   const exportMatches = () => {
@@ -205,12 +228,22 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                 </thead>
                 <tbody>
                   {players.map((p) => (
-                    <tr key={p.name}>
+                    <tr
+                      key={p.name}
+                      className={nameKey(p.name) === selected ? 'is-selected' : undefined}
+                    >
                       <th scope="row">
+                        {/* The name is the select target because it is the only
+                            cell always on screen — the table scrolls sideways by
+                            ~200px on a phone and this column is sticky. It is
+                            also the *only* control in the table: renaming lives
+                            in the panel below, so a mis-tap can only ever select. */}
                         <button
-                          className="player-rename"
-                          onClick={() => setRenaming(p)}
-                          aria-label={`Rename ${p.name}`}
+                          className="player-select"
+                          onClick={() =>
+                            setSelected((s) => (s === nameKey(p.name) ? null : nameKey(p.name)))
+                          }
+                          aria-pressed={nameKey(p.name) === selected}
                         >
                           {p.name}
                         </button>
@@ -236,20 +269,83 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
             </div>
           </section>
 
-          {pairs.length > 0 && (
+          {/* Only for the selected player. The unscoped list of every pair grew
+              as n(n-1)/2 — 42 rows at 11 players, and you had to check both
+              columns of each to find yourself, because headToHead keys a pair
+              low-name-first. `opponentRecords` puts the subject on one side. */}
+          {subject && (
             <section className="stats-section">
-              <h2>Head to head</h2>
-              <ul className="h2h">
-                {pairs.map((pair) => (
-                  <li key={`${pair.a}-${pair.b}`}>
-                    <span className="h2h-name">{pair.a}</span>
-                    <span className="h2h-score">
-                      {pair.aWins}–{pair.bWins}
-                    </span>
-                    <span className="h2h-name h2h-right">{pair.b}</span>
-                  </li>
-                ))}
-              </ul>
+              <h2>
+                {subject.name}
+                <span className="rivals-sub">
+                  {DOT}
+                  {worst || best ? (
+                    <>
+                      {worst && (
+                        <>
+                          nemesis <b>{worst.name}</b>
+                        </>
+                      )}
+                      {worst && best && DOT}
+                      {best && (
+                        <>
+                          dominates <b>{best.name}</b>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    `no rivalries yet — needs ${RIVAL_MIN_MEETINGS} meetings`
+                  )}
+                </span>
+              </h2>
+              {rivals.length > 0 ? (
+                /* The captions live inside the bordered box with the rows, or they
+                   read as a stray line above an unrelated list. */
+                <div className="rivals">
+                  {/* The old list bracketed the score between both names, so which
+                      way round it read was self-evident. With one name it isn't:
+                      "Sigma 13–18" has to say whose 13 that is. */}
+                  <div className="rivals-head" aria-hidden="true">
+                    <span>Opponent</span>
+                    <span>W–L</span>
+                  </div>
+                  <ul className="h2h">
+                    {rivals.map((o) => (
+                      <li key={o.name}>
+                        <span className="h2h-name">{o.name}</span>
+                        {/* Named rather than shaded. A darker row says *something*
+                            is special without saying what, and there is room here
+                            for the word. "Dominated" describes the opponent, the
+                            way "nemesis" does — "dominates" on their row reads as
+                            though they are the one doing it. */}
+                        {o === worst && <span className="rival-tag">nemesis</span>}
+                        {o === best && <span className="rival-tag">dominated</span>}
+                        <span className="h2h-score">
+                          <span className="h2h-spoken">
+                            {o.wins} won, {o.losses} lost against {o.name}
+                            {o === worst ? ', their nemesis' : ''}
+                            {o === best ? ', whom they dominate' : ''}
+                          </span>
+                          <span aria-hidden="true">
+                            {o.wins}–{o.losses}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="rivals-none">No opponents yet.</p>
+              )}
+              <p className="rivals-foot">
+                <span>
+                  {rivals.length} opponent{rivals.length === 1 ? '' : 's'} ·{' '}
+                  {rivals.reduce((n, o) => n + o.met, 0)} meetings
+                </span>
+                <button className="match-edit" onClick={() => setRenaming(subject)}>
+                  Rename {subject.name}
+                </button>
+              </p>
             </section>
           )}
 

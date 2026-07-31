@@ -479,7 +479,10 @@ console.log('\na career rename does not publish the new name with an empty recor
     JSON.stringify(before));
 
   await scorer.getByRole('button', { name: 'Stats' }).click();
-  await scorer.locator('.stats-table tbody tr', { hasText: 'Rho' }).locator('.player-rename').click();
+  // Renaming is reached by selecting the player first: there is no control in
+  // the career table, only in the panel that selection opens.
+  await scorer.locator('.stats-table tbody tr', { hasText: 'Rho' }).locator('.player-select').click();
+  await scorer.getByRole('button', { name: 'Rename Rho', exact: true }).click();
   await scorer.locator('.rename-input').fill('Rho B');
   await scorer.locator('.modal').getByRole('button', { name: 'Rename' }).click();
   await new Promise((r) => setTimeout(r, 2500));

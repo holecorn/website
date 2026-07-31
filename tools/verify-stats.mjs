@@ -21,6 +21,13 @@ const check = (label, cond, detail = '') => {
   if (!cond) failures++;
 };
 
+// Renaming is only reachable through the selected-player panel — there is no
+// control in the career table — so every route to it selects first.
+const openRename = async (page, name) => {
+  await page.locator('.stats-table tbody tr', { hasText: name }).locator('.player-select').click();
+  await page.getByRole('button', { name: `Rename ${name}`, exact: true }).click();
+};
+
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
 const context = await browser.newContext({
   viewport: { width: 430, height: 932 },
@@ -210,7 +217,29 @@ check('Sigma threw the same four rounds', sigma.RDS === '4', sigma.RDS);
 check('Sigma threw every bag on the floor', sigma.HOLE === '0%', sigma.HOLE);
 
 check('the unused doubles slot is not listed', !(await page.getByText('Player 2').count()));
-check('head to head is shown', (await page.locator('.h2h li').count()) === 1);
+// Two absences, asserted here — on the first stats screen this file opens —
+// rather than alongside the scoped checks further down. Both are things nothing
+// in the components would notice coming back, and putting them last is worse than
+// useless: a rename control restored to the table makes `openRename` match two
+// buttons and die on a strict-mode violation, so the run ends in a stack trace
+// instead of naming the fault. Verified by mutation, which is how that was found.
+check('nothing is scoped until a player is picked', (await page.locator('.h2h').count()) === 0);
+check(
+  'and there is no way to rename one from the career table',
+  (await page.getByRole('button', { name: /^Rename/ }).count()) === 0,
+);
+
+// Head to head is scoped to a selected player now, so it has to be asked for.
+// Deselected again afterwards, so the rest of this block sees the screen it did
+// before.
+await page.getByRole('button', { name: 'Neil', exact: true }).click();
+check('head to head is shown for the selected player', (await page.locator('.h2h li').count()) === 1);
+check(
+  'and reads as their record against the opponent',
+  (await page.locator('.h2h li').first().innerText()).replace(/\s+/g, ' ').includes('Sigma'),
+  await page.locator('.h2h li').first().innerText(),
+);
+await page.getByRole('button', { name: 'Neil', exact: true }).click();
 check('both matches listed as recent', (await page.locator('.recent li').count()) === 2);
 
 // Expanding a match must agree with the summary row above it — the running
@@ -515,7 +544,7 @@ check(
 
   // Renaming onto somebody who already has a history is a merge. Said out loud,
   // because it cannot be undone from this screen.
-  await renPage.locator('.stats-table tbody tr', { hasText: 'Chi' }).locator('.player-rename').click();
+  await openRename(renPage, 'Chi');
   await renPage.locator('.rename-input').fill('Phi');
   check('a merge is named as a merge', await renPage.getByText('already has 1 match').isVisible());
   check(
@@ -524,7 +553,7 @@ check(
   );
   await renPage.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
 
-  await renPage.locator('.stats-table tbody tr', { hasText: 'Phi' }).locator('.player-rename').click();
+  await openRename(renPage, 'Phi');
   await renPage.locator('.rename-input').fill('Phi B');
   await renPage.locator('.modal').getByRole('button', { name: 'Rename' }).click();
   check('a career rename reaches the record', (await stored())[0].players.b[0] === 'Phi B');
@@ -674,6 +703,88 @@ check(
   check('one round reads "round"', b.round === '1', JSON.stringify(Object.keys(b)));
   check('zero washes reads "washes"', b.washes === '0', JSON.stringify(Object.keys(b)));
   await one.close();
+}
+
+// Selecting a player scopes the screen to them. Two of these are absences, which
+// nothing in the components would notice coming back: the unscoped list of every
+// pair, and a rename control in the table. The list grew as n(n-1)/2 — 42 rows at
+// 11 players — and rename in the table is what made a mis-tap open a dialog.
+{
+  const sel = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const sp = await sel.newPage();
+  sp.on('pageerror', (e) => { console.log('  PAGE ERROR', e.message); failures++; });
+  await sp.goto(URL);
+  // Sigma is chosen deliberately: headToHead keys pairs low-name-first, so Sigma
+  // sits on the *left* against Tau and on the *right* against Chi and Neil. That
+  // split is the thing being fixed, so the fixture has to contain both.
+  await sp.evaluate(() => {
+    localStorage.clear();
+    const beat = (w, l, id) => ({
+      format: 1, id, endedAt: 1.7e12 + id.length * 1000, mode: 'singles',
+      players: { a: [w, ''], b: [l, ''] },
+      colors: { a: '#2f80ed', b: '#eb5757' }, target: 21, winner: 'a',
+      final: { a: 21, b: 11 }, rounds: [],
+    });
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify([
+      beat('Sigma', 'Tau', 'a'), beat('Sigma', 'Tau', 'aa'), beat('Tau', 'Sigma', 'aaa'),
+      beat('Chi', 'Sigma', 'b'), beat('Chi', 'Sigma', 'bb'), beat('Chi', 'Sigma', 'bbb'),
+      beat('Neil', 'Sigma', 'c'), beat('Sigma', 'Neil', 'cc'),
+    ]));
+  });
+  await sp.reload();
+  await sp.getByRole('button', { name: 'Stats' }).click();
+  await sp.waitForSelector('.stats-table');
+
+  await sp.getByRole('button', { name: 'Sigma', exact: true }).click();
+  await sp.waitForSelector('.h2h');
+  const rows = await sp.$$eval('.h2h li', (ls) => ls.map((l) => [
+    l.querySelector('.h2h-name').textContent.trim(),
+    l.querySelector('.h2h-score').lastElementChild.textContent.trim(),
+    l.querySelector('.rival-tag')?.textContent.trim() ?? '',
+  ]));
+  // Sigma never appears in a row: every row is an opponent, and the score is
+  // always Sigma's won–lost. Read off the *other* keying — Chi and Neil — because
+  // that is where an unflipped implementation reports the reverse.
+  check('the subject is not one of their own rows', !rows.some((r) => r[0] === 'Sigma'),
+    JSON.stringify(rows));
+  check('a pair keyed with the subject on the left reads their way round',
+    JSON.stringify(rows.find((r) => r[0] === 'Tau')?.slice(0, 2)) === '["Tau","2–1"]',
+    JSON.stringify(rows));
+  check('and so does one keyed with them on the right',
+    JSON.stringify(rows.find((r) => r[0] === 'Chi')?.slice(0, 2)) === '["Chi","0–3"]',
+    JSON.stringify(rows));
+  // Named rather than shaded, and at both ends of the list: Sigma is 0-3 down to
+  // Chi and 2-1 up on Tau, over three meetings each.
+  check('worst first, and the nemesis is named on its row',
+    rows[0][0] === 'Chi' && rows[0][2] === 'nemesis', JSON.stringify(rows));
+  check('the one they have the better of is named at the other end',
+    rows[rows.length - 1][0] === 'Tau' && rows[rows.length - 1][2] === 'dominated',
+    JSON.stringify(rows));
+  const heading = await sp.locator('.stats-section').nth(1).locator('h2').innerText();
+  check('and both are in the heading', heading.includes('Chi') && heading.includes('Tau'), heading);
+  // The captions have to sit inside the bordered box with the rows, or they read
+  // as a stray line above an unrelated list.
+  check('the column captions are part of the list',
+    (await sp.locator('.rivals > .rivals-head + .h2h').count()) === 1);
+  // 1–1 against Neil: level is not a rivalry, and this is also the row that would
+  // read 1–1 either way round, so it is no use for the flip assertions above.
+  check('a level opponent is still listed',
+    JSON.stringify(rows.find((r) => r[0] === 'Neil')?.slice(0, 2)) === '["Neil","1–1"]',
+    JSON.stringify(rows));
+
+  await sp.getByRole('button', { name: 'Sigma', exact: true }).click();
+  check('picking the same player again clears it', (await sp.locator('.h2h').count()) === 0);
+
+  // Nobody has beaten them enough to count — a real state, not a zero.
+  await sp.getByRole('button', { name: 'Neil', exact: true }).click();
+  await sp.waitForSelector('.rivals-foot');
+  check('a player with no qualifying rival either way says so rather than naming one',
+    (await sp.locator('.stats-section').nth(1).locator('h2').innerText()).includes('no rivalries yet'),
+    await sp.locator('.stats-section').nth(1).locator('h2').innerText());
+  check('and neither end of their list is tagged',
+    (await sp.locator('.rival-tag').count()) === 0);
+  check('but their opponents are still listed', (await sp.locator('.h2h li').count()) === 1);
+  await sel.close();
 }
 
 // A match imported from a written-down result — a score and no rounds. Every

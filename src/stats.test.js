@@ -21,6 +21,10 @@ import {
   matchDuration,
   finalScore,
   hasRounds,
+  opponentRecords,
+  nemesis,
+  RIVAL_MIN_MEETINGS,
+  dominates,
 } from './stats.js';
 
 const H = 'hole';
@@ -862,5 +866,172 @@ describe('the parity in scoring.js and stats.js', () => {
       }
       game = playRound(game, [F, F, F, F], [F, F, F, F]);
     }
+  });
+});
+
+// One player's record against everyone, and who among them is their nemesis.
+//
+// Result-only records rather than played ones: headToHead needs a winner and a
+// lineup and nothing else, so building seventeen meetings out of rounds would be
+// noise around the thing under test.
+describe('opponentRecords', () => {
+  const meetings = (x, y, xWins, yWins, tag) => {
+    const out = [];
+    for (let i = 0; i < xWins; i += 1) {
+      out.push(oldSingles(x, y, { a: 21, b: 13 }, { id: `${tag}-x${i}`, endedAt: 1000 + i }));
+    }
+    for (let i = 0; i < yWins; i += 1) {
+      out.push(oldSingles(x, y, { a: 13, b: 21 }, { id: `${tag}-y${i}`, endedAt: 5000 + i }));
+    }
+    return out;
+  };
+
+  // The complaint this whole thing exists for. headToHead keys a pair
+  // low-name-first, so Sigma is on the left against Tau and on the right against
+  // Chi — here they must be neither, only `wins` and `losses`.
+  it('puts the subject on one side however the pair was keyed', () => {
+    const archive = [...meetings('Sigma', 'Tau', 3, 1, 't'), ...meetings('Chi', 'Sigma', 1, 2, 'c')];
+    const rows = opponentRecords(archive, 'Sigma');
+    expect(rows.map((o) => o.name).sort()).toEqual(['Chi', 'Tau']);
+    expect(rows.find((o) => o.name === 'Tau')).toMatchObject({ wins: 3, losses: 1, met: 4 });
+    expect(rows.find((o) => o.name === 'Chi')).toMatchObject({ wins: 2, losses: 1, met: 3 });
+  });
+
+  it('folds spellings the career screen already treats as one player', () => {
+    const rows = opponentRecords(meetings('Sigma', 'Tau', 2, 1, 't'), '  sigma ');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: 'Tau', wins: 2, losses: 1 });
+  });
+
+  it('is empty for a name with no history, and for no name at all', () => {
+    expect(opponentRecords(meetings('Sigma', 'Tau', 1, 0, 't'), 'Psi')).toEqual([]);
+    expect(opponentRecords([], '')).toEqual([]);
+  });
+
+  it('sorts worst first, so the nemesis is the top qualifying row', () => {
+    const archive = [
+      ...meetings('Sigma', 'Tau', 5, 0, 't'),
+      ...meetings('Sigma', 'Chi', 1, 4, 'c'),
+      ...meetings('Sigma', 'Phi', 2, 3, 'p'),
+    ];
+    expect(opponentRecords(archive, 'Sigma').map((o) => o.name)).toEqual(['Chi', 'Phi', 'Tau']);
+  });
+});
+
+describe('nemesis', () => {
+  const meetings = (x, y, xWins, yWins, tag) => {
+    const out = [];
+    for (let i = 0; i < xWins; i += 1) {
+      out.push(oldSingles(x, y, { a: 21, b: 13 }, { id: `${tag}-x${i}`, endedAt: 1000 + i }));
+    }
+    for (let i = 0; i < yWins; i += 1) {
+      out.push(oldSingles(x, y, { a: 13, b: 21 }, { id: `${tag}-y${i}`, endedAt: 5000 + i }));
+    }
+    return out;
+  };
+  const forName = (archive, name) => nemesis(opponentRecords(archive, name));
+
+  // The case the definition turns on, taken from the sample archive: Sigma has
+  // lost to Neil more than to anyone (5 times) while *leading* that matchup 8–5.
+  // Raw losses call Neil the nemesis, which is plainly wrong, and the same effect
+  // makes the group's most frequent player everybody's nemesis.
+  it('is who beats you, not who you have played most', () => {
+    const archive = [
+      ...meetings('Sigma', 'Neil', 8, 5, 'n'),
+      ...meetings('Sigma', 'Chi', 1, 3, 'c'),
+    ];
+    const rows = opponentRecords(archive, 'Sigma');
+    expect(rows.find((o) => o.name === 'Neil').losses).toBe(5);
+    expect(rows.find((o) => o.name === 'Chi').losses).toBe(3);
+    expect(forName(archive, 'Sigma').name).toBe('Chi');
+  });
+
+  // A losing record over one or two games is a bad afternoon.
+  it('ignores an opponent below the meeting threshold, however lopsided', () => {
+    const archive = [
+      ...meetings('Sigma', 'Phi', 0, 2, 'p'),
+      ...meetings('Sigma', 'Chi', 2, 3, 'c'),
+    ];
+    const rows = opponentRecords(archive, 'Sigma');
+    expect(rows[0]).toMatchObject({ name: 'Phi', deficit: 2, met: 2 });
+    expect(rows[1]).toMatchObject({ name: 'Chi', deficit: 1, met: 5 });
+    expect(forName(archive, 'Sigma').name).toBe('Chi');
+    expect(RIVAL_MIN_MEETINGS).toBe(3);
+  });
+
+  // Not a zero: nobody has the better of them, which is a different thing from
+  // having no history — the same distinction `played` draws.
+  it('is null when nobody holds a winning record over them', () => {
+    expect(forName(meetings('Sigma', 'Tau', 4, 2, 't'), 'Sigma')).toBeNull();
+    // A dead-level rivalry is not one either.
+    expect(forName(meetings('Sigma', 'Tau', 3, 3, 't'), 'Sigma')).toBeNull();
+    expect(forName([], 'Sigma')).toBeNull();
+  });
+
+  it('breaks a tied deficit towards the longer rivalry', () => {
+    const archive = [
+      ...meetings('Sigma', 'Tau', 1, 4, 't'),
+      ...meetings('Sigma', 'Chi', 4, 7, 'c'),
+    ];
+    const rows = opponentRecords(archive, 'Sigma');
+    expect(rows.map((o) => o.deficit)).toEqual([3, 3]);
+    expect(forName(archive, 'Sigma')).toMatchObject({ name: 'Chi', losses: 7 });
+  });
+});
+
+// The far end of the same list. Mirrors `nemesis` in every respect, including
+// that beating somebody a few times out of many is not dominating them.
+describe('dominates', () => {
+  const meetings = (x, y, xWins, yWins, tag) => {
+    const out = [];
+    for (let i = 0; i < xWins; i += 1) {
+      out.push(oldSingles(x, y, { a: 21, b: 13 }, { id: `${tag}-x${i}`, endedAt: 1000 + i }));
+    }
+    for (let i = 0; i < yWins; i += 1) {
+      out.push(oldSingles(x, y, { a: 13, b: 21 }, { id: `${tag}-y${i}`, endedAt: 5000 + i }));
+    }
+    return out;
+  };
+  const both = (archive, name) => {
+    const rows = opponentRecords(archive, name);
+    return [nemesis(rows)?.name ?? null, dominates(rows)?.name ?? null];
+  };
+
+  it('is who you beat, not who you have beaten most times', () => {
+    const archive = [
+      // 9 wins but 7 losses: played a lot, not dominated.
+      ...meetings('Sigma', 'Neil', 9, 7, 'n'),
+      ...meetings('Sigma', 'Eta', 4, 0, 'e'),
+    ];
+    const rows = opponentRecords(archive, 'Sigma');
+    expect(rows.find((o) => o.name === 'Neil').wins).toBe(9);
+    expect(dominates(rows)).toMatchObject({ name: 'Eta', wins: 4, losses: 0 });
+  });
+
+  it('ignores an opponent below the meeting threshold', () => {
+    const archive = [
+      ...meetings('Sigma', 'Phi', 2, 0, 'p'),
+      ...meetings('Sigma', 'Chi', 3, 2, 'c'),
+    ];
+    expect(dominates(opponentRecords(archive, 'Sigma')).name).toBe('Chi');
+  });
+
+  it('is null when nobody has been got the better of', () => {
+    expect(dominates(opponentRecords(meetings('Sigma', 'Tau', 2, 4, 't'), 'Sigma'))).toBeNull();
+    expect(dominates(opponentRecords(meetings('Sigma', 'Tau', 3, 3, 't'), 'Sigma'))).toBeNull();
+    expect(dominates([])).toBeNull();
+  });
+
+  // They read off opposite ends of one list and must never meet in the middle.
+  it('is never the same opponent as the nemesis', () => {
+    const archive = [
+      ...meetings('Sigma', 'Chi', 1, 5, 'c'),
+      ...meetings('Sigma', 'Eta', 5, 1, 'e'),
+      ...meetings('Sigma', 'Tau', 3, 3, 't'),
+    ];
+    expect(both(archive, 'Sigma')).toEqual(['Chi', 'Eta']);
+    // One opponent, one-sided: they are a nemesis and nothing else.
+    expect(both(meetings('Sigma', 'Chi', 0, 4, 'c'), 'Sigma')).toEqual(['Chi', null]);
+    expect(both(meetings('Sigma', 'Eta', 4, 0, 'e'), 'Sigma')).toEqual([null, 'Eta']);
   });
 });

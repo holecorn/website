@@ -199,15 +199,10 @@
 }
 
 .h2h-name {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.h2h-right {
-  text-align: right;
 }
 
 .h2h-score,
@@ -442,9 +437,18 @@
 
 /* Looks like the cell it replaces and taps like a button. Underlined rather than
    coloured, because the row's own name is the only thing here that is a control
-   and nothing else in the table is. */
-.player-rename {
+   and nothing else in the table is. It is the whole width of the sticky column,
+   which on a phone is the only part of the row that is reliably on screen. */
+/* The button carries the cell's padding rather than sitting inside it, so the tap
+   target is the whole sticky column and the full row height — 81x40 rather than
+   the 57x20 the text alone occupies, which is under the 24px minimum. */
+.stats-table tbody th {
   padding: 0;
+}
+
+.player-select {
+  width: 100%;
+  padding: 10px 12px;
   border: 0;
   background: none;
   color: inherit;
@@ -452,6 +456,19 @@
   text-align: left;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+/* Selection is stated by the underline going solid as well as by the row
+   lightening, so it does not rest on colour alone. `aria-pressed` carries it for
+   anything not looking at the screen. */
+.player-select[aria-pressed='true'] {
+  color: var(--text);
+  text-decoration-style: solid;
+}
+
+.stats-table tbody tr.is-selected th,
+.stats-table tbody tr.is-selected td {
+  background: var(--border);
 }
 
 /* One look for both dialogs' fields; only the width differs, since a doubles pair
@@ -547,4 +564,99 @@
   .recent-chevron {
     transition: none;
   }
+}
+
+/* The rivals heading names both rivalries, so unlike the other section headings it
+   carries more than one thing. The names are set back to sentence case out of the
+   heading's uppercase, because they are people rather than labels — and the parts
+   are joined by a dot in the markup rather than spaced with a margin here, so
+   every gap in the line is the same one. */
+.rivals-sub {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.rivals-sub b {
+  color: var(--text);
+}
+
+/* Mirrors .match-rounds-foot: a fact on the left and the edit on the right. This
+   is the only route to renaming a player — there is no control in the table. */
+.rivals-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.rivals-none {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The captions and the rows are one box. Outside it they read as a stray line
+   floating above an unrelated list, since .h2h carries its own border. */
+.rivals {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.rivals .h2h {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* Hidden from a screen reader, which gets each row's own sentence instead — a
+   caption over a flex list would be read as another row. */
+.rivals-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* The score is pushed right rather than the name stretched, so the tag can sit
+   beside the name it describes instead of against the numbers. */
+.h2h-score {
+  margin-left: auto;
+}
+
+/* A word rather than a shaded row: shading says something is special without
+   saying what, and the row has the space. Sibling of the name, not inside it, so
+   a long name still ellipsises against the tag rather than taking it with it. */
+.rival-tag {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Same trick as .lineup-form-text: a row of numbers reads as nothing aloud, so
+   the row carries a sentence and the digits are hidden from it. */
+.h2h-spoken {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

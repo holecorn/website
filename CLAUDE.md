@@ -760,6 +760,82 @@ project dependency. It starts and stops its own preview server.
     for both sides and the match reads `Blue v Blue`. A casual game is never
     archived, so that flag can only arrive by hand. An *off*-palette clash is
     already safe — `playerLabel` falls back to `Team A`/`Team B`.
+- **Head to head is scoped to a selected player, and the unscoped list is gone.**
+  It grew as `n(n-1)/2` — 42 rows at the sample's 11 players, and the real family
+  game is 12, so up to 66. But volume was the lesser fault: `headToHead` keys a pair
+  low-name-first, so a given player sits on the *left* of some rows and the *right*
+  of others and you had to check both columns of every row to find yourself. There
+  is no usable find-in-page on iOS Safari.
+  - **`opponentRecords` is the fix and the flip is the point of it.** It reads
+    `headToHead` rather than folding the matches again — one definition of who beat
+    whom — and returns every opponent from the subject's own point of view, so a row
+    is always `wins`/`losses`. Scoped, the sample goes 42 rows to 10.
+  - **The rivals list needs a `W–L` caption where the old one didn't.** The old rows
+    bracketed the score between both names, so which way round it read was
+    self-evident; with one name, `Sigma 13–18` does not say whose 13 that is.
+  - **`dominates` is the same list read from the far end**, so the two can never
+    name the same opponent — one needs a positive deficit and the other a negative
+    one, and nobody qualifies at zero. Deficit for the same reason: beating somebody
+    five times out of thirty is not dominating them.
+  - **The two are *named* on their rows, not shaded.** A darker row says something
+    is special without saying what, and the row has the space for the word. The tag
+    is a **sibling** of the name rather than inside it, so a long name ellipsises
+    against the tag instead of taking it off the end — which also meant `.h2h-name`
+    giving up `flex: 1` and `.h2h-score` taking `margin-left: auto`, or the tags sit
+    against the numbers rather than beside the name they describe.
+  - **The row tag reads `dominated`, the heading reads `dominates`.** The heading is
+    a sentence about the subject; the tag is an adjective about the opponent, and
+    `DOMINATES` on their row reads as though they are the one doing it.
+  - **`nemesis` is `losses − wins`, not most losses**, and the difference is not
+    cosmetic. Raw losses cannot tell "beats me" from "plays me a lot": measured on
+    the sample it made Neil — who is in 82% of the matches — the nemesis of **7 of
+    the 9** eligible players, and it made **Sigma's nemesis Neil, a matchup Sigma
+    leads 18–13**. A positive deficit structurally cannot name somebody you are
+    beating. Worst win *rate* was the third candidate and is worse again: it rewards
+    tiny samples, so it needs a threshold high enough to exclude newcomers outright.
+  - **Every join in the heading is the same `DOT`**, including the one after the
+    player's name — that one was a `margin-left` on `.rivals-sub` and read as
+    unevenly spaced against the dot beside it, because the heading's
+    `letter-spacing: 0.08em` adds to the gap and the sub resets it to 0.
+  - **The column captions live inside the bordered box**, in a `.rivals` wrapper
+    that carries the border while `.h2h` gives up its own. Outside it they read as a
+    stray line floating above an unrelated list.
+  - **A tied deficit needs no extra comparator.** With the deficit fixed,
+    `losses = (met + deficit) / 2`, so sorting by meetings *is* sorting by losses.
+    It looks like a different tie-break from the one specified; it isn't.
+  - **Neither is a real state**, not a zero — nobody has the better of them and
+    they have the better of nobody. Same distinction `played` draws between a
+    genuine zero and no history. One can be absent without the other.
+  - **Rename moved out of the table entirely, into that panel.** A pencil in a
+    far-right column was the obvious answer and is wrong here: measured, the Players
+    table overflows a phone by **198–235px** and the name column is the only cell
+    always on screen (`position: sticky`), so a far-right control sits off-screen and
+    renaming would mean scrolling the table sideways. Putting rename *in* the panel
+    mirrors `Edit names` in the expanded match, and makes the mis-tap it was meant to
+    prevent **structurally impossible**: there is no control in the table, so a tap
+    can only select. The cost is that rename is a two-step discovery, which is right
+    for something done once a year against something done every visit.
+  - **The name button carries the cell's padding, not the cell.** Otherwise the tap
+    target is the 57x20 the text occupies rather than the 81x40 of the column —
+    under the 24px minimum.
+  - **Considered and rejected:** expanding the row in place (cheapest, reuses
+    `openId` wholesale, but scoping a section elsewhere on the page from an expansion
+    buried inside the table is action at a distance, so it is a dead end for the
+    per-player stats this exists to enable); a nemesis column in the Players table
+    (deep stats belong behind a selection, and that table is already ten columns);
+    sorting or thresholding the old list (42 rows to 30, surfaces rivalries, does
+    nothing about finding yourself — the obvious cheap fix, so expect it to be
+    re-proposed); a persistent "this is me" setting (a new persistent concept, wrong
+    on a shared scoring phone, and it cannot answer "how does Sigma get on" — worth
+    revisiting only as a *default* for the selection).
+  - **Two of `verify-stats.mjs`'s assertions are absences**, because nothing in the
+    components would notice either coming back — the unscoped list, and a rename
+    control in the table. **They are asserted on the first stats screen the file
+    opens, not beside the scoped checks further down**, and that ordering is
+    load-bearing: verified by mutation, a rename control restored to the table makes
+    `openRename` match two buttons and die on a strict-mode violation, so a run with
+    them last ends in a stack trace instead of naming the fault. Both mutations pass
+    all 287 unit tests.
 - **Export/import is the only route off a device** until there's a backend, so
   `verify-stats.mjs` drives the whole round trip rather than just asserting a
   file appears. The unexported count is measured against the newest exported
@@ -785,8 +861,8 @@ project dependency. It starts and stops its own preview server.
     Ids would buy only rename-without-a-sweep, and the sweep is ten lines.
 - **Two scopes, and the difference between them is load-bearing.** A per-match edit
   (in the expanded match) must **not** touch the lineup waiting on the setup screen,
-  because it is a correction to history; a career rename (from the Players row)
-  **must**, or the typo walks straight back into the next game. `verify-stats.mjs`
+  because it is a correction to history; a career rename (from the selected-player
+  panel) **must**, or the typo walks straight back into the next game. `verify-stats.mjs`
   asserts both directions, and it is the only thing that can: `renamePlayer` and the
   `renamePlayer` reducer case in `App.jsx` are separately correct however they are
   wired together. Verified by mutation — dropping the `onRenamePlayer` dispatch, and
@@ -1627,6 +1703,13 @@ renaming — that a career rename reaches the setup lineup and a per-match fix d
 not — where both halves of each are individually correct and only the wiring
 between them can be wrong.
 
+It covers a third such gap for **a match imported with no round detail**, seeded
+beside a real one because both have to be true at once. `finalScore` and `summary`
+are unit tested, but `Stats.jsx` reading the score off `totals()` instead compiles,
+passes all 275 unit tests and puts **0–0** on every imported row — and the same is
+true of a rate keyed on `played` rather than on the round count. The skunk
+assertion needs the real match to be **24–12 rather than a skunk itself**, or the
+chip reads 1 whether the guard is there or not.
 
 The same is true of the guest-game guard, and both ways round of getting it wrong
 are silent: either a stranger is folded into somebody's career, or every real match
