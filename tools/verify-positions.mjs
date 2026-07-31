@@ -135,6 +135,130 @@ console.log('\nthe name fields set the arrangement and the court reports it');
   await page.close();
 }
 
+console.log('\nthe toss picks between the two players at the start board');
+{
+  // The only candidates are the two slot-0 players, so a toss must never reorder
+  // a pair — `throwFirst` at slot 1 composes `swapEnds`, and pointing the toss
+  // there passes every unit test while silently re-crediting doubles rounds. The
+  // draw itself is random, so the properties are what get asserted: both outcomes
+  // come up, only ever at the start board, and the names stay put.
+  const page = await open(WIDE, { start: false });
+  const court = page.locator('.positions');
+  const named = async () => (await court.locator('.pitch-box.is-first').innerText()).trim();
+  const lineup = () => page.locator('.team-name-input').evaluateAll((els) => els.map((e) => e.value));
+  const before = (await lineup()).join(', ');
+  // The result is withheld for TOSS_MS, so a read taken straight after the press
+  // is the *previous* outcome and 20 quick presses are one toss.
+  // Reported rather than thrown: a toss with no pause at all is the very fault this
+  // block exists for, and a timeout that ends the run names nothing.
+  const waitFor = (state) =>
+    page
+      .waitForSelector('.toss-result.is-tossing', { state, timeout: 3000 })
+      .then(
+        () => true,
+        () => false,
+      );
+  const settle = async () => {
+    const held = await waitFor('attached');
+    await waitFor('detached');
+    return held;
+  };
+  const seen = new Set();
+  const bad = [];
+  const TOSSES = 20;
+  for (let i = 0; i < TOSSES; i += 1) {
+    await page.locator('.toss').click();
+    await settle();
+    const first = await named();
+    seen.add(first);
+    // Rho and Cat are the two at the start board; Tau and Dan are the far pair.
+    if (!['Rho', 'Cat'].includes(first)) bad.push(first);
+    if ((await lineup()).join(', ') !== before) bad.push(`reordered to ${(await lineup()).join(', ')}`);
+  }
+  check('it only ever lands on the start board', bad.length === 0, bad.join(' | '));
+  check('and leaves both pairs in their ends', (await lineup()).join(', ') === before, before);
+  // A two-way draw, so this flakes once in 2^19 runs if it is honest and always
+  // if it is stuck.
+  check(
+    `both players come up over ${TOSSES} tosses`,
+    seen.size === 2,
+    [...seen].join(', '),
+  );
+  // Half of all presses land where the bag already was, so the withheld result is
+  // the only thing that answers "did that work?" — and it has to name the player
+  // the bag marks, or it is answering about somebody else.
+  const result = (await page.locator('.toss-result').innerText()).trim();
+  check(
+    `the result line names ${await named()}`,
+    result === `${await named()} throws first`,
+    result,
+  );
+
+  // The pause is the feature: without it a toss that repeats its outcome changes
+  // nothing on screen. Read straight after the press, before it settles.
+  const line = page.locator('.toss-result');
+  const opacity = () => line.evaluate((e) => Number(getComputedStyle(e).opacity));
+  const buttonX = () =>
+    page.locator('.toss').evaluate((e) => Math.round(e.getBoundingClientRect().x));
+  const settledX = await buttonX();
+  const settledFirst = await named();
+  await page.locator('.toss').click();
+  // Read inside the window rather than at the instant of the press: the fade takes
+  // 150ms, so an immediate read catches whatever the transition has reached and
+  // says nothing either way.
+  const held = await waitFor('attached');
+  if (held) await page.waitForTimeout(220);
+  const midOpacity = await opacity();
+  check(
+    'the result is withheld while it decides',
+    held && midOpacity < 0.1,
+    held ? `opacity ${midOpacity}` : 'the result landed on the press',
+  );
+  check(
+    'and the marker waits with it, so nothing is published early',
+    (await named()) === settledFirst,
+    `${settledFirst} -> ${await named()}`,
+  );
+  // Faded, not emptied — an emptied line re-centres the row and walks the tap
+  // target sideways on every toss.
+  check(
+    'the button does not move while it decides',
+    (await buttonX()) === settledX,
+    `${settledX}px -> ${await buttonX()}px`,
+  );
+  await settle();
+  // The class goes at the *start* of the fade back, so the reveal has to be waited
+  // out separately. Caught rather than left to throw: a timeout here should name
+  // the fault, not end the run before the checks below it.
+  const revealed = await page
+    .waitForFunction(
+      () => Number(getComputedStyle(document.querySelector('.toss-result')).opacity) > 0.99,
+      null,
+      { timeout: 2000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  check('and comes back with the answer', revealed, `opacity ${await opacity()}`);
+  check(
+    'naming whoever the bag now marks',
+    (await line.innerText()).trim() === `${await named()} throws first`,
+    (await line.innerText()).trim(),
+  );
+
+  // Pressing again mid-toss restarts it rather than stacking timers, so a mashed
+  // button settles rather than sticking hidden.
+  for (let i = 0; i < 4; i += 1) await page.locator('.toss').click();
+  await waitFor('detached');
+  check(
+    'a mashed button still settles',
+    (await line.innerText()).trim() === `${await named()} throws first`,
+    (await line.innerText()).trim(),
+  );
+  await page.close();
+}
+
 console.log('\nthe play screen deals only with scoring');
 {
   // Once a round is committed, nothing about who the teams are may change: names
@@ -190,10 +314,10 @@ console.log('\nevery control is a real button, with nothing hidden to stand in f
     boxesHidden: [...document.querySelectorAll('.pitch-box')].every((e) =>
       e.hasAttribute('aria-hidden'),
     ),
-    unnamed: [...document.querySelectorAll('.teams-fields button, .positions button')].filter(
+    unnamed: [...document.querySelectorAll('.teams-fields button, .toss-row button, .positions button')].filter(
       (b) => !(b.getAttribute('aria-label') || b.textContent).trim(),
     ).length,
-    unfocusable: [...document.querySelectorAll('.teams-fields button, .positions button')].filter(
+    unfocusable: [...document.querySelectorAll('.teams-fields button, .toss-row button, .positions button')].filter(
       (b) => b.tabIndex < 0,
     ).length,
   }));

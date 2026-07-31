@@ -50,6 +50,11 @@ import './App.css';
 
 const STORAGE_KEY = 'holecorn.game.v3';
 
+// How long the toss withholds its result. Long enough to read as a decision being
+// made rather than a flicker, short enough that settling an argument by tossing
+// twice doesn't feel gated.
+const TOSS_MS = 500;
+
 // A match needs an identity before it can be archived. It lives here rather
 // than in scoring.js, which stays pure — an id is not a scoring concern — and
 // is added on load as well as on creation, so a game saved without one still
@@ -481,6 +486,7 @@ export default function App() {
           onSetFirst={(team, slot) => dispatch({ type: 'throwFirst', team, slot })}
           onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
         />
+        <TossForFirst game={game} dispatch={dispatch} />
         <Positions
           game={game}
           onSwapSides={(side) => dispatch({ type: 'setStartSide', side })}
@@ -826,6 +832,53 @@ function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSw
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Deciding who opens by chance. The candidates are the two players at the start
+// board — in singles because they are the only players, in doubles because the
+// slot index *is* the end that partner stands at — so both are slot 0, and the
+// toss is a coin flip on `nextFirst` that structurally cannot reorder a pair. At
+// slot 1 `throwFirst` would compose `swapEnds` and re-credit committed rounds. The
+// draw is made here rather than in `scoring.js`, which stays pure.
+function TossForFirst({ game, dispatch }) {
+  const [tossing, setTossing] = useState(false);
+  const timer = useRef(null);
+  // A pending toss must not land after the screen has gone: the reducer's
+  // `throwFirst` is gated structurally rather than on `gameStarted`, so it would
+  // still hand the opening throw to the other team mid-game.
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // The result is hidden for TOSS_MS and the draw made on the way back, so the
+  // press always changes something even when the coin lands where it already was —
+  // which is half of all presses. Presentational, and one dispatch at the end:
+  // `nextFirst` travels to the board as `first` on a retained topic, so flipping
+  // state to animate would publish values that were never the result.
+  const toss = () => {
+    clearTimeout(timer.current);
+    setTossing(true);
+    timer.current = setTimeout(() => {
+      dispatch({ type: 'throwFirst', team: Math.random() < 0.5 ? 'a' : 'b', slot: 0 });
+      setTossing(false);
+    }, TOSS_MS);
+  };
+  // Derived from `nextFirst`, never remembered from the press, so it cannot go
+  // stale. The region is always in the DOM, because one inserted along with its
+  // content is announced unreliably; the cost is that renaming the leading player
+  // retypes it into a live region.
+  const opener = String(playerLabel(game, game.nextFirst, 0) ?? '').trim();
+  return (
+    <div className="toss-row">
+      <button type="button" className="toss" onClick={toss}>
+        Toss for first
+      </button>
+      <span className={`toss-result${tossing ? ' is-tossing' : ''}`} aria-live="polite">
+        {opener && (
+          <>
+            <span style={{ color: game.colors[game.nextFirst] }}>{opener}</span> throws first
+          </>
+        )}
+      </span>
     </div>
   );
 }

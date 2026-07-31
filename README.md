@@ -139,14 +139,22 @@ pair over without changing which team leads. Because the partner at the starting
 board is the one who opens, giving the opening bag to somebody at the far board
 brings them down to the starting board too — the two aren't separate settings.
 
+If nobody wants to decide, **Toss for first** below the two cards picks for you.
+It chooses between the two players at the **starting board** — in singles that's
+both of them, in doubles it's whoever is holding the bags — so it never moves
+anybody: it only hands over the opening throw. Press it and the answer beside the
+button disappears for half a second while it decides, then comes back with whoever
+has it and the bag lands to match. That pause is deliberate: it's a two-way toss,
+so half the time it lands where it already was, and without it those presses would
+look like nothing happened.
+
 The one adjustment that isn't a property of a name is which side of the court each
 team takes, so it lives on the diagram: the small **⇄** on the starting board
 mirrors the whole thing.
 
 It's all fixed once the game starts, because past rounds are credited to players
-by the board they were standing at. During play the first thrower can still be
-corrected by tapping a team's bag beside the score, which changes only which team
-leads the round.
+by the board they were standing at. The bag beside the score is then only an
+indicator: after the first round it follows whoever scored last.
 
 These are the conventions this group plays, not a rulebook: in particular, when
 singles players walk down they each keep their own side of the court.

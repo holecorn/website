@@ -258,6 +258,45 @@
   border-bottom-color: #eb5757;
 }
 
+/* Its own row under the team cards, so it sits with the bags it moves. Not in
+   `.setup-top`, which has no width left for a fourth control, and not in the
+   court, which reports the arrangement rather than setting it. */
+.toss-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* The Guests chip's metrics: both are optional setup controls of the same weight. */
+.toss {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.toss-result {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 150ms ease;
+}
+
+/* Faded rather than emptied, so the line keeps its box: the row is centred, and
+   removing the text would slide the button sideways and back on every toss. */
+.toss-result.is-tossing {
+  opacity: 0;
+}
+
 .target-field {
   display: flex;
   align-items: center;
@@ -993,6 +1032,11 @@
   }
   .callout-text {
     animation: callout-fade 1600ms ease-out forwards;
+  }
+  /* The crossfade goes, the pause stays: withholding the result is what says the
+     coin was thrown, and it is a delay rather than motion. */
+  .toss-result {
+    transition: none;
   }
 }
 

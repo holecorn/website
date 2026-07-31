@@ -288,6 +288,58 @@ project dependency. It starts and stops its own preview server.
       board".
     - **The bag needs the setup gate as much as the chip does**, because a slot-1
       bag is `swapEnds` + `setFirst`, not just `setFirst`.
+    - **`Toss for first` is a coin flip on `nextFirst` and nothing else**, because
+      the candidates are the two players at the *start* board — in singles the only
+      players, in doubles because the slot index *is* the end. Both are slot 0, so
+      the toss reuses the existing `throwFirst` action at slot 0: no new state, no
+      new function in `scoring.js`, and structurally it cannot reorder a pair. **A
+      toss that reached slot 1 would compose `swapEnds`** and silently re-credit
+      every committed doubles round, which is why `verify-positions.mjs` asserts the
+      four names are unchanged across 30 presses as well as which box lights.
+      - **The draw is made in `App.jsx`**, so `scoring.js` stays pure — the same
+        rule that has `drawSplash` handed its two colours rather than picking them.
+        `Math.random` rather than `getRandomValues`: a coin flip needs no entropy
+        guarantee, and `Confetti` already uses it.
+      - **The result is withheld for `TOSS_MS` and the draw made on the way back**,
+        because **half of all presses land where the bag already was** — a two-way
+        toss repeats half the time, and a marker that doesn't move reads as a dead
+        button. The pause is what says the coin was thrown, so the press changes
+        something whatever the outcome.
+        - **Presentational, and one dispatch at the end.** Animating by flipping
+          `nextFirst` would be far less code — every surface already renders off it,
+          so the bags and the court would move for free — and it is wrong: `first` is
+          in the score payload on a **retained** topic behind a 400ms debounce, so a
+          600ms flicker publishes a value that was never the result and a board
+          rebooting recovers it. Same objection as a retained `fourBagger`.
+        - **Faded, not emptied.** `.toss-row` is centre-justified, so removing the
+          text slides the button sideways and back on every toss — measured, 44px at
+          393px wide. Holding the box costs one shift at the reveal when the two
+          names differ in length, which coincides with the answer landing.
+        - **Pressing again restarts it rather than stacking timers**, so a mashed
+          button settles 500ms after the last press instead of sticking hidden.
+        - **The pending toss is cleared on unmount.** The reducer's `throwFirst` is
+          gated structurally rather than on `gameStarted`, so a toss still in flight
+          when `Start` is pressed would hand the opening throw to the other team.
+        - Under `prefers-reduced-motion` the crossfade goes and **the pause stays** —
+          withholding the result is a delay, not motion.
+      - **The line itself is derived from `nextFirst`, never remembered from the
+        press**, so it cannot go stale across `New game` (which resets `nextFirst`
+        to `a`) or a rename. The known cost is that renaming the leading player
+        retypes it into an `aria-live` region; the region is always in the DOM,
+        because one inserted along with its content is announced unreliably.
+      - **It is kept in a guest game**, where it reads "Blue throws first" through
+        `playerLabel` — somebody still opens, and with strangers playing a toss is
+        more use rather than less.
+      - **Its own row under the team cards, and the two alternatives are both
+        wrong.** `.setup-top` has no width left (see the `Start` bullet under
+        casual), and the court reports the arrangement rather than setting it.
+        Measured, the row costs **54px** (34px plus the screen's 20px gap) and
+        `Start`'s fold clearance is untouched at 682px on a 393x852 iPhone, because
+        it precedes the row in the DOM. The row needs 227px of the 328px a 360px
+        Android has with an ordinary name, and 300px with a 16-character one — so on
+        the deploy runner's wider font the worst case ellipsises the name rather
+        than wrapping, which is why `.toss-result` carries `nowrap` and
+        `min-width: 0`. At 320px it already ellipsises.
     - **The browser check is what makes any of this safe**, not the unit tests.
       Verified by mutation: pointing a bag at `1 - i` (the partner of the row it sits
       on), and turning the play screen's team name back into a button, both pass all
@@ -1740,7 +1792,24 @@ which fails that assertion and nothing else. **The arrangement controls are ther
 for the same reason, and more so now that they sit in a different panel from the
 drawing they change**: a bag wired to the partner of its own row, and the setup
 handlers reaching the play screen's edit dialog, both pass all 220 unit tests and
-fail only here. It also asserts what the controls' *absence* is worth — no bag or
+fail only here. The toss is covered there too, and only *properties* can be —
+the draw is random, so it asserts that both start-board players come up over 20
+presses, that no far partner ever does, and that the four names never move. It also
+holds the pause: the result faded out inside the window, the marker still where it
+was, **and the button not having moved** — that last one is the only thing that
+would notice the line being emptied rather than faded. Verified by mutation:
+pointing the toss at slot 1, pinning it to team A, reading the line off the other
+team, dispatching on the press with no pause, and emptying the line each fail only
+their own assertions.
+  - **Every wait in that block reports rather than throws**, and the no-pause
+    mutation is why: `waitForSelector` on a class that never appears ended the run
+    with a stack trace instead of naming the fault. Same lesson as the ordering of
+    `verify-stats.mjs`'s absence assertions.
+  - **The reveal has to be waited out separately from the class**, which goes at the
+    *start* of the fade back — reading opacity on the class detaching measured ~0 and
+    failed three runs out of three. The mid-toss read is taken 220ms in for the mirror
+    of that reason: at the instant of the press the 150ms transition has gone nowhere,
+    so an immediate read says nothing either way and passed and failed at random. It also asserts what the controls' *absence* is worth — no bag or
 chip in that dialog — because nothing in `TeamsFields` itself would notice.
 
 `src/stats.test.js` builds its fixtures by playing rounds through the real
