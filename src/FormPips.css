@@ -1,0 +1,29 @@
+.form-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Spoken, not shown: a row of dots says nothing aloud. */
+.form-line-spoken {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.form-line-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+/* Only where no team colour was handed in — on the setup screen an inline style
+   overrides this with the team's own, which is what tells the two rows apart
+   there. The career table has no teams. */
+.form-line-pip.is-win {
+  background: var(--text);
+}

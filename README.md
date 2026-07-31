@@ -165,7 +165,9 @@ A **Guests** game is never filed at all, however it ends.
 Per player you get matches played, won and lost, **rounds thrown**, **PPR** (raw
 bag points per round, before cancellation — the number cornhole players quote),
 the share of bags that went in the hole and the share that stayed in play,
-four-baggers, best single round, and the current win streak. Rounds sits next to
+four-baggers, best single round, their **last five results** as a row of pips
+(oldest first, filled for a win), and the current win streak — which is worth
+keeping alongside the pips because it catches a run longer than five. Rounds sits next to
 PPR because it's the number PPR is averaged over — and in doubles it's the more
 honest measure of how much someone actually played, since partners alternate and
 only throw half the rounds of a match. There are also totals for washes, skunks

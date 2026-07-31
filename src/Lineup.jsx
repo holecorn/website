@@ -10,6 +10,7 @@
 import { useMemo } from 'react';
 import { FORM_LENGTH, lineupStats, sideRecord } from './stats.js';
 import { teamLabel } from './scoring.js';
+import FormPips from './FormPips.jsx';
 import './Lineup.css';
 
 const pct = (n) => `${Math.round(n * 100)}%`;
@@ -63,7 +64,7 @@ export default function Lineup({ game, colors, matches }) {
                     {p.wins}–{p.losses}
                   </td>
                   <td>
-                    <Form results={p.form} color={colors[p.team]} />
+                    <FormPips results={p.form} color={colors[p.team]} />
                   </td>
                   {/* Rates need thrown bags, and a record made only of
                       imported results has none — a real 0.0 average and no data
@@ -82,28 +83,5 @@ export default function Lineup({ game, colors, matches }) {
         </tbody>
       </table>
     </section>
-  );
-}
-
-// Pips rather than "WWLWW": at this size the letters read as one word and the
-// run of wins is the thing being looked for. Spelled out for a screen reader,
-// which gets nothing from a row of shapes.
-function Form({ results, color }) {
-  return (
-    <span className="lineup-form">
-      <span className="lineup-form-text">
-        {results.length === 0
-          ? 'no matches yet'
-          : results.map((won) => (won ? 'won' : 'lost')).join(', ')}
-      </span>
-      {results.map((won, i) => (
-        <span
-          key={i}
-          className={`lineup-pip${won ? ' is-win' : ''}`}
-          style={won ? { background: color } : undefined}
-          aria-hidden="true"
-        />
-      ))}
-    </span>
   );
 }

@@ -98,26 +98,3 @@
   color: var(--muted);
   font-size: 12px;
 }
-
-.lineup-form {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-/* Spoken, not shown: a row of dots says nothing aloud. */
-.lineup-form-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.lineup-pip {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border);
-}

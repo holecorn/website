@@ -16,6 +16,7 @@ import {
 import {
   playerStats,
   playedIn,
+  FORM_LENGTH,
   opponentRecords,
   nemesis,
   dominates,
@@ -26,6 +27,7 @@ import {
   finalScore,
   hasRounds,
 } from './stats.js';
+import FormPips from './FormPips.jsx';
 import './Stats.css';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
@@ -233,6 +235,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                     <th scope="col">Player</th>
                     <th scope="col" title="Matches played">P</th>
                     <th scope="col" title="Won–lost">W–L</th>
+                    <th scope="col" title={`Last ${FORM_LENGTH} matches, oldest first`}>
+                      Last {FORM_LENGTH}
+                    </th>
                     {/* Next to PPR, which is points over exactly this. */}
                     <th scope="col" title="Rounds thrown">Rds</th>
                     <th scope="col" title="Raw bag points per round">PPR</th>
@@ -268,6 +273,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                       <td>{p.matches}</td>
                       <td>
                         {p.wins}–{p.losses}
+                      </td>
+                      <td>
+                        <FormPips results={p.form} />
                       </td>
                       <td>{p.rounds}</td>
                       {/* A rate over no rounds is undefined, not zero. Only a

@@ -174,6 +174,15 @@ await page.getByRole('button', { name: 'New game' }).click();
     haydnCells.join(' | '),
   );
 
+  // The form panel and the career table draw their pips with the same component,
+  // and only this one hands it a team colour — the career table has no teams, so
+  // dropping the prop would go unnoticed there.
+  const litPips = page.locator('.lineup-table .form-line-pip.is-win');
+  check('the form panel tints its win pips with the team colour',
+    (await litPips.count()) > 0
+      && (await litPips.first().evaluate((e) => e.style.background)) !== '',
+    `${await litPips.count()} lit`);
+
   // A name nobody has played under must say so rather than report 0% of
   // everything — the `played` flag in lineupStats is what carries that.
   await page.locator('.team-name-input').nth(1).fill('Psi');
@@ -217,6 +226,28 @@ check('Sigma threw the same four rounds', sigma.RDS === '4', sigma.RDS);
 check('Sigma threw every bag on the floor', sigma.HOLE === '0%', sigma.HOLE);
 
 check('the unused doubles slot is not listed', !(await page.getByText('Player 2').count()));
+
+// The career table's form line. Drawn by the same component as the setup screen's
+// Form panel, so a drift between them is not possible — what is worth holding here
+// is that a row of shapes is not the only thing a reader gets, and that a short
+// history draws fewer pips rather than padding to five.
+{
+  const neil = page.locator('.stats-table tbody tr', { hasText: 'Neil' });
+  check('a form line is drawn in the career table',
+    (await neil.locator('.form-line-pip').count()) === 2,
+    `${await neil.locator('.form-line-pip').count()} pips for two matches`);
+  check('and both are wins', (await neil.locator('.form-line-pip.is-win').count()) === 2);
+  // Counted before it is read: innerText on a missing element throws and takes the
+  // whole run down with a stack trace instead of naming the fault.
+  const spoken = neil.locator('.form-line-spoken');
+  check('with the results spelled out, since pips read as nothing aloud',
+    (await spoken.count()) === 1 && (await spoken.innerText()) === 'won, won',
+    `${await spoken.count()} found`);
+  const sigma = page.locator('.stats-table tbody tr', { hasText: 'Sigma' });
+  check('a losing run draws pips too, just unlit',
+    (await sigma.locator('.form-line-pip').count()) === 2
+      && (await sigma.locator('.form-line-pip.is-win').count()) === 0);
+}
 // Two absences, asserted here — on the first stats screen this file opens —
 // rather than alongside the scoped checks further down. Both are things nothing
 // in the components would notice coming back, and putting them last is worse than
@@ -887,15 +918,15 @@ check(
   // Two matches, two rounds, and the average is over the one that has any.
   check('and is left out of the average', chips['avg rounds'] === '3.0', JSON.stringify(chips));
 
-  const career = Object.fromEntries(await lp.$$eval('.stats-table tbody tr', (rows) =>
-    rows.map((r) => [
-      r.querySelector('th').textContent.trim(),
-      [...r.querySelectorAll('td')].map((t) => t.textContent.trim()),
-    ])));
-  check('a career of imported results rates nothing', career['Player 1']?.[3] === '—',
-    JSON.stringify(career['Player 1']));
-  check('while one with rounds behind it still does', career.Neil?.[3] === '8.0',
-    JSON.stringify(career.Neil));
+  // By heading, not by index — adding a column shifts every position and makes a
+  // positional check assert the wrong one rather than fail, which is what the
+  // `Last 5` column did to these two.
+  const imported = await statsFor(lp, 'Player 1');
+  const played = await statsFor(lp, 'Neil');
+  check('a career of imported results rates nothing', imported.PPR === '—',
+    JSON.stringify(imported));
+  check('while one with rounds behind it still does', played.PPR === '8.0',
+    JSON.stringify(played));
 
   // Expanding it: no round table to show, and the footer says so rather than
   // reading "0 rounds".

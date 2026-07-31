@@ -653,7 +653,7 @@
   letter-spacing: 0.06em;
 }
 
-/* Same trick as .lineup-form-text: a row of numbers reads as nothing aloud, so
+/* Same trick as .form-line-spoken: a row of numbers reads as nothing aloud, so
    the row carries a sentence and the digits are hidden from it. */
 .h2h-spoken {
   position: absolute;

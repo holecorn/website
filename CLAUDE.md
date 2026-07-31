@@ -760,6 +760,27 @@ project dependency. It starts and stops its own preview server.
     for both sides and the match reads `Blue v Blue`. A casual game is never
     archived, so that flag can only arrive by hand. An *off*-palette clash is
     already safe — `playerLabel` falls back to `Team A`/`Team B`.
+- **`FormPips` is the one definition of a form line**, drawn by the setup screen's
+  Form panel and by the career table. It was private to `Lineup.jsx` until the
+  table wanted one, and two copies of "what a run of results looks like" is the
+  failure with no symptom. The classes are `form-line-*` and **not** `form-pip`,
+  which `Display.css` already owns — `main.jsx` imports `Display` statically, so
+  that stylesheet is loaded on this route whether or not the display is on screen.
+  - **Only the setup panel passes a colour**, because only it has teams; the
+    career table falls back to the stylesheet's default. That prop is the one
+    thing sharing the component could silently drop, so `verify-stats.mjs` asserts
+    the panel's lit pips carry an inline background.
+  - **A short history draws fewer pips, not five padded ones**, right-aligned so
+    the newest sits in the same column on every row — the same reasoning
+    `drawPips` in `render.h` already carries for the LED panel.
+  - **The column costs 71px** and takes the phone's overflow from 235 to 306px.
+    It sits straight after `W–L`, which is where it is *reachable*: the table
+    scrolls sideways and only `Player`, `P`, `W–L`, `Last 5` and `Rds` are on
+    screen at 393px without scrolling.
+  - **`Streak` was checked for redundancy and kept.** Pips can only show five, and
+    measured on the sample the column is 9 of 11 dashes — but both non-dashes are
+    `7W` and `6W`, runs *longer* than the pips can show. It earns its place in
+    exactly the case they cannot cover.
 - **Head to head is scoped to a selected player, and the unscoped list is gone.**
   It grew as `n(n-1)/2` — 42 rows at the sample's 11 players, and the real family
   game is 12, so up to 66. But volume was the lesser fault: `headToHead` keys a pair
