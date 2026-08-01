@@ -417,9 +417,22 @@ int main() {
   BoardState overflow = makeState(999, -5, 250, "0123456789ABCDEFGHIJKLMNOPQ", "X");
   overflow.target = 250;
 
+  // A name in a script the 5x7 font has no glyphs for. Every byte of it falls back to
+  // FONT_UNKNOWN, so the row reads as a name that cannot be shown rather than as an empty
+  // one — before that fallback existed these two lit 13 pixels of the name row against
+  // 181 for two Latin names, which looks like a fault rather than a limitation. The bytes
+  // are written out because this file is compiled as plain ASCII.
+  const BoardState unshowable =
+      makeState(12, 7, 5, "\xce\xa9\xce\xbc\xce\xad\xce\xb3\xce\xb1",
+                "\xce\xa3\xce\xaf\xce\xb3\xce\xbc\xce\xb1", 0, 'a');
+  // Half and half: the Latin part still has to draw normally beside it.
+  const BoardState partlyShowable = makeState(12, 7, 5, "Jos\xc3\xa9", "Renee", 0, 'a');
+
   shot("play", play, true, true, true);
   shot("early", early, true, true, true);
   shot("long-names", longNames, true, true, true);
+  const Framebuffer unshown = shot("unshowable-names", unshowable, true, true, true);
+  shot("partly-showable-names", partlyShowable, true, true, true);
   shot("stale", play, true, false, true);
   const Framebuffer noState = shot("no-state", play, false, true, true);
   const Framebuffer winOn = shot("winner-on", won, true, true, true);
@@ -851,6 +864,22 @@ int main() {
   Rgb white;
   parseColor("not a colour", white);
   check(white.r == 255 && white.g == 255 && white.b == 255, "bad colour falls back to white");
+
+  // Asserted off the framebuffer rather than against FONT_UNKNOWN, so it proves what got
+  // *drawn*: a row of dashes is ink where a row of spaces was not. Compared with the
+  // "play" scene's own name row, which draws two ordinary Latin names.
+  {
+    Framebuffer plain;
+    renderBoard(plain, play, true, true, true, PANEL_FULL, nullptr);
+    int litUnshown = 0;
+    int litPlain = 0;
+    for (int y = 0; y < FONT_H; y++) {
+      litUnshown += unshown.litCount(y, 0, PANEL_W);
+      litPlain += plain.litCount(y, 0, PANEL_W);
+    }
+    check(litUnshown > 60, "a name the font cannot draw still lights the name row");
+    check(litUnshown < litPlain, "but less than a name it can, so the two are not confused");
+  }
 
   char label[TEAM_LABEL_MAX];
   copyLabel("ABCDEFGHIJKLMNOP & QRSTUVWXYZABCDEF", label);

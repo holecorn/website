@@ -43,6 +43,7 @@ static const int FONT_W = 5;
 static const int FONT_H = 7;
 static const int FONT_ADVANCE = 6;
 static const char FONT_CHARS[] = " &-./'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static const int FONT_UNKNOWN = 2;  // '-', drawn for anything the font lacks
 static const uint8_t FONT_ROWS[][7] = {
   { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },  // space
   { 0x06, 0x09, 0x05, 0x02, 0x15, 0x09, 0x16 },  // &
@@ -93,8 +94,10 @@ inline int glyphIndex(char c) {
   return 0;
 }
 
+// A character the font cannot draw becomes FONT_UNKNOWN, not a space: a name in a script
+// this font does not cover would otherwise leave an empty row that reads as a fault.
 inline int fontIndex(char c) {
   if (c >= 'a' && c <= 'z') c = char(c - 'a' + 'A');
   for (int i = 0; FONT_CHARS[i]; i++) if (FONT_CHARS[i] == c) return i;
-  return 0;
+  return FONT_UNKNOWN;
 }

@@ -39,6 +39,8 @@ export const FONT_W = 5;
 export const FONT_H = 7;
 export const FONT_ADVANCE = 6;
 export const FONT_CHARS = " &-./'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+// Drawn for any character the font has no glyph for. See generate_glyphs.mjs.
+export const FONT_UNKNOWN = 2;
 export const FONT_ROWS = [
   [0, 0, 0, 0, 0, 0, 0], // space
   [6, 9, 5, 2, 21, 9, 22], // &

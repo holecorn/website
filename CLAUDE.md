@@ -1633,9 +1633,25 @@ coverage without being it. The full reasoning is in `firmware/hub75/README.md`.
     pixel fails the check. Verified by mutation, so `idiv` is load-bearing rather
     than stylistic.
   - **Labels are UTF-8 byte arrays, not strings**, because that is what reaches
-    the board — so a name outside the 5x7 font renders as spaces and a 40-byte
-    label is cut mid-character. Don't "fix" either on the JS side alone; the
-    limitation is the firmware's and the point is to see it.
+    the board — so a 40-byte label is cut mid-character and a name outside the 5x7
+    font is drawn one `FONT_UNKNOWN` per byte. Don't "fix" either on the JS side
+    alone; the limitation is the firmware's and the point is to see it.
+    - **A character the font lacks draws a dash, not a space.** It was a space, and
+      that was recorded here as deliberate — right while the only cost was
+      truncation, wrong once a whole name could vanish: measured, two Greek-script
+      names lit **13** pixels of the name row against 181 for two Latin ones, which
+      reads as a fault rather than a limitation. Now 103.
+    - **A dash, and the alternatives are all worse.** `.` is one pixel and this panel
+      is sized to be read at 7m, so nine of them would be invisible — the very
+      problem being solved. `/` is taken: `fitLabel` separates a shortened doubles
+      pair with it. `'` is two pixels and sits high, reading as punctuation.
+    - **`FONT_UNKNOWN` is emitted by `generate_glyphs.mjs`** into both `glyphs.h` and
+      `src/panelGlyphs.js`, because `fontIndex` exists twice — generated into the
+      header, hand-written in `panelRender.js` — and the pixel check compares them
+      byte for byte. Written down twice they could drift.
+    - Accented Latin degrades readably where a non-Latin script does not: `José`
+      draws as `JOS-`, losing one character rather than the whole name. That is why
+      the fixtures carry an accent and deliberately no Greek script.
   - `glyphs.h` and `src/panelGlyphs.js` come from **one run** of
     `generate_glyphs.mjs`, so the emulator can't quantise the polygons
     differently. Both are checked for staleness.

@@ -14,6 +14,7 @@
 import {
   FONT_ADVANCE,
   FONT_CHARS,
+  FONT_UNKNOWN,
   FONT_H,
   FONT_ROWS,
   FONT_W,
@@ -148,10 +149,14 @@ function glyphIndex(code) {
   return i < 0 ? 0 : i;
 }
 
+// Mirrors glyphs.h's fontIndex, including the fallback: a character the font has no glyph
+// for draws FONT_UNKNOWN rather than a space, so a name in a script the 5x7 font does not
+// cover reads as unshowable instead of leaving an empty row. The index comes from the
+// generator, so the two cannot disagree about which glyph that is.
 function fontIndex(code) {
   const upper = code >= 0x61 && code <= 0x7a ? code - 0x20 : code;
   const i = FONT_CODES.indexOf(upper);
-  return i < 0 ? 0 : i;
+  return i < 0 ? FONT_UNKNOWN : i;
 }
 
 export function createFramebuffer() {
