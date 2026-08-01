@@ -390,6 +390,11 @@ opens to the whole bracket — which is the thing the paper sheets were kept for
 Several tournaments can run at once; a singles cup and a doubles cup in the same
 summer is an ordinary thing to want.
 
+Abandoning a tournament takes only the bracket — its played ties stay in your
+history and keep counting. It is also not final: importing a file that carries
+the draw brings the bracket back, results and all, because those ties never went
+anywhere.
+
 A tournament runs over weeks rather than an evening, which is worth knowing for
 one reason: **whichever device takes the draw has to score every tie**, because
 the history is per-browser. Add Holecorn to your home screen before you start —

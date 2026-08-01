@@ -367,9 +367,13 @@ actually decided.
   Cheap, and it is the only warning that could arrive before the loss rather than
   after.
 - **A tournament left unfinished for a year.** The field is stale, the entrants may
-  not be around, and it will still be offering ties as playable. Whether an old
-  tournament can be abandoned, and what that does to its ties in the archive, is
-  undecided.
+  not be around, and it will still be offering ties as playable. **~~What abandoning
+  one does to its ties~~** — answered: it is abandoned from the tournament screen behind
+  a confirm, and its played ties stay in the archive and keep counting, which the dialog
+  says. What follows from that is that **abandoning is not destructive and a re-import
+  undoes it**: the draw is the only thing deleted, so a file carrying it brings the whole
+  bracket back with its results derived afresh. Tombstones were considered and rejected —
+  see `CLAUDE.md`.
 - **Seeding from career stats was rejected in favour of a random draw**, so newcomers
   with no history need no rule. If seeding ever returns, that is the question it
   brings back with it.

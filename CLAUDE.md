@@ -1024,6 +1024,19 @@ the alternatives that were rejected; this section holds what breaks when you cha
   - **`mergeTournaments` keeps the local copy, the opposite of `mergeMatches`.** A tournament
     is fixed the moment it is drawn, so two copies of one id are the same draw and an incoming
     one cannot be more right. `mergeMatches` needs `updatedAt` because records get edited.
+  - **A deleted tournament is resurrected by a re-import, and it comes back *finished*.**
+    Deletion propagates nowhere in this model — the archive's known limit — but here it is
+    more surprising than for a match: deleting a bracket deliberately leaves its ties in the
+    archive, so the draw returning is enough for `bracket()` to recompute the whole thing,
+    champion and all. Only a bracket with nothing played comes back empty. **This is right
+    and should not be "fixed" with tombstones**: deleting removes a derived view rather than
+    data, and a tombstone suppressing the bracket but not its ties gives the worst state of
+    the three — orphan records tagged with an id that resolves to nothing, no `tieLabels`
+    entry, and no route back while the file explaining them sits on disk.
+  - **So the import notice counts tournaments as well as matches.** That case adds nothing
+    to the archive, and reporting only the archive said "Nothing new" at the exact moment a
+    whole bracket reappeared — the one thing that changed being the one thing unmentioned.
+    Both merges are individually right, so only `verify-stats.mjs` can see it.
   - **`saveTournaments` has no drop-the-oldest retry**, unlike `saveArchive`: losing a bracket
     to make room would take its ties' meaning with it while leaving the ties in the archive.
 - **Deleting a tournament asks, where deleting a match offers an undo.** Deliberately

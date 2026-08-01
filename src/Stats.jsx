@@ -46,6 +46,7 @@ const one = (v) => v.toFixed(1);
 // "round" takes "s", so anything that guesses gets one of them wrong.
 const plural = (n, one, many) => (n === 1 ? one : many);
 const matchCount = (n) => `${n} ${plural(n, 'match', 'matches')}`;
+const tournamentCount = (n) => `${n} ${plural(n, 'tournament', 'tournaments')}`;
 // One separator for every join in the rivals heading, so the gap after the
 // player's name matches the gap between the two rivalries rather than being a
 // margin that has to be eyeballed against it.
@@ -124,9 +125,8 @@ const DURABILITY = {
 
 export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const [matches, setMatches] = useState(loadArchive);
-  // Read once, alongside the archive. Nothing on this screen edits a tournament, so unlike
-  // `matches` it never has to be written back — it is here only so a match can say which
-  // tie it was.
+  // Read alongside the archive, so a match can say which tie it was. Nothing on this
+  // screen edits a tournament; import is the one path that writes the list back.
   const [tournaments, setTournaments] = useState(loadTournaments);
   const [lastExport, setLastExport] = useState(loadLastExport);
   const [notice, setNotice] = useState(null);
@@ -234,14 +234,27 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
       if (!data) throw new Error('not an export');
       // Tournaments first: a tie that lands before its bracket does is a match
       // pointing at nothing, and the stats screen would draw it as an ordinary game.
-      setTournaments(saveTournaments(mergeTournaments(loadTournaments(), data.tournaments)));
+      const mergedTournaments = saveTournaments(
+        mergeTournaments(loadTournaments(), data.tournaments),
+      );
+      setTournaments(mergedTournaments);
       const merged = saveArchive(mergeMatches(loadArchive(), data.matches));
       const added = merged.length - matches.length;
+      // Counted as well as the matches, because a bracket can arrive without one. A
+      // tournament deleted here is resurrected by a re-import — the ties were never
+      // deleted, so it comes back with its results intact — and reporting only the
+      // archive said "nothing new" at the moment a whole bracket reappeared.
+      const addedTournaments = mergedTournaments.length - tournaments.length;
       setMatches(merged);
       setNotice(
-        added === 0
-          ? 'Nothing new — those matches are already here.'
-          : `Added ${matchCount(added)}.`,
+        added === 0 && addedTournaments === 0
+          ? "Nothing new — it's all already here."
+          : `Added ${[
+              added > 0 && matchCount(added),
+              addedTournaments > 0 && tournamentCount(addedTournaments),
+            ]
+              .filter(Boolean)
+              .join(' and ')}.`,
       );
     } catch {
       setNotice("That file doesn't look like a Holecorn export.");

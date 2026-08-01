@@ -430,6 +430,65 @@ await fresh.locator('.file-button input').setInputFiles(dump);
 await fresh.getByText('Nothing new').waitFor({ timeout: 3000 });
 check('re-importing the same file adds nothing', (await fresh.locator('.recent li').count()) === 2);
 
+// A file whose matches are all already here but whose brackets are not. This is the
+// shape a re-import takes after a tournament has been deleted — its ties were never
+// deleted, so nothing lands in the archive while a whole bracket comes back — and
+// counting only the archive reported "nothing new" at exactly that moment. Nothing
+// hermetic can see it: `mergeTournaments` and `mergeMatches` are both individually
+// right, and only the notice built from the two of them is wrong.
+const withCup = join(out, 'exported-with-tournament.json');
+await writeFile(
+  withCup,
+  JSON.stringify({
+    ...exported,
+    tournaments: [
+      {
+        format: 1,
+        id: 'resurrected',
+        name: 'Hole Corn V',
+        createdAt: 1.7e12,
+        mode: 'singles',
+        target: 21,
+        entrants: [['Rho'], ['Tau']],
+      },
+    ],
+  }),
+);
+// The notice is already on screen saying something else, so this waits for the *text*
+// to change rather than for the element — and reports rather than throwing, so a
+// regression names itself instead of ending the run. Same lesson as the ordering of
+// the absence assertions above.
+const noticeSettles = async (want) => {
+  try {
+    await fresh.waitForFunction(
+      (text) => document.querySelector('.durability-notice')?.textContent === text,
+      want,
+      { timeout: 3000 },
+    );
+  } catch {
+    // reported by the check that follows
+  }
+  return fresh.locator('.durability-notice').textContent();
+};
+
+await fresh.locator('.file-button input').setInputFiles(withCup);
+const cupNotice = await noticeSettles('Added 1 tournament.');
+check(
+  'a file that adds only a bracket says so rather than "nothing new"',
+  cupNotice === 'Added 1 tournament.',
+  cupNotice,
+);
+check(
+  'and adds no matches doing it',
+  (await fresh.locator('.recent li').count()) === 2,
+  `${await fresh.locator('.recent li').count()}`,
+);
+
+// Only now is "nothing new" the truth, and it must not still be talking about matches.
+await fresh.locator('.file-button input').setInputFiles(withCup);
+const settled = await noticeSettles("Nothing new — it's all already here.");
+check('once the bracket is here too, nothing new means nothing at all', !settled.includes('match'), settled);
+
 const junk = join(out, 'not-an-export.json');
 await writeFile(junk, '{"hello":"world"}');
 await fresh.locator('.file-button input').setInputFiles(junk);
