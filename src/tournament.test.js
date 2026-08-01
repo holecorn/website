@@ -5,6 +5,7 @@ import {
   bracketShape,
   bracketTree,
   entrantFaults,
+  lastPlayed,
   levelName,
   mergeTournaments,
   newTournament,
@@ -379,6 +380,39 @@ describe('unfinished', () => {
     const played = [tie(t.id, 'singles', ['Rho'], ['Tau'], 'a')];
     expect(unfinished([t], played)).toEqual([]);
     expect(unfinished([t], [])).toHaveLength(1);
+  });
+});
+
+describe('lastPlayed', () => {
+  const t = tournamentOf([['Rho'], ['Tau']]);
+
+  it('is nothing until a tie has been played', () => {
+    expect(lastPlayed(bracket(t, []), [])).toBe(null);
+  });
+
+  it('is the newest tie of the tournament', () => {
+    const played = [
+      { ...tie(t.id, 'singles', ['Rho'], ['Tau'], 'a'), endedAt: 500 },
+    ];
+    expect(lastPlayed(bracket(t, played), played)).toBe(500);
+  });
+
+  // Read off the bracket's ties, so a record carrying the id that the bracket does not
+  // recognise as one of its ties cannot date it.
+  it('ignores a match the bracket did not resolve to a tie', () => {
+    const real = { ...tie(t.id, 'singles', ['Rho'], ['Tau'], 'a'), endedAt: 500 };
+    const stray = {
+      ...tie(t.id, 'singles', ['Phi'], ['Chi'], 'a'),
+      endedAt: 9000,
+    };
+    expect(lastPlayed(bracket(t, [real, stray]), [real, stray])).toBe(500);
+  });
+
+  // A stamp of 0 is what an imported record can carry, and Math.max would date the
+  // tournament to 1970 rather than admitting it does not know.
+  it('does not take a missing stamp for a date', () => {
+    const undated = { ...tie(t.id, 'singles', ['Rho'], ['Tau'], 'a'), endedAt: 0 };
+    expect(lastPlayed(bracket(t, [undated]), [undated])).toBe(null);
   });
 });
 

@@ -1318,6 +1318,159 @@ console.log('\nboth lists read newest draw first, whatever order storage holds')
   await page.close();
 }
 
+console.log('\nevery row says when the tournament happened');
+{
+  // A cup runs over weeks, so the row carries two facts rather than one, in two shapes:
+  // an unfinished one leads with the draw — which is also what both lists are sorted by,
+  // so the order explains itself — and a finished one is a span from the draw to the final.
+  //
+  // Absolute dates, and none of this reads Date.now(): a conditional year would make a
+  // check on the text pass by season. See `dates.js`.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  // Four entrants where a cup has to survive a tie being played, two where the first tie
+  // is the final. Two is not a shortcut here — a two-entrant cup *is* finished after one
+  // tie, which is what makes the played-but-unfinished case need its own field.
+  const cup = (id, name, createdAt, entrants = [['Rho'], ['Tau']]) => ({
+    format: 1,
+    id,
+    name,
+    createdAt,
+    mode: 'singles',
+    target: 21,
+    entrants,
+  });
+  const won = (id, endedAt) => ({
+    format: 1,
+    id: `m-${id}`,
+    tournament: id,
+    mode: 'singles',
+    players: { a: ['Rho', ''], b: ['Tau', ''] },
+    rounds: [],
+    final: { a: 21, b: 13 },
+    winner: 'a',
+    endedAt,
+  });
+  await page.goto(URL);
+  await page.evaluate(
+    ([tournaments, matches]) => {
+      localStorage.clear();
+      localStorage.setItem('holecorn.tournaments.v1', JSON.stringify(tournaments));
+      localStorage.setItem('holecorn.matches.v1', JSON.stringify(matches));
+    },
+    [
+      [
+        // A 24-character name, which is what makes the no-clipping check below mean
+        // something: it fits at 393px today and an inline date would take it away.
+        cup('fresh', 'The Really Long Cup Name', Date.parse('2026-07-28')),
+        cup('running', 'Four Entrant Cup', Date.parse('2026-06-02'), [
+          ['Rho'],
+          ['Tau'],
+          ['Phi'],
+          ['Chi'],
+        ]),
+        cup('sameyear', 'Summer Doubles', Date.parse('2025-07-05')),
+        cup('crossyear', 'Winter Cup', Date.parse('2025-12-28')),
+        cup('oneday', 'Afternoon Cup', Date.parse('2026-05-09T13:00:00')),
+        // Drawn and part-played in one afternoon, so its `last played` is redundant the
+        // same way the span's second date is. Four entrants, or one tie would finish it.
+        cup('onedayopen', 'Half An Afternoon', Date.parse('2026-05-09T13:00:00'), [
+          ['Rho'],
+          ['Tau'],
+          ['Phi'],
+          ['Chi'],
+        ]),
+      ],
+      [
+        won('sameyear', Date.parse('2025-09-14')),
+        won('crossyear', Date.parse('2026-01-03')),
+        won('running', Date.parse('2026-07-28')),
+        won('oneday', Date.parse('2026-05-09T17:30:00')),
+        won('onedayopen', Date.parse('2026-05-09T15:00:00')),
+      ],
+    ],
+  );
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.waitForSelector('.tournament-list');
+  const rowFor = (name) =>
+    page.locator('.tournament-list li', { hasText: name }).locator('.tournament-row');
+  const whenOf = async (name) => (await rowFor(name).locator('.tournament-when').textContent()).trim();
+
+  check(
+    'an unfinished cup with nothing played gives the draw date',
+    (await whenOf('The Really Long Cup Name')) === 'Drawn 28 Jul 26',
+    await whenOf('The Really Long Cup Name'),
+  );
+  // "Is this one still going?" is the question an unfinished row is actually asked, and
+  // the draw date alone cannot answer it.
+  check(
+    'and gains how recently it was played once a tie is in',
+    (await whenOf('Four Entrant Cup')) === 'Drawn 2 Jun 26 · last played 28 Jul',
+    await whenOf('Four Entrant Cup'),
+  );
+  check(
+    'a finished cup spans the draw to the final, days and all',
+    (await whenOf('Summer Doubles')) === '5 Jul – 14 Sept 25',
+    await whenOf('Summer Doubles'),
+  );
+  // The one case where the year cannot be written once. Nothing else in the fixture would
+  // notice the span dropping a year that was doing work.
+  check(
+    'and carries both years when it crosses one',
+    (await whenOf('Winter Cup')) === '28 Dec 25 – 3 Jan 26',
+    await whenOf('Winter Cup'),
+  );
+
+  // A cup drawn and won in one afternoon, which is the ordinary size of one. Both ends of
+  // the span are the same date, and writing it twice with a dash between reads as a fault.
+  check(
+    'a cup played out in a day is the date once, not a range',
+    (await whenOf('Afternoon Cup')) === '9 May 26',
+    await whenOf('Afternoon Cup'),
+  );
+  // The same redundancy on the unfinished shape: the draw date has already said how long
+  // ago, so `· last played` adds nothing.
+  check(
+    'and an unfinished one played the day it was drawn says it once too',
+    (await whenOf('Half An Afternoon')) === 'Drawn 9 May 26',
+    await whenOf('Half An Afternoon'),
+  );
+
+  // The placement, which is the part no unit test can see. Measured, an inline date clips
+  // the 24-character name at 393px where it fits today and reads as a second status beside
+  // `0 of 1 ties`; on its own line it costs 19px of row height and clips nothing. Asserted
+  // as *below the name* rather than by row height, because a taller row is also what a
+  // wrapped inline date would give.
+  const boxes = await page.evaluate(() =>
+    [...document.querySelectorAll('.tournament-row')].map((r) => {
+      const name = r.querySelector('.tournament-name');
+      const when = r.querySelector('.tournament-when');
+      return {
+        below: when ? Math.round(when.getBoundingClientRect().top - name.getBoundingClientRect().bottom) : null,
+        clipped: [...r.querySelectorAll('.tournament-name, .tournament-when')].filter(
+          (n) => n.scrollWidth > n.clientWidth + 0.5,
+        ).length,
+      };
+    }),
+  );
+  check(
+    'the date is on its own line under the name, on every row',
+    boxes.length === 6 && boxes.every((b) => b.below !== null && b.below >= 0),
+    JSON.stringify(boxes.map((b) => b.below)),
+  );
+  check(
+    'so nothing on the row is clipped, name or date',
+    boxes.every((b) => b.clipped === 0),
+    JSON.stringify(boxes.map((b) => b.clipped)),
+  );
+  await page.close();
+}
+
 console.log('\nthe stats screen marks which matches were ties');
 {
   // The recent list is the tightest thing on that screen: `.recent-teams` is `flex: 1`, so

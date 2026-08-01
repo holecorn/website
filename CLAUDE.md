@@ -47,6 +47,8 @@ project dependency. It starts and stops its own preview server.
   tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
 - `src/nameField.js` — `NAME_FIELD`, the props every person-name field needs to stop
   the browser's own contact autofill fighting the archive's suggestions.
+- `src/dates.js` — how a date is written on screen, shared by the stats screen's recent
+  list and the tournament rows. Pure and framework-free; tested in `src/dates.test.js`.
 - `src/Lineup.jsx` / `src/Lineup.css` — the setup screen's pre-game form panel.
   Draws only; `lineupStats()` and `sideRecord()` in `stats.js` derive it.
 - `src/GameStats.jsx` / `src/GameStats.css` — the in-game stats panel. Draws only;
@@ -1056,6 +1058,35 @@ the alternatives that were rejected; this section holds what breaks when you cha
   the same reason `mergeMatches` settles a clash on `updatedAt` rather than on arrival — and
   it is what that field is *for*: it was written by `newTournament` and read by nothing.
   A tournament without one sorts last and keeps its place, since `sort` is stable.
+- **Every row says when, and the two lists say it differently on purpose.** A cup runs over
+  weeks, so one date does not answer the question either list is asked. An unfinished row
+  leads with the draw — which is also what the lists are sorted by, so the order explains
+  itself — and gains `· last played 28 Jul` once a tie is in, because "is this still going?"
+  is what you actually want from it. A finished row is the span `5 Jul – 14 Sept 25`, drawn
+  to final. `lastPlayed` reads the **bracket's own ties** rather than every record carrying
+  the id, so the date and the `X of Y ties` beside it cannot count different things.
+  - **A cup that starts and finishes in a day is the date once**, and that is the ordinary
+    size of one rather than an edge case — `9 May – 9 May 26` reads as a fault. The same
+    collapse applies to the unfinished shape, where play on the day of the draw drops
+    `· last played` entirely: the draw date has already said how long ago. **Two separate
+    guards**, in `dateSpan` and in `whenLine`, and a mutation of either leaves the other
+    passing. `sameDay` is the local calendar day, so an afternoon's play spanning hours
+    still collapses.
+  - **It is a caption under the name, not a third thing on the top line.** Measured at
+    393px, inline clips a 24-character name that fits today (2 names at 320px) and an
+    unlabelled date beside `0 of 1 ties` reads as a second status. The caption costs 19px of
+    row height — 48px to 67px — and clips nothing. `verify-tournament.mjs` asserts it sits
+    *below* the name rather than asserting a row height, because a wrapped inline date
+    would give a taller row too.
+  - **A tournament with no `createdAt` draws no line at all** and its row is simply shorter.
+    That needs a hand-edited file — `newTournament` has always stamped it — and reserving an
+    empty caption on every other row to keep them even is the worse trade.
+  - **`src/dates.js` exists so the format is written once.** The stats screen's recent list
+    had it first; two copies of "how a date looks" is the drift with no symptom. The
+    always-show-the-year rule moved with it, and `dateSpan`/`dropRepeatedYear` are the only
+    things allowed to omit a year — never from absence carrying meaning, but because the
+    year is still on the line at the other end. Neither reads `Date.now()`, so a check on
+    the text cannot pass by season. `dayMonth` stays private for that reason.
 - **The label says "Winner" and the model says `champion`**, deliberately. `winner` is
   already the winner of a single *tie* (`tie.winner`, `.tie-side.is-winner`,
   `.winner-banner`), and one bracket has ten of those and exactly one champion.

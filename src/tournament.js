@@ -337,6 +337,23 @@ export function tieFor(view, game) {
   );
 }
 
+// When a tournament was last played, or null if nothing in it has been. For a finished one
+// that is also when it was won, because the final is the last tie there is.
+//
+// Read off the bracket's own ties rather than off every record carrying the id, so the date
+// and the `X of Y ties` beside it on the same row are counting the same ties and cannot
+// disagree. A record with no `endedAt` — the shape an imported result can take — contributes
+// nothing rather than a zero, which would otherwise date a tournament to 1970.
+export function lastPlayed(view, matches) {
+  if (!view) return null;
+  const played = new Set(view.ties.map((t) => t.match).filter(Boolean));
+  const stamps = matches
+    .filter((m) => played.has(m.id))
+    .map((m) => m.endedAt)
+    .filter((ms) => ms > 0);
+  return stamps.length > 0 ? Math.max(...stamps) : null;
+}
+
 // Newest draw first. The lists used to render in the order the list happened to hold,
 // which is insertion order — locally drawn ones oldest first, imported ones appended
 // after every local one whatever their draw date. So the order recorded how a device

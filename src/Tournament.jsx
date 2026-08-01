@@ -17,11 +17,13 @@ import {
   bracket,
   bracketTree,
   entrantFaults,
+  lastPlayed,
   newTournament,
   newestFirst,
   shuffled,
 } from './tournament.js';
 import { NAME_FIELD } from './nameField.js';
+import { dateSpan, dropRepeatedYear, sameDay, shortDate } from './dates.js';
 import Modal from './Modal.jsx';
 import './Tournament.css';
 
@@ -531,14 +533,40 @@ function Draw({ knownNames, onDrawn }) {
   );
 }
 
+// When a tournament happened, as its row says it. A cup runs over weeks, so one date is
+// rarely the answer: an unfinished one is asked "is this still going?", which is the draw
+// plus how recently a tie was played, and a finished one is asked "when was that?", which
+// is the whole span from the draw to the final.
+//
+// The draw date is also what both lists are sorted by, so an unfinished row leads with it
+// — the order on screen is then self-evident rather than something you have to be told.
+//
+// Null when there is nothing to say, which needs a hand-edited file: `newTournament` has
+// always stamped `createdAt`, so a tournament reaches here without one only if a file
+// dropped it, and then a bracket with nothing played has no date anywhere. Its row is
+// simply shorter, which is better than reserving an empty line on every other row for it.
+function whenLine(tournament, view, matches) {
+  const drawn = tournament.createdAt;
+  const last = lastPlayed(view, matches);
+  if (view.done && last) return drawn ? dateSpan(drawn, last) : `Won ${shortDate(last)}`;
+  if (!drawn) return last ? `Last played ${shortDate(last)}` : null;
+  // Not a span: this one is still running, so the second date is where it has got to
+  // rather than where it ended, and a range would say it had finished there. Dropped
+  // entirely when the play was the day of the draw, the same redundancy `dateSpan`
+  // collapses — "last played" is there to say how long ago, and the draw already has.
+  const since = last && !sameDay(drawn, last) ? ` · last played ${dropRepeatedYear(drawn, last)}` : '';
+  return `Drawn ${shortDate(drawn)}${since}`;
+}
+
 // One tournament, open or shut. Both lists use this: a row with the name and where it got
 // to, and everything else behind a tap. A finished bracket is the point of keeping them at
 // all, and an unfinished one is 63 ties on a 64-entrant field — neither wants to be
 // unrolled on arrival next to five others.
-function TournamentRow({ tournament, view, isOpen, onToggle, onPlayTie, onDrop }) {
+function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie, onDrop }) {
   const [confirming, setConfirming] = useState(false);
   const done = view.done;
   const verb = done ? 'Delete' : 'Abandon';
+  const when = whenLine(tournament, view, matches);
   return (
     <li className={isOpen ? 'is-open' : undefined}>
       <button
@@ -569,6 +597,11 @@ function TournamentRow({ tournament, view, isOpen, onToggle, onPlayTie, onDrop }
             {view.played} of {view.total} ties
           </span>
         )}
+        {/* Its own line under the name rather than a third thing on the top one. Measured
+            at 393px, inline clips a 24-character name that fits today and leaves the date
+            reading as a second status beside `0 of 1 ties`; the caption costs 19px of row
+            height instead and clips nothing. */}
+        {when && <span className="tournament-when">{when}</span>}
       </button>
       {isOpen && (
         <>
@@ -663,6 +696,7 @@ export default function Tournament({
               key={tournament.id}
               tournament={tournament}
               view={view}
+              matches={matches}
               isOpen={openId === tournament.id}
               onToggle={() => toggle(tournament.id)}
               onPlayTie={onPlayTie}
