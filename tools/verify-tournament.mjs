@@ -1162,11 +1162,13 @@ console.log('\nseveral tournaments can run at once');
   }
   await page.locator('.draw-go').click();
   await page.waitForSelector('.bracket');
+  // Newest first, so the one just drawn heads the list rather than sitting under the
+  // one it followed.
   check(
-    'a second is not refused',
+    'a second is not refused, and leads the list',
     (await page.locator('.tournament-name').evaluateAll((els) => els.map((e) => e.textContent))).join(
       ' | ',
-    ) === 'Hole Corn VI | Doubles Cup',
+    ) === 'Doubles Cup | Hole Corn VI',
     (
       await page.locator('.tournament-name').evaluateAll((els) => els.map((e) => e.textContent))
     ).join(' | '),
@@ -1234,6 +1236,85 @@ console.log('\nan imported tournament shows up without a reload');
     (await playable(page)) === 1,
     `${await playable(page)} playable`,
   );
+  await page.close();
+}
+
+console.log('\nboth lists read newest draw first, whatever order storage holds');
+{
+  // Seeded straight into storage in an order no sort would produce, because that is the
+  // order the app really ends up with: `upsertTournament` appends what is drawn here and
+  // `mergeTournaments` appends what a file brings, so an imported bracket lands after
+  // every local one whatever its draw date. Nothing below `Tournament.jsx` can see this —
+  // `newestFirst` is unit tested and `bracket()` never looks at two tournaments at once.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  const cup = (id, name, createdAt) => ({
+    format: 1,
+    id,
+    name,
+    createdAt,
+    mode: 'singles',
+    target: 21,
+    entrants: [['Rho'], ['Tau']],
+  });
+  // A tie for a cup is what finishes it, so these two land under Completed.
+  const won = (id) => ({
+    format: 1,
+    id: `m-${id}`,
+    tournament: id,
+    mode: 'singles',
+    players: { a: ['Rho', ''], b: ['Tau', ''] },
+    rounds: [],
+    final: { a: 21, b: 13 },
+    winner: 'a',
+    endedAt: 1.7e12,
+  });
+  await page.goto(URL);
+  await page.evaluate(
+    ([tournaments, matches]) => {
+      localStorage.clear();
+      localStorage.setItem('holecorn.tournaments.v1', JSON.stringify(tournaments));
+      localStorage.setItem('holecorn.matches.v1', JSON.stringify(matches));
+    },
+    [
+      [
+        cup('mid', 'Middle Cup', 2e12),
+        cup('old', 'Oldest Cup', 1e12),
+        cup('new', 'Newest Cup', 3e12),
+        cup('done-old', 'Old Champion', 1.5e12),
+        cup('done-new', 'New Champion', 2.5e12),
+      ],
+      [won('done-old'), won('done-new')],
+    ],
+  );
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.waitForSelector('.tournament-list');
+  const listed = () =>
+    page.locator('.tournament-list').evaluateAll((sections) =>
+      sections.map((s) => ({
+        heading: s.querySelector('h2').textContent,
+        names: [...s.querySelectorAll('.tournament-name')].map((e) => e.textContent),
+      })),
+    );
+  const [progress, completed] = await listed();
+  check(
+    'In progress runs newest to oldest',
+    progress.heading === 'In progress' &&
+      progress.names.join(' | ') === 'Newest Cup | Middle Cup | Oldest Cup',
+    `${progress.heading}: ${progress.names.join(' | ')}`,
+  );
+  check(
+    'and Completed does too',
+    completed.heading === 'Completed' &&
+      completed.names.join(' | ') === 'New Champion | Old Champion',
+    `${completed.heading}: ${completed.names.join(' | ')}`,
+  );
+
   await page.close();
 }
 

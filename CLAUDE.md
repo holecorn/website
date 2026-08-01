@@ -1047,6 +1047,15 @@ the alternatives that were rejected; this section holds what breaks when you cha
 - **`.tournament-screen` must be excluded from the wide tier's grid in `App.css`**, the same
   trap `.stats-screen` already carries. Without it the screen took the play screen's grid: a
   bracket drawing in 408px with 340px reserved for a rail that never renders.
+- **Both lists are sorted `newestFirst`, and unsorted they were showing import history.**
+  The screen used to render the array as stored, which is insertion order: locally drawn
+  ones oldest first, and `mergeTournaments` appending imported ones after every local one
+  whatever their draw date. So the tournament you had just drawn sat at the *bottom* of
+  In progress, a resurrected one jumped to the end, and two devices holding identical data
+  could disagree about the order. Sorting on `createdAt` makes it a property of the data —
+  the same reason `mergeMatches` settles a clash on `updatedAt` rather than on arrival — and
+  it is what that field is *for*: it was written by `newTournament` and read by nothing.
+  A tournament without one sorts last and keeps its place, since `sort` is stable.
 - **The label says "Winner" and the model says `champion`**, deliberately. `winner` is
   already the winner of a single *tie* (`tie.winner`, `.tie-side.is-winner`,
   `.winner-banner`), and one bracket has ten of those and exactly one champion.

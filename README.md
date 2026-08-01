@@ -388,7 +388,7 @@ names the tournament and the round.
 Finished tournaments move to **Completed** with their winner, and the row still
 opens to the whole bracket — which is the thing the paper sheets were kept for.
 Several tournaments can run at once; a singles cup and a doubles cup in the same
-summer is an ordinary thing to want.
+summer is an ordinary thing to want. Both lists show the most recent draw first.
 
 Abandoning a tournament takes only the bracket — its played ties stay in your
 history and keep counting. It is also not final: importing a file that carries

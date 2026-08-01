@@ -337,6 +337,20 @@ export function tieFor(view, game) {
   );
 }
 
+// Newest draw first. The lists used to render in the order the list happened to hold,
+// which is insertion order — locally drawn ones oldest first, imported ones appended
+// after every local one whatever their draw date. So the order recorded how a device
+// came by its tournaments rather than anything about them, two devices holding the same
+// data could disagree, and the one you had just drawn sat at the bottom.
+//
+// Sorting on `createdAt` makes it a property of the data, the same reason `mergeMatches`
+// settles a clash on `updatedAt` rather than on which copy arrived first. A tournament
+// from before the field existed, or from a hand-edited file, has none — it sorts last
+// rather than first, and `sort` is stable, so those keep the order they were in.
+export function newestFirst(tournaments) {
+  return [...tournaments].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+}
+
 // Tournaments with no champion yet. What the setup screen announces, because the
 // next session may be a fortnight after the last one and nobody will remember.
 export function unfinished(tournaments, matches) {

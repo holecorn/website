@@ -18,6 +18,7 @@ import {
   bracketTree,
   entrantFaults,
   newTournament,
+  newestFirst,
   shuffled,
 } from './tournament.js';
 import { NAME_FIELD } from './nameField.js';
@@ -642,7 +643,10 @@ export default function Tournament({
   // that is the one thing you have just asked for.
   const [openId, setOpenId] = useState(null);
   const views = useMemo(
-    () => tournaments.map((t) => ({ tournament: t, view: bracket(t, matches) })).filter((x) => x.view),
+    () =>
+      newestFirst(tournaments)
+        .map((t) => ({ tournament: t, view: bracket(t, matches) }))
+        .filter((x) => x.view),
     [tournaments, matches],
   );
   const open = views.filter((x) => !x.view.done);

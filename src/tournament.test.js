@@ -8,6 +8,7 @@ import {
   levelName,
   mergeTournaments,
   newTournament,
+  newestFirst,
   removeTournament,
   shuffled,
   tieLabels,
@@ -378,6 +379,41 @@ describe('unfinished', () => {
     const played = [tie(t.id, 'singles', ['Rho'], ['Tau'], 'a')];
     expect(unfinished([t], played)).toEqual([]);
     expect(unfinished([t], [])).toHaveLength(1);
+  });
+});
+
+describe('newestFirst', () => {
+  const drawn = (id, createdAt) => ({ id, ...(createdAt === undefined ? {} : { createdAt }) });
+
+  it('puts the newest draw first, whatever order the list held', () => {
+    expect(newestFirst([drawn('a', 1), drawn('c', 3), drawn('b', 2)]).map((t) => t.id)).toEqual([
+      'c',
+      'b',
+      'a',
+    ]);
+  });
+
+  it('leaves the list it was given alone', () => {
+    const list = [drawn('a', 1), drawn('b', 2)];
+    newestFirst(list);
+    expect(list.map((t) => t.id)).toEqual(['a', 'b']);
+  });
+
+  // An import appends whatever the file holds, so the order the app sees is the order
+  // the tournaments arrived in. Sorting is what stops that showing.
+  it('interleaves an imported tournament by its draw date, not by its arrival', () => {
+    const local = [drawn('local-new', 30), drawn('local-old', 10)];
+    const imported = [drawn('imported', 20)];
+    expect(newestFirst([...local, ...imported]).map((t) => t.id)).toEqual([
+      'local-new',
+      'imported',
+      'local-old',
+    ]);
+  });
+
+  it('sorts one with no draw date last, keeping the order those were in', () => {
+    const list = [drawn('none-first'), drawn('none-second'), drawn('dated', 5)];
+    expect(newestFirst(list).map((t) => t.id)).toEqual(['dated', 'none-first', 'none-second']);
   });
 });
 
