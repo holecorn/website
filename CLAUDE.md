@@ -1087,6 +1087,33 @@ the alternatives that were rejected; this section holds what breaks when you cha
     things allowed to omit a year — never from absence carrying meaning, but because the
     year is still on the line at the other end. Neither reads `Date.now()`, so a check on
     the text cannot pass by season. `dayMonth` stays private for that reason.
+- **A completed row names the runner-up under the winner, and it costs nothing.** The date
+  had already made the row two lines, so the second line's right half was empty — the loser
+  of the final is the one place in a knockout where losing is worth naming, and it lands in
+  the column the winner is in. `bracket()` derives `runnerUp` beside `champion` for the
+  reason everything else is derived there: this screen draws.
+  - **The fixture's *second* entrant has to win**, in the browser check and the unit tests
+    both. With the first one winning, "the other side of the final" and "side b of the
+    final" name the same person, so a runner-up derived without consulting the winner at all
+    passes — verified by mutation, and it did pass until the fixture was flipped. Same lesson
+    the rest of `verify-tournament.mjs` already carries twice over.
+  - **Each line is one grid item ending on the row's right edge, and aligning the two
+    *captions* instead was tried and rejected.** Splitting the caption into a third column
+    lines `Winner` up with `Runner-up`, but a shared track can only hold the *left* of the
+    names together — so whichever name is shorter stops short of the edge and leaves a gap,
+    which is the thing that reads as broken. It also cost width: `Winner` in a
+    `Runner-up`-wide track took a doubles row's name from 126px to 101px and made the date
+    beside the runner-up clip. **Don't re-split it** without re-reading that.
+  - **The column is shared with the champion, so the wider of the two sets it.** Usually the
+    champion — bolder and 2px larger — but a short winner against a long loser is the
+    exception, and there the runner-up costs the tournament name width it had. Measured and
+    accepted rather than capped; the numbers are in `Tournament.css`.
+  - **The fixture puts the long name on the winning side in one cup and the losing side in
+    the other**, because the reach-the-edge assertion is measured against the wider of the
+    two lines: with the long name only ever losing, un-aligning the *runner-up* changes
+    nothing, since the widest item sets the track whichever way it is justified. Verified by
+    mutating each side separately. Two near-equal names — the obvious fixture — make the
+    assertion unable to fail at all.
 - **The label says "Winner" and the model says `champion`**, deliberately. `winner` is
   already the winner of a single *tie* (`tie.winner`, `.tie-side.is-winner`,
   `.winner-banner`), and one bracket has ten of those and exactly one champion.

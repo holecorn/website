@@ -95,9 +95,15 @@
 /* The row is the button rather than something inside it, so the tap target is the whole
    card instead of the text's own box.
 
-   A grid rather than a flex row, because the date sits on a second line spanning both
-   columns. `space-between` cannot express that, and wrapping a flex row would let the
-   status fall onto the second line before the date did. */
+   A grid rather than a flex row, because the date sits on a second line beside the
+   runner-up. `space-between` cannot express that, and wrapping a flex row would let the
+   status fall onto the second line before the date did.
+
+   **Two columns, and each result line is one item ending on the right edge.** A third
+   column holding the captions was tried, which lined `Winner` up with `Runner-up`: a shared
+   track can only hold the *left* of the names together, so whichever name was shorter
+   stopped short of the row's edge and left a gap. Reaching the edge won. The captions then
+   sit wherever their own line puts them, which is the trade. */
 .tournament-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -139,12 +145,39 @@
   font-weight: 700;
 }
 
-/* Spans both columns, so it is the name it sits under that it reads against rather than
-   the status. Clipped rather than wrapped: a second line here would make the row taller
-   than the ones around it, and the row is a summary — the bracket below has the detail. */
+/* Column one, under the name it reads against rather than under the status. It used to
+   span both, and gave the column back when the runner-up took the other half; on an
+   unfinished row nothing sits beside it, so it still reads as a full-width line.
+   Clipped rather than wrapped: a second line here would make the row taller than the ones
+   around it, and the row is a summary — the bracket below has the detail. */
 .tournament-when {
   grid-area: 2 / 1;
-  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Directly under the champion, sharing that column. Muted and unbold against the winner's
+   text weight, because a knockout has one winner and the loser of the final is context for
+   it rather than a second result.
+
+   12px and not 13, which buys two things: the second line then reads at one size beside the
+   date, and the row stays at the 67px an unfinished one is — measured, 13px made a completed
+   row 69px and the two lists no longer matched.
+
+   **The column is shared with the champion above, so whichever is wider sets it.** Usually
+   that is the champion, whose name is bolder and 2px larger; the exception is a short winner
+   against a long loser, where — measured at 393px, `Rho` against `AlphaBetaGammaDe` — the
+   runner-up takes the track to 204px and a 16-character tournament name clips where it did
+   not before. Accepted rather than capped: a long *winner* already does the same to the name
+   (126px on a doubles row), so a floor here would be a magic number correcting one of the
+   two cases. */
+.runner-up-who {
+  grid-area: 2 / 2;
+  justify-self: end;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -154,8 +187,10 @@
 }
 
 /* A name on its own says nothing about why it is there. The caption is what makes it a
-   champion rather than just somebody mentioned beside a tournament. */
-.champion-cap {
+   champion rather than just somebody mentioned beside a tournament, and the same word does
+   the same job for the runner-up — so one class, inline within its own line rather than in
+   a column of its own. See `.tournament-row` for why the column was given up. */
+.result-cap {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;

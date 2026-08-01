@@ -385,8 +385,9 @@ Ties count in everyone's career exactly like any other game. On the stats screen
 a tournament tie carries a green mark in the recent matches list, and opening it
 names the tournament and the round.
 
-Finished tournaments move to **Completed** with their winner, and the row still
-opens to the whole bracket — which is the thing the paper sheets were kept for.
+Finished tournaments move to **Completed** with their winner and the runner-up
+beneath, and the row still opens to the whole bracket — which is the thing the
+paper sheets were kept for.
 Several tournaments can run at once; a singles cup and a doubles cup in the same
 summer is an ordinary thing to want. Both lists show the most recent draw first,
 and every row carries its dates — when it was drawn and how recently a tie was

@@ -232,6 +232,12 @@ export function bracket(tournament, matches = []) {
   const ties = [];
   const { side: champion } = resolve(root, matches, tournament.id, 1, null, ties);
   const played = ties.filter((t) => t.match).length;
+  // Whoever lost the final, which is the one place in a knockout where losing a tie is
+  // worth naming. Derived here rather than on the screen for the reason `champion` is:
+  // this file answers every question about the bracket and `Tournament.jsx` draws.
+  const final = ties.find((t) => t.level === 1);
+  const runnerUp =
+    (final?.winner && [final.a, final.b].find((s) => s && s.key !== final.winner.key)) || null;
   return {
     shape,
     entrants: sides,
@@ -244,6 +250,7 @@ export function bracket(tournament, matches = []) {
     })),
     playable: ties.filter((t) => t.playable),
     champion,
+    runnerUp,
     played,
     total: sides.length - 1,
     done: Boolean(champion),

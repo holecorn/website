@@ -216,6 +216,41 @@ describe('bracket', () => {
     expect(b.playable).toHaveLength(0);
   });
 
+  it('names the runner-up as whoever lost the final', () => {
+    const t = tournamentOf([['Rho'], ['Tau'], ['Phi'], ['Chi']]);
+    let matches = [];
+    // Both semi-finals, then Rho takes the final.
+    matches = [...matches, tie(t.id, t.mode, ['Rho'], ['Tau'], 'a')];
+    matches = [...matches, tie(t.id, t.mode, ['Phi'], ['Chi'], 'b')];
+    const final = bracket(t, matches).playable[0];
+    matches = [...matches, tie(t.id, t.mode, final.a.names, final.b.names, 'a')];
+    const b = bracket(t, matches);
+    expect(b.champion.names).toEqual(final.a.names);
+    expect(b.runnerUp.names).toEqual(final.b.names);
+    // The loser of a semi-final is not a runner-up, so it cannot simply be "somebody who
+    // lost" — Tau and one of Phi/Chi also lost, and only the beaten finalist counts.
+    expect(b.runnerUp.key).not.toBe(b.champion.key);
+    expect([...final.a.names, ...final.b.names]).toContain(b.runnerUp.names[0]);
+  });
+
+  it('has no runner-up until the final is played', () => {
+    const t = tournamentOf([['Rho'], ['Tau'], ['Phi'], ['Chi']]);
+    expect(bracket(t, []).runnerUp).toBeNull();
+    const half = [tie(t.id, t.mode, ['Rho'], ['Tau'], 'a')];
+    expect(bracket(t, half).runnerUp).toBeNull();
+    expect(bracket(t, half).done).toBe(false);
+  });
+
+  // Read off the tie's own two sides rather than the record's team letters, which are an
+  // accident of which side was entered as A when the tie was started.
+  it('finds the runner-up whichever side of the record they were on', () => {
+    const t = tournamentOf([['Rho'], ['Tau']]);
+    const aWon = [tie(t.id, t.mode, ['Rho'], ['Tau'], 'a')];
+    const bWon = [tie(t.id, t.mode, ['Tau'], ['Rho'], 'a')];
+    expect(bracket(t, aWon).runnerUp.names).toEqual(['Tau']);
+    expect(bracket(t, bWon).runnerUp.names).toEqual(['Rho']);
+  });
+
   it('un-plays a tie when its match goes, and everything above it with it', () => {
     // The reversibility the derived design exists for: undoing a winning round
     // un-archives the match, and the bracket recomputes with nothing to un-advance.

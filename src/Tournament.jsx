@@ -579,6 +579,11 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
         {/* A name on its own says nothing about why it is there, so the caption says what
             it is. The unfinished rows carry how far they have got in the same place, which
             is what makes the two lists read as one kind of thing. */}
+        {/* Caption and name are one item, so each line right-aligns as a whole and both
+            always reach the row's edge. They were briefly two, in a shared caption column,
+            which lined `Winner` up with `Runner-up` — but that can only hold the *left* of
+            the names together, so the shorter one stopped short of the edge. Butting up to
+            the right won; the labels sit where their own line puts them. */}
         {done ? (
           // The label says "Winner"; the model underneath says `champion`, and the class
           // names follow the model. That is not sloppiness — `winner` is already taken by
@@ -586,9 +591,9 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
           // bracket has ten of those and exactly one champion. Reusing the word in code
           // would blur the two; on screen there is only one of them to confuse.
           <span className="champion-who">
-            {/* A real separator, not a margin: without one this reads as "WinnerTau" to
+            {/* A real separator, not a margin: without one this reads as "WinnerRho" to
                 anything that takes the text rather than the layout. */}
-            <span className="champion-cap">Winner</span>
+            <span className="result-cap">Winner</span>
             {DOT}
             {sideNames(view.champion)}
           </span>
@@ -602,6 +607,16 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
             reading as a second status beside `0 of 1 ties`; the caption costs 19px of row
             height instead and clips nothing. */}
         {when && <span className="tournament-when">{when}</span>}
+        {/* Under the winner, in the space the second line already opened — a knockout has
+            one tie where losing is worth naming, and it is the one the winner's name comes
+            out of. Costs no height at all, because the date put the line there. */}
+        {done && view.runnerUp && (
+          <span className="runner-up-who">
+            <span className="result-cap">Runner-up</span>
+            {DOT}
+            {sideNames(view.runnerUp)}
+          </span>
+        )}
       </button>
       {isOpen && (
         <>

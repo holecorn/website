@@ -1251,27 +1251,41 @@ console.log('\nboth lists read newest draw first, whatever order storage holds')
     console.log('  PAGE ERROR', e.message);
     failures++;
   });
-  const cup = (id, name, createdAt) => ({
+  // **The two names are very different widths, and the two finished cups put the long one
+  // on opposite sides.** With `Rho` against `Tau` the result lines come out within a pixel
+  // of each other, so an assertion that both reach the right edge passes whatever the
+  // alignment does. One cup each way is what makes it bite in both directions — verified by
+  // mutation: with only the long *loser*, un-aligning the champion is caught and
+  // un-aligning the runner-up is not, because the widest item sets the track either way.
+  const LONG = 'AlphaBetaGammaDe';
+  const SHORT = 'Tau';
+  const cup = (id, name, createdAt, entrants) => ({
     format: 1,
     id,
     name,
     createdAt,
     mode: 'singles',
     target: 21,
-    entrants: [['Rho'], ['Tau']],
+    entrants,
   });
   // A tie for a cup is what finishes it, so these two land under Completed.
-  const won = (id) => ({
+  //
+  // **The second entrant wins, deliberately.** With the first one winning, "the other side
+  // of the final" and "side b of the final" name the same person, so a runner-up derived
+  // without looking at the winner at all passes — verified by mutation, and it did.
+  const won = (id, entrants) => ({
     format: 1,
     id: `m-${id}`,
     tournament: id,
     mode: 'singles',
-    players: { a: ['Rho', ''], b: ['Tau', ''] },
+    players: { a: [entrants[0][0], ''], b: [entrants[1][0], ''] },
     rounds: [],
-    final: { a: 21, b: 13 },
-    winner: 'a',
+    final: { a: 13, b: 21 },
+    winner: 'b',
     endedAt: 1.7e12,
   });
+  const LONG_LOSES = [[LONG], [SHORT]];
+  const LONG_WINS = [[SHORT], [LONG]];
   await page.goto(URL);
   await page.evaluate(
     ([tournaments, matches]) => {
@@ -1281,13 +1295,13 @@ console.log('\nboth lists read newest draw first, whatever order storage holds')
     },
     [
       [
-        cup('mid', 'Middle Cup', 2e12),
-        cup('old', 'Oldest Cup', 1e12),
-        cup('new', 'Newest Cup', 3e12),
-        cup('done-old', 'Old Champion', 1.5e12),
-        cup('done-new', 'New Champion', 2.5e12),
+        cup('mid', 'Middle Cup', 2e12, LONG_LOSES),
+        cup('old', 'Oldest Cup', 1e12, LONG_LOSES),
+        cup('new', 'Newest Cup', 3e12, LONG_LOSES),
+        cup('done-old', 'Old Champion', 1.5e12, LONG_WINS),
+        cup('done-new', 'New Champion', 2.5e12, LONG_LOSES),
       ],
-      [won('done-old'), won('done-new')],
+      [won('done-old', LONG_WINS), won('done-new', LONG_LOSES)],
     ],
   );
   await page.reload();
@@ -1315,6 +1329,68 @@ console.log('\nboth lists read newest draw first, whatever order storage holds')
     `${completed.heading}: ${completed.names.join(' | ')}`,
   );
 
+  // Under the winner, in the column the winner is in and on the line the date opened. That
+  // placement is the whole point of it — the runner-up reads as belonging to the result
+  // above it rather than to the date beside it — and only a browser can see it.
+  const beaten = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.tournament-list li')];
+    const of = (name) => rows.find((r) => r.textContent.includes(name));
+    const geom = (li) => {
+      const champ = li.querySelector('.champion-who');
+      const runner = li.querySelector('.runner-up-who');
+      if (!runner) return { text: null };
+      const c = champ.getBoundingClientRect();
+      const r = runner.getBoundingClientRect();
+      // How far each line falls short of the widest thing on the row's right-hand side —
+      // 0 on both when each line reaches the edge, which is the property being asked for.
+      const edge = Math.max(c.right, r.right);
+      return {
+        text: runner.textContent.replace(/\s+/g, ' ').trim(),
+        below: Math.round(r.top - c.bottom),
+        shortBy: [Math.round(edge - c.right), Math.round(edge - r.right)],
+        rowH: Math.round(li.getBoundingClientRect().height),
+      };
+    };
+    return {
+      done: geom(of('New Champion')),
+      // The same row with the long name on the winning side instead, so the shortfall is
+      // measured on the runner-up as well as on the champion.
+      reversed: geom(of('Old Champion')),
+      running: geom(of('Newest Cup')),
+    };
+  });
+  check(
+    'a finished row names who lost the final',
+    beaten.done.text === 'Runner-up · AlphaBetaGammaDe',
+    JSON.stringify(beaten.done),
+  );
+  check(
+    'directly under the winner',
+    beaten.done.below >= 0,
+    `below by ${beaten.done.below}px`,
+  );
+  // Both lines reach the row's right edge, whichever name is longer. A shared caption
+  // column was tried and this is what ruled it out: it can only hold the *left* of the two
+  // names together, so the shorter one stops short and leaves a gap. Measured on the
+  // fixture's own two lines rather than against the card, because the card's padding is
+  // not what either is aligned to.
+  check(
+    'and both lines reach the same right edge, whichever name is longer',
+    [...beaten.done.shortBy, ...beaten.reversed.shortBy].every((px) => px <= 1),
+    `long loser [${beaten.done.shortBy}], long winner [${beaten.reversed.shortBy}]`,
+  );
+  // The date already made the row two lines, so this must be free. A third line would show
+  // up here and nowhere else.
+  check(
+    'and costs the row no height, because the date already opened the line',
+    beaten.done.rowH === 67,
+    `${beaten.done.rowH}px`,
+  );
+  check(
+    'an unfinished row has no runner-up to name',
+    beaten.running.text === null,
+    JSON.stringify(beaten.running),
+  );
   await page.close();
 }
 
