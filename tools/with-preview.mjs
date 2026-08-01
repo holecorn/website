@@ -18,6 +18,7 @@ const CHECKS = [
   'verify-copy-link.mjs',
   'verify-stats.mjs',
   'verify-positions.mjs',
+  'verify-tournament.mjs',
   'verify-lanes.mjs',
   'verify-panel.mjs',
 ];

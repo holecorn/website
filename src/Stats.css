@@ -663,3 +663,64 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Development only — `import.meta.env.DEV` removes the component from the build, so
+   these rules style something the shipped app has no markup for. Kept anyway: a
+   stylesheet that has to be edited to try a dev tool is a dev tool nobody uses. */
+.dev-reset {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dev-reset button {
+  padding: 6px 10px;
+  border: 1px dashed #eb5757;
+  border-radius: 8px;
+  background: transparent;
+  color: #eb5757;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* A tournament tie. The accent lives *inside* the row's existing 14px left padding and is
+   absolutely positioned, so it takes nothing at all from the names — which matters more
+   here than anywhere: `.recent-teams` is `flex: 1`, so it sits at zero slack by
+   construction and already clips at 393px with long names. Measured, any badge on this row
+   comes straight out of the name. */
+.recent li.is-tie .recent-open {
+  position: relative;
+}
+
+.recent li.is-tie .recent-open::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: #27ae60;
+}
+
+/* The key, so the mark says what it is rather than only that the row is special. */
+.recent-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 8px below, the same as the section heading gives itself, so the key sits evenly between
+     the two rather than flush against the list — which is where `margin: 0` left it. */
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.recent-key-mark {
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: #27ae60;
+}

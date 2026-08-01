@@ -108,6 +108,14 @@
   color: var(--bg);
 }
 
+/* A tie's mode comes from the draw, so the group is disabled — but the selected
+   segment still has to read as selected. The browser's own disabled rendering dims
+   both, which leaves the row saying nothing about which mode is being played. */
+.mode-toggle button.is-on:disabled {
+  background: var(--muted);
+  color: var(--bg);
+}
+
 /* Third control in .setup-top, which must not wrap — so it neither grows nor
    shrinks, and the row's fit is held by tools/verify-stats.mjs. 12px rather than
    16px for the same reason .start-game is 16px rather than 20px. */
@@ -295,6 +303,15 @@
    removing the text would slide the button sideways and back on every toss. */
 .toss-result.is-tossing {
   opacity: 0;
+}
+
+/* The target-field's metrics without its input, so the row keeps its place when a tie
+   fixes the number. */
+.target-fixed {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
 }
 
 .target-field {
@@ -1021,6 +1038,38 @@
   }
 }
 
+/* Tournament and Stats share the foot of the setup screen. Two buttons on one row
+   rather than stacked: the row below them is the footer, and a second full-width
+   button reads as another section rather than a way out of the screen. */
+.setup-links {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Shown only while a tie is loaded, so an ordinary game spends no height on it. It
+   is the one thing the collapsed name fields cannot say for themselves: they look
+   like a lineup somebody typed rather than one the draw fixed. */
+.tie-banner {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Inline in the sentence rather than a row of its own: it is the rare case, and a
+   button under every tie would cost the screen height on the common one. Underlined
+   because at this size a bordered chip would outweigh the sentence carrying it. */
+.tie-leave {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spark,
   .big-spark,
@@ -1304,7 +1353,12 @@
      stayed reserved for a rail that never renders. Measured, that put the content
      196px left of centre and squeezed the career table into a 408px scroller on the
      widest screens there are. */
-  .app:not(.setup):not(.stats-screen) {
+  /* The play screen's grid, so every other screen has to be excluded by name. The
+     stats screen taught this once: without the exclusion it took the grid, landed in
+     the 408px first column and reserved 340px for a rail that never renders. The
+     tournament screen did exactly the same, and its bracket had two of four columns
+     to draw in. A new screen with its own class needs adding here. */
+  .app:not(.setup):not(.stats-screen):not(.tournament-screen) {
     max-width: 1040px;
     display: grid;
     grid-template-columns: minmax(0, 408px) minmax(260px, 340px);
@@ -1313,10 +1367,10 @@
     column-gap: 24px;
     row-gap: 16px;
   }
-  .app:not(.setup):not(.stats-screen) > *:not(.side-rail):not(.footer) {
+  .app:not(.setup):not(.stats-screen):not(.tournament-screen) > *:not(.side-rail):not(.footer) {
     grid-column: 1;
   }
-  .app:not(.setup):not(.stats-screen) > .footer {
+  .app:not(.setup):not(.stats-screen):not(.tournament-screen) > .footer {
     grid-column: 1 / -1;
   }
   .side-rail {

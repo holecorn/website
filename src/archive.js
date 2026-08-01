@@ -40,6 +40,12 @@ export function matchRecord(game, endedAt) {
     colors: { ...game.colors },
     target: game.target,
     winner: game.winner,
+    // Absent on an ordinary game rather than null, the way `winner` is absent while
+    // a game is live: `bracket` reads a missing key as "not a tie", so a record that
+    // is not part of a tournament keeps exactly the shape it had before tournaments
+    // existed. The id is the only thing a tie carries — where it sat in the bracket
+    // is derived from its two sides.
+    ...(game.tournament ? { tournament: game.tournament } : {}),
     rounds: game.rounds.map((r) => ({
       a: r.a.slice(),
       b: r.b.slice(),
@@ -200,6 +206,26 @@ export function mergeMatches(records, incoming) {
     if (mine && editStamp(mine) >= editStamp(record)) return acc;
     return upsertMatch(acc, record);
   }, records);
+}
+
+// What an export file holds. It grew an envelope when tournaments arrived, because a
+// bare array of matches loses every bracket while appearing to have worked — the ties
+// import perfectly and belong to nothing.
+export const FILE_FORMAT = 1;
+
+export function archiveFile(matches, tournaments) {
+  return { format: FILE_FORMAT, matches, tournaments };
+}
+
+// Reads both shapes. An export taken before tournaments existed is a bare array, and
+// it has to keep importing — the same merge-on-load tolerance `loadGame` uses rather
+// than bumping a key and abandoning what is already on people's phones.
+export function readArchiveFile(parsed) {
+  if (Array.isArray(parsed)) return { matches: parsed, tournaments: [] };
+  if (!parsed || typeof parsed !== 'object') return null;
+  const { matches, tournaments } = parsed;
+  if (!Array.isArray(matches)) return null;
+  return { matches, tournaments: Array.isArray(tournaments) ? tournaments : [] };
 }
 
 // Matches finished since the last export. Measured against the newest end time

@@ -328,14 +328,72 @@ scored game and the rates start from that game alone.
 
 ### Sample history for testing
 
-`tools/fixtures/sample-archive.json` is a made-up history — three years, 124
-matches, singles and doubles, all four colours — to **Import JSON** when you want
-the stats screens populated without playing a hundred games. It mixes both kinds
-of record, so the result-only behaviour above is visible in it.
+`tools/fixtures/sample-archive.json` is a made-up history — three years, 141
+matches, singles and doubles, all four colours, three tournaments — to
+**Import JSON** when you want the stats screens populated without playing a
+hundred games. It mixes both kinds of record, so the result-only behaviour above
+is visible in it.
+
+There is a second, deliberately unreasonable one for finding where the layout
+stops coping: `node tools/make-stress-archive.mjs` writes `tools/out/` with ~900
+matches, 78 players and six tournaments including a 64-entrant bracket. It isn't
+checked in — it runs to megabytes — so generate it when you want it.
 
 Regenerate with `node tools/make-sample-archive.mjs`. It's a fixture, not real
 history: importing it into a browser you actually score in will mix it into your
 own career, so use a separate browser or clear it afterwards.
+
+## Tournaments
+
+The **Tournaments** button on the setup screen runs a knockout: enter everyone
+playing, the app takes the draw, and it tells you which ties can be played. Each
+tie is scored exactly like any other game and lands in your history.
+
+Enter the field by tapping names from your archive — anyone the app already knows
+is a chip you tap to add, tap again to remove — and type any newcomers. Then
+**Take the draw**. The draw is random and final: it puts the excess into
+preliminary ties so the rest of the bracket is a power of two, and gives everyone
+else a bye. For eleven entrants that's three preliminaries and five byes.
+
+Who has the harder path isn't something the draw decides. For eleven, six people
+must win four ties and five must win three — in *every* possible arrangement, so
+no draw is kinder than another.
+
+### Playing a tie
+
+The bracket draws as columns, preliminaries on the left through to the final on
+the right. A tie you can play now is outlined in green with a **▶**; tap the box
+to start it. Several are usually playable at once, and there is no required
+order — play whoever is there, which is how it actually goes.
+
+A tie loads with the names, the mode and the target fixed by the draw, and a line
+saying which tournament and round it is. **Leave tie** puts it back if you tapped
+the wrong one. Everything else works as normal: the toss, the colours, who throws
+first.
+
+On a phone the bracket shows one round at a time with **‹ ›** to step between
+them, and it opens on the round the live ties are in rather than at the outer
+edge. On an iPad the whole bracket fits at once.
+
+### After the game
+
+Winning a tie advances the bracket; undoing the winning round takes it back out
+again. Nothing about the bracket's progress is stored — it is worked out from the
+results — so there is never a bracket that disagrees with the games behind it.
+
+Ties count in everyone's career exactly like any other game. On the stats screen
+a tournament tie carries a green mark in the recent matches list, and opening it
+names the tournament and the round.
+
+Finished tournaments move to **Completed** with their winner, and the row still
+opens to the whole bracket — which is the thing the paper sheets were kept for.
+Several tournaments can run at once; a singles cup and a doubles cup in the same
+summer is an ordinary thing to want.
+
+A tournament runs over weeks rather than an evening, which is worth knowing for
+one reason: **whichever device takes the draw has to score every tie**, because
+the history is per-browser. Add Holecorn to your home screen before you start —
+see **Keeping the history**.
 
 ## External scoreboard
 

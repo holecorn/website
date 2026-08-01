@@ -10,9 +10,11 @@
 
 import {
   BAGS_PER_SIDE,
+  NO_SIDE,
   nameKey,
   playerLabel,
   rawPoints,
+  sideKeyOf,
   tierCounts,
   totals,
 } from './scoring.js';
@@ -281,14 +283,11 @@ export function lineupStats(matches, game) {
   return rows;
 }
 
-const NO_SIDE = '[]';
-
-// One side of a matchup as a name set, so the same people count as the same side
-// whichever team letter they held at the time and whichever order they were
-// entered in.
+// One side of a matchup as a name set. The rule itself is `sideKeyOf` in scoring.js,
+// because the bracket needs it too and it has to mean one thing; this only says which
+// names a match puts on a side.
 function sideKey(match, team) {
-  const names = rosterFor(match, team).map(nameKey).filter(Boolean);
-  return JSON.stringify([...new Set(names)].sort());
+  return sideKeyOf(rosterFor(match, team));
 }
 
 // How this exact matchup has gone before, from the current lineup's point of

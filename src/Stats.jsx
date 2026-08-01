@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { BOARD_NAME, nameKey, teamLabel } from './scoring.js';
 import {
   dropMatch,
@@ -12,7 +12,15 @@ import {
   saveMatchPlayers,
   savePlayerRename,
   unexportedCount,
+  archiveFile,
+  readArchiveFile,
 } from './archive.js';
+import {
+  loadTournaments,
+  tieLabels,
+  mergeTournaments,
+  saveTournaments,
+} from './tournament.js';
 import {
   playerStats,
   playedIn,
@@ -27,7 +35,9 @@ import {
   finalScore,
   hasRounds,
 } from './stats.js';
+import { NAME_FIELD } from './nameField.js';
 import FormPips from './FormPips.jsx';
+import Modal from './Modal.jsx';
 import './Stats.css';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
@@ -63,6 +73,48 @@ function minutes(ms) {
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+// Wipe the history and start again. **Development only** — `import.meta.env.DEV` is a
+// compile-time constant, so Vite eliminates the whole branch and the built app cannot
+// contain this control. That is the point: the archive is the one thing in here with no
+// backstop but an export, ITP can already delete it, and a one-tap way to lose every
+// game ever played does not belong on a phone people score on.
+//
+// Reached over a LAN IP on a real phone, which is where the app actually gets tested and
+// where devtools are not to hand.
+//
+// Keyed by prefix rather than by an imported list, so a new key added anywhere is
+// cleared without this having to be told about it. The scoreboard's two are kept
+// deliberately: a broker URL, user and password are a nuisance to retype, and they are
+// not history.
+const KEEP = ['holecorn.scoreboard.v1', 'holecorn.scoreboard.display.v1'];
+
+function wipeLocalHistory() {
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('holecorn.') && !KEEP.includes(key)) localStorage.removeItem(key);
+  }
+  // Reloaded rather than setting state back: the game, the archive and the tournaments
+  // are held in three places above this screen, and a fresh load is the only thing that
+  // is certainly consistent with empty storage.
+  window.location.reload();
+}
+
+function DevReset() {
+  const [armed, setArmed] = useState(false);
+  if (!import.meta.env.DEV) return null;
+  return (
+    <div className="dev-reset">
+      <button type="button" onClick={() => (armed ? wipeLocalHistory() : setArmed(true))}>
+        {armed ? 'Really wipe everything?' : 'Wipe local history (dev)'}
+      </button>
+      {armed && (
+        <button type="button" onClick={() => setArmed(false)}>
+          Cancel
+        </button>
+      )}
+    </div>
+  );
+}
+
 const DURABILITY = {
   true: 'This browser has agreed to keep your history.',
   false:
@@ -72,6 +124,10 @@ const DURABILITY = {
 
 export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const [matches, setMatches] = useState(loadArchive);
+  // Read once, alongside the archive. Nothing on this screen edits a tournament, so unlike
+  // `matches` it never has to be written back — it is here only so a match can say which
+  // tie it was.
+  const [tournaments, setTournaments] = useState(loadTournaments);
   const [lastExport, setLastExport] = useState(loadLastExport);
   const [notice, setNotice] = useState(null);
   const [deleted, setDeleted] = useState(null);
@@ -88,6 +144,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const [selected, setSelected] = useState(null);
 
   const totalsFor = useMemo(() => summary(matches), [matches]);
+  // Which tie each match was, if any. Keyed by match id, because nothing on a record says
+  // where in a bracket it sat — `tieLabels` works it back out from the two sides.
+  const ties = useMemo(() => tieLabels(tournaments, matches), [tournaments, matches]);
   const players = useMemo(() => playerStats(matches), [matches]);
   // Resolved from the list rather than held alongside it, so a player who has
   // just lost their last match to a deletion takes the panel with them.
@@ -148,7 +207,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const exportMatches = () => {
     const stamp = new Date().toISOString().slice(0, 10);
     const url = URL.createObjectURL(
-      new Blob([JSON.stringify(matches, null, 2)], { type: 'application/json' }),
+      new Blob([JSON.stringify(archiveFile(matches, loadTournaments()), null, 2)], {
+        type: 'application/json',
+      }),
     );
     const link = document.createElement('a');
     link.href = url;
@@ -169,9 +230,12 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
     event.target.value = '';
     if (!file) return;
     try {
-      const parsed = JSON.parse(await file.text());
-      if (!Array.isArray(parsed)) throw new Error('not an export');
-      const merged = saveArchive(mergeMatches(loadArchive(), parsed));
+      const data = readArchiveFile(JSON.parse(await file.text()));
+      if (!data) throw new Error('not an export');
+      // Tournaments first: a tie that lands before its bracket does is a match
+      // pointing at nothing, and the stats screen would draw it as an ordinary game.
+      setTournaments(saveTournaments(mergeTournaments(loadTournaments(), data.tournaments)));
+      const merged = saveArchive(mergeMatches(loadArchive(), data.matches));
       const added = merged.length - matches.length;
       setMatches(merged);
       setNotice(
@@ -376,13 +440,25 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
 
           <section className="stats-section">
             <h2>{subject ? `${subject.name}${DOT}recent matches` : 'Recent matches'}</h2>
+            {/* A marked row has to say what it is, not merely look special — the lesson the
+                shaded nemesis row taught. Drawn only when the list actually holds a tie, so
+                an archive with no tournaments spends nothing on it. */}
+            {recent.some((m) => ties.has(m.id)) && (
+              <p className="recent-key">
+                <span className="recent-key-mark" aria-hidden="true" />
+                Tournament tie
+              </p>
+            )}
             <ul className="recent">
               {recent.map((m) => {
                 const final = finalScore(m);
                 const open = openId === m.id;
                 const label = `${teamLabel(m, 'a')} v ${teamLabel(m, 'b')} on ${shortDate(m.endedAt)}`;
                 return (
-                  <li key={m.id} className={open ? 'is-open' : ''}>
+                  <li
+                    key={m.id}
+                    className={`${open ? 'is-open' : ''}${ties.has(m.id) ? ' is-tie' : ''}`}
+                  >
                     <div className="recent-row">
                       <button
                         className="recent-open"
@@ -419,6 +495,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                       <MatchRounds
                         id={`rounds-${m.id}`}
                         match={m}
+                        tie={ties.get(m.id)}
                         onEdit={() => setEditing(m)}
                       />
                     )}
@@ -451,6 +528,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
             </label>
           </div>
           {notice && <p className="durability-notice">{notice}</p>}
+          <DevReset />
         </div>
       </section>
 
@@ -471,23 +549,6 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
         />
       )}
     </div>
-  );
-}
-
-// Opened by mounting, so the caller keeps the "which thing am I editing" state
-// and there is no ref to toggle. Deliberately *not* dismissed by a click on the
-// backdrop, the way App.jsx's confirm dialog is: both of these hold a name that
-// has been typed, and losing it to a stray tap is worse than one more press on
-// Cancel. Escape still closes, through `onClose`.
-function Modal({ children, onClose }) {
-  const dialog = useRef(null);
-  useEffect(() => {
-    if (!dialog.current?.open) dialog.current?.showModal();
-  }, []);
-  return (
-    <dialog className="modal" ref={dialog} onClose={onClose}>
-      {children}
-    </dialog>
   );
 }
 
@@ -519,6 +580,7 @@ function RenamePlayer({ player, players, onCancel, onSave }) {
             byte budget was measured against. */}
         <input
           className="rename-input"
+          {...NAME_FIELD}
           value={value}
           maxLength={16}
           autoFocus
@@ -598,6 +660,7 @@ function MatchNames({ match, onCancel, onSave }) {
               <input
                 key={i}
                 className="match-name-input"
+                {...NAME_FIELD}
                 value={draft[team][i] ?? ''}
                 maxLength={16}
                 style={{ color: match.colors?.[team] }}
@@ -605,7 +668,7 @@ function MatchNames({ match, onCancel, onSave }) {
                 aria-label={
                   doubles
                     ? `Team ${team.toUpperCase()} player at the ${BOARD_NAME[i]} board`
-                    : `Team ${team.toUpperCase()} player name`
+                    : `Team ${team.toUpperCase()} player`
                 }
               />
             ))}
@@ -631,7 +694,7 @@ function MatchNames({ match, onCancel, onSave }) {
 
 // Round-by-round, using the same shorthand as the in-play history (◎ hole,
 // ▬ board) so the two read alike.
-function MatchRounds({ id, match, onEdit }) {
+function MatchRounds({ id, match, tie, onEdit }) {
   const rounds = matchRounds(match);
   const detailed = hasRounds(match);
   const doubles = match.mode === 'doubles';
@@ -639,6 +702,9 @@ function MatchRounds({ id, match, onEdit }) {
   // Left out rather than shown as a dash when it can't be known — a match saved
   // before start times existed simply doesn't have one.
   const facts = [
+    // First, because it is the thing that makes this match different from the rest of the
+    // list — and the only place the tournament and the round are named.
+    ...(tie ? [`${tie.name}${DOT}${tie.round}`] : []),
     detailed
       ? `${rounds.length} round${rounds.length === 1 ? '' : 's'}${span ? ` in ${minutes(span)}` : ''}`
       : 'result only, no rounds recorded',

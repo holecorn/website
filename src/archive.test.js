@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { newGame, setBag, endRound } from './scoring.js';
+import { bracket, validTournament } from './tournament.js';
 import {
   RECORD_FORMAT,
   matchRecord,
@@ -12,6 +13,9 @@ import {
   mergeMatches,
   unexportedCount,
   newestEnd,
+  FILE_FORMAT,
+  archiveFile,
+  readArchiveFile,
 } from './archive.js';
 
 function wonGame(id = 'm1') {
@@ -43,6 +47,17 @@ describe('matchRecord', () => {
       first: 'a',
     });
     expect(record.winner).toBe('a');
+  });
+
+  it('carries no tournament key at all on an ordinary game', () => {
+    // Absent rather than null, so a record outside a tournament keeps the shape it
+    // had before they existed — `bracket` reads a missing key as "not a tie".
+    expect('tournament' in matchRecord(wonGame(), 900)).toBe(false);
+  });
+
+  it('stamps the tournament a tie belongs to', () => {
+    const game = { ...wonGame(), tournament: 't1' };
+    expect(matchRecord(game, 900).tournament).toBe('t1');
   });
 
   it('copies rather than references, so later play cannot rewrite history', () => {
@@ -270,11 +285,16 @@ describe('unexportedCount', () => {
 // fixture half-importing with nothing to say so — and the generator only validates
 // at the moment it writes.
 describe('the sample archive fixture', () => {
-  const sample = JSON.parse(
-    readFileSync(new URL('../tools/fixtures/sample-archive.json', import.meta.url), 'utf8'),
+  const file = readArchiveFile(
+    JSON.parse(readFileSync(new URL('../tools/fixtures/sample-archive.json', import.meta.url), 'utf8')),
   );
+  const sample = file?.matches ?? [];
 
-  it('is a list every record of which the app would accept', () => {
+  it('is a file the app would import', () => {
+    // Read through `readArchiveFile` rather than parsed as an array, because that is
+    // what Import does — and a fixture that carried the ties but not the brackets would
+    // import without complaint and leave every tournament pointing at nothing.
+    expect(file).not.toBeNull();
     expect(sample.length).toBeGreaterThan(0);
     expect(sample.filter((m) => !validRecord(m))).toEqual([]);
   });
@@ -296,5 +316,87 @@ describe('the sample archive fixture', () => {
     const once = mergeMatches([], sample);
     expect(once).toHaveLength(sample.length);
     expect(mergeMatches(once, sample)).toHaveLength(sample.length);
+  });
+});
+
+describe('archiveFile and readArchiveFile', () => {
+  const match = matchRecord(wonGame(), 900);
+  const tournament = { id: 't1', entrants: [['Neil'], ['Sigma']] };
+
+  it('writes an envelope carrying both', () => {
+    expect(archiveFile([match], [tournament])).toEqual({
+      format: FILE_FORMAT,
+      matches: [match],
+      tournaments: [tournament],
+    });
+  });
+
+  it('round-trips', () => {
+    const parsed = JSON.parse(JSON.stringify(archiveFile([match], [tournament])));
+    expect(readArchiveFile(parsed)).toEqual({ matches: [match], tournaments: [tournament] });
+  });
+
+  it('still reads an export taken before tournaments existed', () => {
+    // A bare array is every file exported so far, and those have to keep importing.
+    expect(readArchiveFile([match])).toEqual({ matches: [match], tournaments: [] });
+  });
+
+  it('tolerates an envelope with no tournaments in it', () => {
+    expect(readArchiveFile({ matches: [match] })).toEqual({ matches: [match], tournaments: [] });
+  });
+
+  it('refuses anything that is not an export', () => {
+    expect(readArchiveFile(null)).toBeNull();
+    expect(readArchiveFile('nope')).toBeNull();
+    expect(readArchiveFile({ tournaments: [] })).toBeNull();
+  });
+});
+
+// The tournaments in the same fixture. A bracket is derived from the draw plus the ties
+// tagged with its id, so the only way it can be wrong is for those two to disagree —
+// which no amount of validating either alone would catch.
+describe('the sample archive fixture, tournaments', () => {
+  const file = readArchiveFile(
+    JSON.parse(
+      readFileSync(new URL('../tools/fixtures/sample-archive.json', import.meta.url), 'utf8'),
+    ),
+  );
+  const views = file.tournaments.map((t) => ({ t, view: bracket(t, file.matches) }));
+
+  it('carries some, and every one of them is usable', () => {
+    expect(file.tournaments.length).toBeGreaterThan(0);
+    expect(file.tournaments.filter((t) => !validTournament(t))).toEqual([]);
+    expect(views.filter((x) => !x.view)).toEqual([]);
+  });
+
+  it('has every tie matched to a record in the same file', () => {
+    // The failure this exists for: a tie whose two sides no record holds is a bracket
+    // that can never be finished, and nothing about either half on its own says so.
+    for (const { t, view } of views) {
+      const played = view.ties.filter((x) => x.match).length;
+      expect(played, t.name).toBe(view.played);
+      expect(view.played, t.name).toBeGreaterThan(0);
+    }
+  });
+
+  it('has both a finished tournament and one still running', () => {
+    // Both states are worth having something to look at, and each is a different screen:
+    // a champion with an openable bracket, and a live one with ties to play.
+    expect(views.some((x) => x.view.done)).toBe(true);
+    expect(views.some((x) => !x.view.done && x.view.playable.length > 0)).toBe(true);
+  });
+
+  it('has a field with preliminaries and one without', () => {
+    // The two shapes behave differently everywhere — a power of two has no deepest
+    // ragged column — so a fixture with only one of them exercises half the layout.
+    const rounds = views.map((x) => x.view.shape);
+    expect(rounds.some((s) => s.rounds > Math.log2(s.size))).toBe(true);
+    expect(rounds.some((s) => s.rounds === Math.log2(s.size))).toBe(true);
+  });
+
+  it('has a doubles tournament, where an entrant is a pair', () => {
+    const pairs = file.tournaments.find((t) => t.mode === 'doubles');
+    expect(pairs).toBeDefined();
+    expect(pairs.entrants.every((e) => e.length === 2 && e.every(Boolean))).toBe(true);
   });
 });

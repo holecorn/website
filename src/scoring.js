@@ -72,6 +72,12 @@ export function newGame(target = DEFAULT_TARGET) {
     // a second value of `mode` — it is orthogonal to singles/doubles, and unlike
     // mode it changes nothing about scoring or where people stand.
     casual: false,
+    // The tournament this game is a tie in, or null for an ordinary game. Unlike
+    // `mode` and `casual` it is deliberately **not** sticky across `New game`: a
+    // tournament runs over weeks, so a mode left on would still be on a fortnight
+    // later and would file a friendly as a tie. It is set only by picking a tie off
+    // the bracket, which is what makes that unreachable.
+    tournament: null,
     target,
     rounds: [],
     current: { a: emptyPositions(), b: emptyPositions() },
@@ -95,6 +101,24 @@ export const TEAM_JOIN = ' & ';
 // disagree about whether two spellings are the same person.
 export function nameKey(name) {
   return String(name ?? '').trim().toLowerCase();
+}
+
+// A side with nobody identifiable on it. Not a real side: `sideRecord` reports no
+// matchup for one and a tournament cannot seat one.
+export const NO_SIDE = '[]';
+
+// Who a *side* is, the way `nameKey` says who a person is: the set of people on it,
+// so the same two players are the same side whichever team letter they held and
+// whichever order they were entered in. It takes names rather than a match because a
+// tournament's entrants are bare sides that have not played yet — `stats.js` wraps it
+// with `rosterFor` for the match-shaped case.
+//
+// Here rather than in stats.js for the reason `nameKey` is here: the career fold, the
+// head-to-head pairs and the bracket all have to agree about what "the same side"
+// means, and two definitions of that is the failure with no symptom.
+export function sideKeyOf(names) {
+  const keys = (names ?? []).map(nameKey).filter(Boolean);
+  return JSON.stringify([...new Set(keys)].sort());
 }
 
 // Which board a player slot stands at. The slot index *is* the end in doubles,

@@ -369,6 +369,21 @@ await mkdir(out, { recursive: true });
 await page.screenshot({ path: join(out, 'stats-screen.png'), fullPage: true });
 console.log(`  screenshot -> tools/out/stats-screen.png`);
 
+// Nothing in this archive is a tournament tie, so the key must not be drawn — it is only
+// worth its line when the list actually holds one. The marking itself is covered in
+// verify-tournament.mjs, which has a tournament to mark.
+check('no tournament key with no tournaments', (await page.locator('.recent-key').count()) === 0);
+
+// The dev-only wipe must not reach a shipped build. It is gated on `import.meta.env.DEV`,
+// which Vite eliminates — so this asserts the elimination rather than the gate, because a
+// gate that stopped working would look identical in the source. Checked here because
+// these run against a production preview; in `npm run dev` the control is present and
+// this assertion would rightly fail.
+check(
+  'the dev wipe is not in the built app',
+  (await page.locator('.dev-reset').count()) === 0 &&
+    !(await page.getByRole('button', { name: /Wipe local history/ }).count()),
+);
 check('export is offered', await page.getByRole('button', { name: 'Export as JSON' }).isEnabled());
 const [download] = await Promise.all([
   page.waitForEvent('download'),
@@ -377,7 +392,16 @@ const [download] = await Promise.all([
 const dump = join(out, 'exported-matches.json');
 await download.saveAs(dump);
 const exported = JSON.parse(await readFile(dump, 'utf8'));
-check('export contains both matches', exported.length === 2, `${exported.length}`);
+check('export contains both matches', exported.matches?.length === 2, `${exported.matches?.length}`);
+// The envelope, not a bare array of matches. A file that carries the ties but not the
+// brackets imports without complaint and leaves every tournament pointing at nothing,
+// which is the failure mode this shape exists to prevent — so it is asserted as a
+// *key*, present and a list, rather than by seeding a tournament to fill it.
+check(
+  'and an envelope with somewhere for the brackets to travel',
+  Array.isArray(exported.tournaments),
+  JSON.stringify(Object.keys(exported)),
+);
 check(
   'the export nudge clears once exported',
   !(await page.getByText('since your last export').count()),

@@ -6,6 +6,7 @@ import Logo from './Logo.jsx';
 import Positions from './Positions.jsx';
 import ScoreboardSettings from './ScoreboardSettings.jsx';
 import Stats from './Stats.jsx';
+import Tournament from './Tournament.jsx';
 import {
   archiveMatch,
   dropMatch,
@@ -46,6 +47,16 @@ import {
   teamLabel,
   winVerb,
 } from './scoring.js';
+import {
+  bracket,
+  dropTournament,
+  levelName,
+  loadTournaments,
+  saveTournament,
+  tieFor,
+  tieSetup,
+} from './tournament.js';
+import { NAME_FIELD } from './nameField.js';
 import './App.css';
 
 const STORAGE_KEY = 'holecorn.game.v3';
@@ -166,6 +177,16 @@ function reducer(game, action) {
       // after a win would strand a record the archive effect can no longer see to
       // remove, and flipping it mid-game would rename every committed round.
       return gameStarted(game) ? game : { ...game, casual: action.value };
+    // Put a tie back and go on playing something else. Only before a bag is thrown,
+    // the same gate `setCasual` has and for the same reason: once rounds are committed
+    // the game is on its way to the archive, and untagging it there would take the tie
+    // out of its bracket while leaving the record behind.
+    //
+    // The lineup stays. It is two people who were about to play, which is a reasonable
+    // thing to start an ordinary game from, and clearing it would be destroying
+    // something to make a point.
+    case 'clearTie':
+      return gameStarted(game) ? game : { ...game, tournament: null };
     case 'setTarget':
       return { ...game, target: action.value };
     case 'start':
@@ -186,6 +207,20 @@ function reducer(game, action) {
         // in view: a run of casual games can't quietly outlast the guests.
         casual: game.casual,
         startSide: game.startSide,
+        // `tournament` is deliberately absent from this list, so `newGame()`'s null
+        // stands: a tournament runs over weeks, and a tie-ness left switched on would
+        // file the next friendly as a tie. The only way to set it is to pick a tie off
+        // the bracket.
+      });
+    // A tie off the bracket: the two sides, the mode and target the tournament was
+    // drawn with, and the id `matchRecord` stamps. The names are then fixed for the
+    // game, which is what makes a mis-typed tie unreachable rather than discouraged.
+    case 'playTie':
+      return identified({
+        ...newGame(action.setup.target),
+        colors: game.colors,
+        startSide: game.startSide,
+        ...action.setup,
       });
     default:
       return game;
@@ -207,6 +242,9 @@ export default function App() {
   // Held here rather than only inside Stats, because the pre-game form panel and
   // the scoreboard publisher both read it and both live above that screen.
   const [matches, setMatches] = useState(loadArchive);
+  // Held here rather than only inside the tournament screen, because a tie's banner needs
+  // the tournament it belongs to and Import writes them from the stats screen.
+  const [tournaments, setTournaments] = useState(loadTournaments);
   const confirmDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
   const archivedId = useRef(null);
@@ -386,6 +424,23 @@ export default function App() {
     return [...seen.values()].sort((x, y) => x.localeCompare(y));
   }, [matches]);
 
+  if (screen === 'tournament') {
+    return (
+      <Tournament
+        tournaments={tournaments}
+        matches={matches}
+        knownNames={knownNames}
+        onBack={() => setScreen('setup')}
+        onCreate={(t) => setTournaments(saveTournament(t))}
+        onDrop={(t) => setTournaments(dropTournament(t.id))}
+        onPlayTie={(t, tie) => {
+          dispatch({ type: 'playTie', setup: tieSetup(t, tie) });
+          setScreen('setup');
+        }}
+      />
+    );
+  }
+
   if (screen === 'stats') {
     // Stats owns its own copy while it is open, because it deletes, restores and
     // imports; re-reading on the way out is what keeps the form panel and the
@@ -393,7 +448,11 @@ export default function App() {
     return (
       <Stats
         onBack={() => {
+          // Tournaments as well as matches: Import writes both, and a bracket that is in
+          // storage but not in state is a tournament the setup button cannot announce
+          // and the screen cannot draw until a reload.
           setMatches(loadArchive());
+          setTournaments(loadTournaments());
           setScreen('setup');
         }}
         persisted={persisted}
@@ -410,8 +469,17 @@ export default function App() {
     );
   }
 
+  // The tournament this game is a tie in.
+  const liveTournament = tournaments.find((t) => t.id === game.tournament) ?? null;
+  const liveView = liveTournament ? bracket(liveTournament, matches) : null;
+  const playingTie = tieFor(liveView, game);
+
   if (screen === 'setup') {
     const faults = lineupFaults(game);
+    // A tie's lineup and mode come from the bracket, so the setup screen shows them
+    // rather than offering them: changing either would re-credit the tie to people who
+    // are not in the tournament, and `bracket` would then never find the match.
+    const tie = Boolean(game.tournament);
     // One sentence per fault the lineup actually has: which name is doubled is
     // worth saying, which box is empty is not — you can see that.
     const twice = [...new Set(faults.filter((f) => f.fault === 'twice').map((f) => f.name))];
@@ -436,6 +504,7 @@ export default function App() {
               <button
                 key={m}
                 className={game.mode === m ? 'is-on' : ''}
+                disabled={tie}
                 onClick={() => dispatch({ type: 'setMode', mode: m })}
               >
                 {m === 'singles' ? 'Singles' : 'Doubles'}
@@ -449,6 +518,7 @@ export default function App() {
           <button
             type="button"
             className={`casual-toggle${game.casual ? ' is-on' : ''}`}
+            disabled={tie}
             onClick={() => dispatch({ type: 'setCasual', value: !game.casual })}
             aria-pressed={game.casual}
             aria-label="Guests: take no names and record nothing"
@@ -478,11 +548,29 @@ export default function App() {
             {hint.join(' ')}
           </p>
         )}
+        {tie && (
+          <p className="tie-banner">
+            {liveTournament?.name ?? 'Tournament'}
+            {playingTie ? ` · ${levelName(playingTie.level, liveView.shape)}` : ''} — the draw
+            sets who plays.{' '}
+            {/* The only way out of a tie picked by mistake. Without it the screen has
+                one exit, `Start`, so backing out means playing the tie or abandoning a
+                started game. */}
+            <button
+              type="button"
+              className="tie-leave"
+              onClick={() => dispatch({ type: 'clearTie' })}
+            >
+              Leave tie
+            </button>
+          </p>
+        )}
         <TeamsFields
           game={game}
           dispatch={dispatch}
           knownNames={knownNames}
           faults={faults}
+          locked={tie}
           onSetFirst={(team, slot) => dispatch({ type: 'throwFirst', team, slot })}
           onSwapEnds={(team) => dispatch({ type: 'swapEnds', team })}
         />
@@ -491,6 +579,14 @@ export default function App() {
           game={game}
           onSwapSides={(side) => dispatch({ type: 'setStartSide', side })}
         />
+        {/* Text rather than a field on a tie, the way the names are: the target is fixed
+            at the draw like the mode is, so every tie in one bracket is played on the same
+            terms. The bracket would not notice a tie played to 12 among ties played to 21
+            — it reads only the two sides and the winner — which is exactly why nothing
+            would ever say it had happened. */}
+        {tie ? (
+          <p className="target-fixed">Play to {game.target}</p>
+        ) : (
         <label className="target-field">
           Play to
           <input
@@ -515,6 +611,7 @@ export default function App() {
             }}
           />
         </label>
+        )}
         <ScoreboardSettings
           config={sbConfig}
           onChange={setSbConfig}
@@ -524,9 +621,14 @@ export default function App() {
         {/* Nobody's history to report, and the slots' default names have one that
             isn't theirs — the same trap `lineupPayload` guards on the board. */}
         {!game.casual && <Lineup game={game} colors={game.colors} matches={matches} />}
-        <button className="setup-stats" onClick={() => setScreen('stats')}>
-          Stats
-        </button>
+        <div className="setup-links">
+          <button className="setup-stats" onClick={() => setScreen('tournament')}>
+            Tournaments
+          </button>
+          <button className="setup-stats" onClick={() => setScreen('stats')}>
+            Stats
+          </button>
+        </div>
         <Footer />
       </div>
     );
@@ -722,9 +824,22 @@ export default function App() {
 // swatches are the only thing on the setup screen that still matters — but the name
 // fields become the colour as text and the board chip goes: with both partners
 // labelled alike, reordering the pair changes nothing anybody can see.
-function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSwapEnds }) {
+function TeamsFields({
+  game,
+  dispatch,
+  knownNames,
+  faults = [],
+  locked = false,
+  onSetFirst,
+  onSwapEnds,
+}) {
   const doubles = game.mode === 'doubles';
   const casual = game.casual;
+  // A tie's names come from the draw, so they are shown rather than offered. Only the
+  // names: who throws first and which partner is at which board are still the
+  // scorer's, and neither can move a tie to different people — `sideKeyOf` reads a
+  // side as a set, so reordering a pair leaves the bracket's match unchanged.
+  const fixed = casual || locked;
   const slots = doubles && !casual ? [0, 1] : [0];
   // The hint says what is wrong; this says where, because four boxes and one
   // sentence leaves you counting.
@@ -734,7 +849,7 @@ function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSw
       {/* Names already in the archive. A returning player is picked rather than
           retyped, which is where near-duplicate spellings come from. Ignored
           where datalist is unsupported, leaving a plain field. */}
-      {!casual && knownNames.length > 0 && (
+      {!fixed && knownNames.length > 0 && (
         <datalist id="known-names">
           {knownNames.map((name) => (
             <option key={name} value={name} />
@@ -771,7 +886,7 @@ function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSw
                     ) : (
                       <span className="first-bag-spacer" aria-hidden="true" />
                     )}
-                    {casual ? (
+                    {fixed ? (
                       <span
                         className="team-name-static"
                         style={{ color: game.colors[team] }}
@@ -781,6 +896,7 @@ function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSw
                     ) : (
                       <input
                         className="team-name-input"
+                        {...NAME_FIELD}
                         value={name}
                         maxLength={16}
                         list={knownNames.length > 0 ? 'known-names' : undefined}
@@ -793,7 +909,7 @@ function TeamsFields({ game, dispatch, knownNames, faults = [], onSetFirst, onSw
                         aria-label={
                           doubles
                             ? `Team ${team.toUpperCase()} player at the ${here} board`
-                            : `Team ${team.toUpperCase()} player name`
+                            : `Team ${team.toUpperCase()} player`
                         }
                       />
                     )}

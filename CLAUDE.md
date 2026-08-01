@@ -38,6 +38,15 @@ project dependency. It starts and stops its own preview server.
 - `src/stats.js` — career stats over archived matches. Pure, like `scoring.js`;
   tested in `src/stats.test.js`.
 - `src/Stats.jsx` / `src/Stats.css` — the career stats screen.
+- `src/tournament.js` — the knockout bracket. Pure like `scoring.js`, plus the
+  localStorage wrapper the way `archive.js` splits it. **Stores the draw and derives
+  the rest** — see **Tournaments**. Tested in `src/tournament.test.js`.
+- `src/Tournament.jsx` / `src/Tournament.css` — the tournament screen: takes the
+  draw, draws the bracket, hands a tie to the scoring screen. Draws only.
+- `src/Modal.jsx` — a dialog that opens by being mounted, shared by the stats and
+  tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
+- `src/nameField.js` — `NAME_FIELD`, the props every person-name field needs to stop
+  the browser's own contact autofill fighting the archive's suggestions.
 - `src/Lineup.jsx` / `src/Lineup.css` — the setup screen's pre-game form panel.
   Draws only; `lineupStats()` and `sideRecord()` in `stats.js` derive it.
 - `src/GameStats.jsx` / `src/GameStats.css` — the in-game stats panel. Draws only;
@@ -945,6 +954,96 @@ project dependency. It starts and stops its own preview server.
   `endedAt`, not a match count, so pruning the oldest can't make it go
   backwards.
 
+## Tournaments
+
+A knockout, drawn once and played over weeks. `docs/TOURNAMENT.md` holds the decisions and
+the alternatives that were rejected; this section holds what breaks when you change it.
+
+- **`src/tournament.js` stores the draw and derives everything else.** A tournament holds its
+  entrants *in the order they came out of the hat* and nothing about progress. Who is through,
+  which round a tie belongs to, which ties can be played, who won — all computed from that
+  draw plus the archived matches carrying the tournament's id.
+  - **So undoing a winning round un-archives the tie and the bracket recomputes**, with
+    nothing to un-advance. That is the whole reason for the shape; a stored tree would need
+    the win → undo → re-win cycle to un-advance a node, and a bracket disagreeing with the
+    archive **has no symptom**.
+  - **Nothing on a record says where in the bracket it sat.** The two *sides* say it, because
+    a knockout lets two sides meet at most once, so within one tournament a pair of sides
+    identifies exactly one tie. Don't add a round or a position to the record.
+  - **`tieLabels` is the way round for a screen holding a match**, and it builds one bracket
+    per *tournament* rather than one per match — a hundred matches would otherwise compute a
+    hundred brackets.
+- **`sideKeyOf` in `scoring.js` is the competitor identity**, and it is why singles and fixed
+  doubles pairs are one concept: an unordered, deduped set of name keys, so the same people
+  are the same side whichever team letter and slot order they held. It moved out of `stats.js`
+  for the reason `nameKey` did — the career fold, the head-to-head pairs and the bracket all
+  have to agree, and two definitions of "the same side" is the failure with no symptom.
+- **The bracket's shape is forced, which is what makes generating it safe.** Kraft equality
+  fixes the depths: for 11 entrants exactly six must win four ties and five must win three, in
+  *every* arrangement. So no draw is fairer than another and the only free choice is which
+  seats hold the preliminaries. This one alternates halves top-down because that reproduces
+  the paper sheet — for 11 it puts them at seats 1, 2 and 5, which is the Hole Corn V sheet
+  exactly, and `bracketShape` is pinned to that.
+- **Above the deepest level the tree is *perfect*, and the drawn bracket rests on it.** All
+  the raggedness of an uneven field is in the deepest column, where a seat is a preliminary
+  tie or a lone bye. So every parent has exactly two children and sits exactly between them,
+  which is why the connectors are pure CSS with nothing measured.
+  - **Every box must be the same height** or that stops being true. `.tie-sides` reserves two
+    rows' worth whether or not it holds two — verified by mutation, removing it gives 68px and
+    44px. The fixed `line-height` beside it is **not** load-bearing today; it guards a font
+    whose natural metrics exceed 22px, which is real given the runner's `system-ui` differs.
+  - **A playable box is the button, and that is a width and height decision.** A control
+    beside the names would take a third of a 176px column; one below would make the box
+    taller. The `▶` is absolutely positioned, and playable boxes reserve a 20px gutter so it
+    cannot sit on a long name — measured, names get 287px against 307px, zero overlaps at 16
+    characters.
+- **A tie's names, mode and target are all fixed by the draw.** The lineup because
+  `throwerFor` credits rounds by slot and `bracket` finds a tie by its sides; the mode and
+  target because a bracket where one tie was played to 12 among ties played to 21 is not one
+  competition — and the bracket would never notice, which is exactly why nothing would say it
+  had happened.
+  - **`Leave tie` is the only exit**, and it has to exist: with the names locked and nothing
+    else on the screen, `Start` was the sole way off it. Gated on `gameStarted` for the reason
+    `setCasual` is.
+  - **`game.tournament` is deliberately not sticky across `New game`**, unlike `mode` and
+    `casual`. A tournament runs over weeks, so a tie-ness left on would file the next friendly
+    as a tie — silently, into somebody else's bracket. Picking a tie off the bracket is the
+    only thing that sets it.
+- **`entrantFaults` has to agree with `lineupFaults`**, or the draw succeeds and produces a
+  tie nobody can start. It did once: `sideKeyOf` filters blanks, so a doubles pair with one
+  half empty read as a good one-person side, the draw took it, and `Start` then stayed off
+  for ever. A side needs as many people as it has slots, and every slot named.
+- **The record carries only the tournament's id, and only when there is one.** Absent rather
+  than null on an ordinary game, the way `winner` is absent while a game is live, so a
+  record outside a tournament keeps exactly the shape it had before tournaments existed.
+- **Export grew an envelope for this.** A bare array of matches carries the ties but not the
+  brackets, so it imports without complaint and leaves every tournament pointing at nothing.
+  `readArchiveFile` still accepts a bare array, because that is every file exported before —
+  the merge-on-load tolerance, not a bumped key. Import writes tournaments **first**, or a
+  tie lands before the bracket it belongs to.
+  - **`mergeTournaments` keeps the local copy, the opposite of `mergeMatches`.** A tournament
+    is fixed the moment it is drawn, so two copies of one id are the same draw and an incoming
+    one cannot be more right. `mergeMatches` needs `updatedAt` because records get edited.
+  - **`saveTournaments` has no drop-the-oldest retry**, unlike `saveArchive`: losing a bracket
+    to make room would take its ties' meaning with it while leaving the ties in the archive.
+- **Deleting a tournament asks, where deleting a match offers an undo.** Deliberately
+  opposite: a match is deleted often enough that a confirm is in the way, a tournament about
+  once a year, its button sits under the bracket you were reading, and there is a fact an undo
+  bar cannot carry — the ties stay in the archive and keep counting. The dialog says so, and
+  `verify-tournament.mjs` checks the claim is true rather than only that it is made.
+- **`.tournament-screen` must be excluded from the wide tier's grid in `App.css`**, the same
+  trap `.stats-screen` already carries. Without it the screen took the play screen's grid: a
+  bracket drawing in 408px with 340px reserved for a rail that never renders.
+- **The label says "Winner" and the model says `champion`**, deliberately. `winner` is
+  already the winner of a single *tie* (`tie.winner`, `.tie-side.is-winner`,
+  `.winner-banner`), and one bracket has ten of those and exactly one champion.
+- **A tournament runs over weeks, and that is the sharpest risk in the feature.**
+  `localStorage` is per browser and a home-screen app is a different container from a Safari
+  tab, so whichever device takes the draw must score every tie — and ITP deletes
+  script-writable storage after seven days of Safari use without visiting the site, so a gap
+  of more than a week between ties in a *tab* takes the archive with it. Not a coding problem;
+  `requestPersistence` already runs and the stats screen already reports the answer.
+
 ## Editing names
 
 - **Rewriting a record's `players` array *is* the reattribution, and that is the
@@ -1037,6 +1136,27 @@ project dependency. It starts and stops its own preview server.
   last game's names, so it is a *new* player being typed that goes wrong. Default
   names show up in the list because they are genuinely in the archive — filtering
   them would be a lie about the history.
+  - **`NAME_FIELD` in `src/nameField.js` is what stops the browser's own contact
+    autofill fighting that list, and it takes all three of its properties to do it.**
+    Safari offered the machine's address book on top of the archive's suggestions, on
+    macOS and iOS both — two popups, and the useless one wins. Each lever looks
+    pointless alone, so **don't tidy any of them away**:
+    - `autoComplete: 'off'` — respected by Chrome, and **ignored by Safari**, which
+      treats the address book as the user's choice rather than the page's. Easy to
+      delete as dead code on that basis; it is not dead in Chrome.
+    - **No label may contain the word "name."** Safari's heuristic reads the field's
+      label, which is why these say `Team A player` and `Entrant 3`. The singles field
+      said `Team A player name` and that alone was enough to trigger it.
+    - `name: 'holecorn-slot'` — the heuristic also weighs `name`/`id`, and these had
+      neither, so the label was the only thing it had. The value's whole job is to
+      match none of `name`, `fname`, `fullname` and the rest.
+    - **It does not disable the `datalist`.** Autofill and `<datalist>` are separate
+      mechanisms and `list` still binds — worth knowing before "fixing" this by
+      removing the attribute. `verify-tournament.mjs` asserts both halves over every
+      name field on a screen, so a new one without `NAME_FIELD` fails.
+    - **Whether the address book actually stops appearing cannot be checked here**,
+      for the same reason the popup below can't: it is native browser UI. Confirmed by
+      hand on macOS and iOS Safari, which is the only way there is.
   - **How the list is drawn is the browser's, and nothing about it is ours to style.**
     Neither popup inherits the field's font — both use the system UI font — so the
     field's `700 18px` is not a lever on it, and there is no selector for the items.
@@ -1893,6 +2013,29 @@ change silently stops matching the panel until someone regenerates. These were
 manual for a while and drifted twice — a fixture that claimed to be "exactly
 what `scoreboardPayload()` produces" but was missing a field, and two characters
 `FONT_CHARS` advertised with blank glyphs behind them.
+
+`tools/verify-tournament.mjs` covers the tournament, and the block it exists for is
+**reversibility**: win a tie, undo the winning round, and the bracket goes back to
+nothing played with every opening tie live again. `tournament.js` is pure and unit
+tested, so everything here is about the wiring — that a tie loads locked and tagged,
+that `New game` clears the tie-ness, that an imported bracket appears without a
+reload. Each was verified by mutation.
+
+**That file taught the same two lessons repeatedly, and they are worth knowing before
+adding to it:**
+
+- **A bare `waitForSelector` swallows a mutation.** Three times, a mutation removed
+  the thing under test, the wait timed out, and the run *ended* — naming nothing and
+  skipping every block below. Waits that are really assertions go through a helper
+  that reports instead of throwing.
+- **An assertion that passes for the wrong reason is the normal failure mode, not a
+  rare one.** Five in this file: two measured `0 of 0` on a fixture with nothing to
+  count, two compared rendered text width where the property was about available
+  space (`45px vs 135px` looked like a regression and was not), and one ran on a
+  fresh tournament whose live ties are in the outermost round anyway, so pinning the
+  opening round to zero passed. The habit is reaching for whatever is easiest to
+  query rather than the quantity the property is about. **Check what a mutation
+  actually prints**, not merely that something failed.
 
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so

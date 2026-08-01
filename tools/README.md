@@ -10,7 +10,7 @@ those outputs are current, so a stale `firmware/hub75/glyphs.h` or
 `src/panelGlyphs.js` is left rewritten in your working tree along with the
 failure. That is the fix, so commit it.
 
-Two scripts need nothing at all:
+Four scripts need nothing at all:
 
 `import-legacy.mjs` turns a text file of written-down results into an archive
 file the stats screen can import, and validates it with the app's own
@@ -25,7 +25,26 @@ transcribed ones through `import-legacy.mjs`, so a fixture can't disagree with
 the rules it exists to exercise. Seeded and dated absolutely, so re-running
 produces no diff; the dates will age, and `FIRST`/`LAST` are where to bump them.
 `src/archive.test.js` holds the committed file to `validRecord`, because
-`mergeMatches` drops a bad record silently.
+`mergeMatches` drops a bad record silently. It also carries three tournaments —
+one finished doubles, one finished singles with preliminaries, one still running —
+played tie by tie through the real `bracket()`, so the draw and the results it is
+derived from cannot disagree.
+
+`make-stress-archive.mjs` writes `out/stress-archive.json`, which is the same idea
+taken to an unreasonable extreme: ~900 matches, ~9,700 rounds, 78 players and six
+tournaments including a 64-entrant bracket (six rounds, "Round of 64" headings),
+the worst possible ragged shape at 31 entrants, 32 doubles pairs, and one left part
+way through with 18 ties playable at once. Names sit at the app's 16-character cap,
+in Greek script, and one contains " & " so `winVerb` reads a singles player as a
+pair. **Not checked in** — it runs to megabytes and `out/` is gitignored, so
+generate it when you want it. It reports its own size against the 5MB localStorage
+budget, which is a limit the app really hits: `saveArchive` drops the oldest match
+and retries on a failed write.
+
+Both fixture generators share `lib/fixture.mjs`, which is where the seeded PRNG and
+the play-it-through-the-real-functions machinery lives. The sample must regenerate
+byte-identically after any change there — that is the check that a change to the
+shared code has not quietly moved the committed file.
 
 Everything else here drives a browser and needs Playwright, which is deliberately
 **not** a project dependency:
@@ -94,6 +113,7 @@ assert.
 | `verify-copy-link.mjs` | Checks **Copy display link** puts the link on the clipboard, falls back to a manual-copy dialog when the Clipboard API is missing or refuses (plain http, denied permission), and that the **QR code** rasterises and decodes back to the display link. Needs `npm run preview`. |
 | `verify-positions.mjs` | Checks the court diagram and the in-game stats panel: that the court names the same thrower the scoring lanes do (two independent derivations that App.jsx could still cross over), that the phone toggles and the persistent wide-screen column are the same panels, that the rail runs court/stats/history, that the stats follow the live game round by round, and that the four-bagger badge isn't clipped by a long name. Needs `npm run preview`. |
 | `verify-lanes.mjs` | Measures the scoring lanes across nine device sizes: the bag token square and centred, the lane track within its 72px cap and above the 44px touch minimum, the card free of dead space with the End round button matching its width, the lane actually *reaching* the cap where there's room (which is what holds `.main`'s 408px against the intrinsic width of the tier labels), and the wide and compact tiers never both matching. Needs `npm run preview`. |
+| `verify-tournament.mjs` | The tournament, driven end to end: the draw builds the bracket the paper sheet has, a tie loads locked and tagged, `Leave tie` puts it back, and — the one it exists for — **undoing a winning round un-archives the tie and the bracket recomputes**, since nothing about its progress is stored. Also the drawn bracket's geometry (columns evenly pitched, headings over their own column, every box one height), the phone's `‹ ›` paging, the delete confirmation, and that name fields refuse contact autofill. Needs `npm run preview`. |
 | `verify-panel.mjs` | Checks the `?panel=1` LED-panel emulator: that the querystring still routes there rather than falling through to the scoring app, and that `panelPaint.js` actually puts the framebuffer's light on the canvas — sampled at LED centres, against the no-state screen, which needs no broker. What the framebuffer *contains* is not checked here; `npm run test:firmware` pins that against the firmware far more tightly. Needs `npm run preview`. |
 | `verify-wakelock.mjs` | Drives a fake `navigator.wakeLock` to check the display re-acquires the lock after the system reclaims it, and degrades to a slow retry rather than spinning. Needs `npm run preview`. |
 | `verify-winner-flash.mjs` | Checks the winner's digits alternate solid/hollow, that only the winning side is affected, and that the flash is skipped under reduced motion. **Manual** — needs `npm run dev` and a reachable MQTT broker. |

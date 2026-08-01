@@ -17,10 +17,21 @@
 // Nothing here calls Date.now() or Math.random().
 
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
-import { PALETTE, newGame, setBag, endRound, nameKey } from '../src/scoring.js';
-import { matchRecord, validRecord } from '../src/archive.js';
+import { nameKey } from '../src/scoring.js';
+import { archiveFile, validRecord } from '../src/archive.js';
+import { bracket, validTournament } from '../src/tournament.js';
 import { parseGames } from './import-legacy.mjs';
+import {
+  DAY,
+  at,
+  colours,
+  idFor,
+  iso,
+  pick,
+  playMatch as playMatchWith,
+  playTournament as playTournamentWith,
+  rng,
+} from './lib/fixture.mjs';
 
 const OUT = new URL('fixtures/sample-archive.json', import.meta.url).pathname;
 
@@ -49,28 +60,6 @@ const SKILL = {
   Upsilon: { hole: 0.22, board: 0.4 },
 };
 
-// mulberry32. A checked-in fixture has to regenerate byte-identically or every
-// run shows up as a diff, so the randomness is seeded rather than real.
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const pick = (r, list) => list[Math.floor(r() * list.length)];
-
-// Stable and 32 hex characters, matching what import-legacy.mjs emits: the id is
-// what makes importing idempotent, so it must not move between runs, and hashing
-// keeps it clear of anything a person might type.
-const idFor = (slug) => createHash('sha256').update(slug).digest('hex').slice(0, 32);
-
-const DAY = 86_400_000;
-const at = (iso, hour) => new Date(`${iso}T00:00:00Z`).getTime() + hour * 3_600_000;
-const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
 
 // Sessions from summer 2023 to summer 2026, a few weeks apart and clustered into
 // the warmer months — this is played on a seafront. Dates are absolute so the
@@ -92,50 +81,10 @@ function sessions(r) {
   return out;
 }
 
-// Two teams can never share a colour — the app's swatches enforce it, so a
-// fixture that broke it would be showing something unreachable.
-function colours(r) {
-  const a = Math.floor(r() * PALETTE.length);
-  let b = Math.floor(r() * (PALETTE.length - 1));
-  if (b >= a) b += 1;
-  return { a: PALETTE[a].value, b: PALETTE[b].value };
-}
 
-function throwBag(r, skill) {
-  const n = r();
-  if (n < skill.hole) return 'hole';
-  if (n < skill.hole + skill.board) return 'board';
-  return 'floor';
-}
-
-// One match, played bag by bag through scoring.js. Returns null if it somehow
-// fails to finish — cancellation between two evenly matched sides can wash for a
-// long time, and a fixture must not depend on that never happening.
-function playMatch(r, { id, startedAt, mode, players, colors, target }) {
-  let game = {
-    ...newGame(target),
-    id,
-    startedAt,
-    mode,
-    players: { a: players.a.slice(), b: players.b.slice() },
-    colors,
-  };
-  for (let n = 0; n < 40 && !game.winner; n += 1) {
-    // The slot that throws this round, mirroring throwerSlot in stats.js.
-    const slot = mode === 'doubles' ? game.rounds.length % 2 : 0;
-    for (const team of ['a', 'b']) {
-      const skill = SKILL[players[team][slot]] ?? SKILL.Psi;
-      for (let bag = 0; bag < 4; bag += 1) {
-        game = setBag(game, team, bag, throwBag(r, skill));
-      }
-    }
-    game = endRound(game);
-  }
-  if (!game.winner) return null;
-  // About a minute and a half a round, so "avg length" on the stats screen reads
-  // like a game rather than a number nobody chose.
-  return matchRecord(game, startedAt + game.rounds.length * 95_000);
-}
+// The shared versions, with this fixture's skill table bound in. See tools/lib/fixture.mjs.
+const skillFor = (name) => SKILL[name] ?? SKILL.Psi;
+const playMatch = (r, spec) => playMatchWith(r, skillFor, spec);
 
 const r = rng(20260731);
 const all = sessions(r);
@@ -229,7 +178,67 @@ for (const t of modernDays) {
   }
 }
 
-const records = [...legacy, ...modern].sort((x, y) => x.endedAt - y.endedAt);
+// Three, so there is one of each thing to look at: a clean power of two with no
+// preliminaries, an uneven field that has them, and one still running — which is what
+// puts a bracket on the setup screen's button and leaves ties to play.
+const CUPS = [
+  {
+    id: idFor('holecorn-cup-iv'),
+    name: 'Hole Corn IV',
+    mode: 'doubles',
+    target: 21,
+    from: at('2025-06-14', 18),
+    entrants: [
+      [NEIL, 'Rho'],
+      ['Sigma', 'Tau'],
+      ['Phi', 'Chi'],
+      ['Eta', 'Psi'],
+    ],
+  },
+  {
+    id: idFor('holecorn-cup-v'),
+    name: 'Hole Corn V',
+    mode: 'singles',
+    target: 21,
+    from: at('2025-10-04', 18),
+    entrants: [NEIL, 'Rho', 'Sigma', 'Tau', 'Phi', 'Chi', 'Eta', 'Psi', 'Omega', 'Omicron'].map(
+      (n) => [n],
+    ),
+  },
+  {
+    id: idFor('holecorn-cup-vi'),
+    name: 'Hole Corn VI',
+    mode: 'singles',
+    target: 21,
+    from: at('2026-06-20', 18),
+    // Left part way through on purpose, so the fixture has a live bracket with ties
+    // waiting rather than only finished ones.
+    stopAfter: 5,
+    entrants: [NEIL, 'Rho', 'Sigma', 'Tau', 'Phi', 'Chi', 'Eta', 'Psi', 'Omega', 'Omicron'].map(
+      (n) => [n],
+    ),
+  },
+];
+
+const tournaments = [];
+const tourneyTies = [];
+for (const cup of CUPS) {
+  const { tournament, ties } = playTournamentWith(r, skillFor, cup);
+  const view = bracket(tournament, ties);
+  if (!validTournament(tournament)) {
+    console.error(`rejected by validTournament: ${tournament.name}`);
+    process.exit(1);
+  }
+  // A cup that was meant to finish and did not is a broken fixture, not a live one.
+  if (cup.stopAfter === undefined && !view.done) {
+    console.error(`${tournament.name} did not reach a champion (${view.played}/${view.total})`);
+    process.exit(1);
+  }
+  tournaments.push(tournament);
+  tourneyTies.push(...ties);
+}
+
+const records = [...legacy, ...modern, ...tourneyTies].sort((x, y) => x.endedAt - y.endedAt);
 for (const record of records) {
   if (!validRecord(record)) {
     console.error(`rejected by validRecord: ${record.id}`);
@@ -238,16 +247,31 @@ for (const record of records) {
 }
 
 mkdirSync(new URL('fixtures/', import.meta.url).pathname, { recursive: true });
-// One record per line: pretty-printing puts every bag on its own line and makes
+// The export envelope rather than a bare list, because a file carrying the ties but not
+// the brackets imports without complaint and leaves every tournament pointing at
+// nothing. One record per line: pretty-printing puts every bag on its own line and makes
 // the diff unreadable, and a single line makes it unreviewable.
-writeFileSync(OUT, `[\n${records.map((m) => JSON.stringify(m)).join(',\n')}\n]\n`);
+const file = archiveFile(records, tournaments);
+writeFileSync(
+  OUT,
+  `{\n"format": ${file.format},\n"tournaments": [\n${tournaments
+    .map((x) => JSON.stringify(x))
+    .join(',\n')}\n],\n"matches": [\n${records.map((m) => JSON.stringify(m)).join(',\n')}\n]\n}\n`,
+);
 
 const people = new Set(
   records.flatMap((m) => [...m.players.a, ...m.players.b].map(nameKey).filter(Boolean)),
 );
 const rounds = records.reduce((n, m) => n + m.rounds.length, 0);
 console.log(
-  `${records.length} matches (${legacy.length} result-only, ${modern.length} scored), ` +
-    `${rounds} rounds, ${people.size} players, ${iso(records[0].endedAt)} to ` +
-    `${iso(records[records.length - 1].endedAt)}`,
+  `${records.length} matches (${legacy.length} result-only, ${modern.length} scored, ` +
+    `${tourneyTies.length} tournament ties), ${rounds} rounds, ${people.size} players, ` +
+    `${iso(records[0].endedAt)} to ${iso(records[records.length - 1].endedAt)}`,
 );
+for (const t of tournaments) {
+  const view = bracket(t, records);
+  console.log(
+    `  ${t.name}: ${t.entrants.length} entrants, ${view.played}/${view.total} ties, ` +
+      (view.champion ? `won by ${view.champion.names.filter(Boolean).join(' & ')}` : 'in progress'),
+  );
+}

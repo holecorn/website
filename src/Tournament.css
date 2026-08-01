@@ -1,0 +1,668 @@
+/* Its own file rather than appended to App.css, for the reason Stats.css is: that
+   file's responsive tiers have to stay last in source order, so adding base rules
+   there is a trap.
+
+   `.app.tournament-screen` and not `.tournament-screen` — the same trap again. Both
+   declarations below also exist on `.app`, and App.jsx imports this file before its
+   own stylesheet, so at equal specificity the single-class form would silently lose
+   and the screen would run at `.app`'s width. `.stats-head` and `.stats-back` are
+   reused from Stats.css rather than redeclared, the way Stats reuses `.modal`. */
+/* 1040px, the width the stats screen and the play screen's wide tier already use. The
+   bracket is the widest thing the app draws — four columns at 204px is 788px for eleven
+   entrants — and at 720px an iPad had to scroll a bracket it could have shown whole.
+   The controls that would rather not be a metre wide are capped individually below. */
+.app.tournament-screen {
+  max-width: 1040px;
+  gap: 20px;
+  /* How wide a shut row is, and so how wide everything that has to line up with one is.
+     One variable rather than the number written down four times, because the whole point is
+     that the edges agree. An *open* row is wider — it takes whatever its bracket needs — so
+     this is the resting width, which is the one worth aligning to: aligning to an open row
+     would move the controls about as brackets were opened and shut. */
+  --row-w: 560px;
+}
+
+/* Capped as an element rather than by narrowing the screen, so widening the screen for
+   the bracket does not stretch a column of name fields across an iPad. */
+.draw,
+.tournament-empty {
+  width: 100%;
+  max-width: var(--row-w);
+}
+
+.tournament-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Both lists are the same kind of thing — a row you open — so they share everything but
+   their heading. An unfinished bracket is up to 63 ties and a finished one is the whole
+   history of a year; neither wants unrolling on arrival beside five others. */
+.tournament-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tournament-list h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Direct children throughout. This fixed a real bug once: an open row used to contain the
+   "Ready to play" list, and `.tournament-list li` matched its items too, giving every
+   waiting tie the row's panel background, border and cap. Specificity would not have saved
+   it — the later rules tie rather than win.
+   
+   That list is gone and the drawn bracket uses no lists, so **nothing nests inside a row
+   today and the `>` is currently inert**. Kept because the next list added inside a row
+   would otherwise inherit all of this silently; there is deliberately no check on it, since
+   one measuring zero nested items cannot fail. */
+.tournament-list > ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tournament-list > ul > li {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  /* Capped while shut so a list of rows does not stretch across an iPad; an open one takes
+     the width its bracket asks for. Capping the section instead held a 64-entrant bracket
+     to 534px on a screen with 1008px to give it. */
+  max-width: var(--row-w);
+}
+
+.tournament-list > ul > li.is-open {
+  max-width: none;
+}
+
+/* The row is the button rather than something inside it, so the tap target is the whole
+   card instead of the text's own box. */
+.tournament-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.tournament-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Both statuses sit in the same place and neither may wrap, so the row reads the same
+   whichever list it is in. */
+.tournament-progress,
+.champion-who {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.champion-who {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* A name on its own says nothing about why it is there. The caption is what makes it a
+   champion rather than just somebody mentioned beside a tournament. */
+.champion-cap {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The bracket is drawn as a tree, columns running deepest-first to the final on the
+   right — the BBC's knockout layout rather than the paper sheet's mirrored one, which
+   is both simpler and half the width.
+
+   **The columns are not laid out. They emerge.** Every node draws its two children to
+   its left and itself to the right, and above the deepest level the tree is a perfect
+   binary tree (see `bracketTree`), so each parent lands exactly between its children
+   with nothing measured and every box of a given level shares an offset. That is also
+   what makes the connectors pure CSS. */
+.bracket {
+  --box-w: 176px;
+  --conn: 28px;
+  --kid-gap: 10px;
+  --line: var(--border);
+  /* One row of a tie box. Every box is two of these whether it holds two sides or one,
+     which is what keeps the tree's children equal — the connectors run from each child's
+     own centre to the boundary between the pair, and that only meets the parent's stub if
+     the two children are the same height.
+     
+     **The `min-height` on `.tie-sides` is what enforces that**; verified by mutation,
+     removing it gives boxes of 68px and 44px. The fixed line-height below is a second
+     guard with no measurable effect at these font sizes: it stops a font whose natural
+     line-height exceeds 22px from making a name row and the smaller *waiting* row
+     different heights, which is not hypothetical — the deploy runner's `system-ui` is not
+     the one used here. */
+  --tie-row: 22px;
+  --tie-gap: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* One heading per column, at the column's own pitch, so the row lines up with the
+   boxes below it without either knowing about the other. Inside the scroller, so a
+   bracket too wide for its container takes its headings with it. */
+.bracket-heads {
+  display: flex;
+  gap: var(--conn);
+  margin-bottom: 8px;
+}
+
+.bracket-head {
+  flex: 0 0 var(--box-w);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Drawn only where a column fills the screen. On a wide one every round is already
+   visible, so a control that steps between them has nothing to do. */
+/* The arrows are pinned to the right edge and the label takes what is left, so a round
+   name changing width cannot move the buttons. Anchored to the container rather than
+   the two being spaced apart: the label is what varies, so it is the one that gives. */
+.bracket-paging {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bracket-arrows {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+/* Ellipsised rather than allowed to push. A long round name must not be able to reach
+   the arrows and start moving them again. */
+.bracket-at {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bracket-paging button {
+  width: 36px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.bracket-paging button:disabled {
+  color: var(--border);
+}
+
+.bracket-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.node {
+  display: flex;
+  align-items: center;
+}
+
+.node-kids {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kid-gap);
+  margin-right: var(--conn);
+}
+
+/* The connectors. Each child draws a stub out to the spine and a vertical from its own
+   centre to the boundary between the pair — which is where the parent's stub arrives,
+   because the two children are the same height. Nothing here measures anything. */
+.node-kid {
+  position: relative;
+}
+
+.node-kid::before {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: calc(var(--conn) / 2);
+  border-top: 2px solid var(--line);
+}
+
+.node-kid:first-child::after,
+.node-kid:last-child::after {
+  content: '';
+  position: absolute;
+  left: calc(100% + var(--conn) / 2 - 2px);
+  border-left: 2px solid var(--line);
+}
+
+.node-kid:first-child::after {
+  top: 50%;
+  height: calc(50% + var(--kid-gap) / 2);
+}
+
+.node-kid:last-child::after {
+  bottom: 50%;
+  height: calc(50% + var(--kid-gap) / 2);
+}
+
+/* The parent's own stub, drawn only where there is something feeding it — the deepest
+   column has nothing to its left. A class rather than `:has()`, so support is not a
+   question on an older iOS. */
+.node.has-kids > .tie::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: calc(var(--conn) / 2);
+  border-top: 2px solid var(--line);
+}
+
+/* No height here: `.tie-sides` decides it, so there is one number rather than two that
+   have to agree. Uniform height is what keeps the tree balanced — see `--tie-row`. */
+.bracket .tie {
+  position: relative;
+  flex: 0 0 var(--box-w);
+  width: var(--box-w);
+  scroll-snap-align: start;
+}
+
+.tie.is-seat {
+  border-style: dashed;
+}
+
+.tie {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* The one state worth a colour: these are the ties that can be played right now, and
+   there are usually several. Everything else on the screen is history or waiting. */
+.tie.is-playable {
+  border-color: #27ae60;
+}
+
+/* Two rows' worth whether or not there are two, so a bye's single name makes a box the
+   same height as a tie's pair. This is the only place a box's height is decided; the box
+   itself sets no min-height, or there would be two numbers to keep in step. */
+.tie-sides {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tie-gap);
+  min-height: calc(var(--tie-row) * 2 + var(--tie-gap));
+}
+
+/* Both sides of a played tie carry a number, so the row needs a column for it to line
+   up in — otherwise the two scores sit at whatever offset the names happen to end at.
+   Only the name may give, and it ellipsises. */
+.tie-side {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: var(--tie-row);
+}
+
+/* A seat still waiting reads as a sentence rather than a name, so it is lighter and
+   smaller — it is a description of a tie, not a competitor. The line-height is inherited
+   deliberately: a smaller one here would make the box shorter than its neighbours. */
+.tie-side.is-waiting {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.tie-side.is-winner {
+  color: var(--text);
+}
+
+/* Dimmed rather than struck. Who lost is still there — a knockout reads by seeing
+   where each name stopped — but a rule through every loser is a line through half the
+   bracket, and the score beside them already says it. */
+.tie-side.is-loser {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Centred on the right, absolutely positioned so it cannot change the box's height —
+   that is what the tree's connectors rest on. Width is a different matter: a playable tie
+   has no score yet, so the right-hand edge is where its *name* ends, and a marker this
+   size would sit on top of a long one. Hence the reserved gutter below. */
+.tie-play {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #27ae60;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Reserved on playable boxes only, so the marker has somewhere to be that is not on top of
+   a name. Costs width and not height, and only on the boxes that carry a marker. */
+.tie.is-playable .tie-sides {
+  padding-right: 20px;
+}
+
+/* The box is the button when it is playable, so it needs a button's reset and the text
+   alignment a div had. */
+button.tie {
+  display: flex;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.champion-who {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.draw-cancel,
+.tournament-drop {
+  align-self: center;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* In the header, pushed to the right by `margin-left: auto` rather than by `.stats-head`
+   growing a `justify-content` — that rule is shared with the stats screen, which has only
+   two children and wants them left. Never shrinks: the row holds `‹ Back`, the heading and
+   this, and a wrapped header is the `.setup-top` problem again. */
+.tournament-new {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Red, because it destroys something. Outlined rather than filled: the filled red is the
+   confirm dialog's own button, so the one that *asks* and the one that *does* do not look
+   alike. */
+.tournament-drop {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-color: #eb5757;
+  color: #eb5757;
+  font-size: 13px;
+}
+
+/* Tap to add. Chips rather than a list of checkboxes: the names are short and the
+   whole point is filling a field of eleven quickly, so they wrap and the lit ones say
+   who is in without having to read the entrant list below. */
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roster h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 8px vertical padding rather than the 4px the text needs, so a chip clears the 24px
+   minimum target with a row of them packed together. */
+.roster-chip {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.roster-chip.is-on {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+/* Taking the draw */
+.draw {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.draw-name,
+.draw-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.draw-name {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.draw-name input,
+.draw-target input,
+.entrant-name {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  /* 17px, not 15: iOS zooms the page on a focus under 16px, and this screen has a
+     column of them. The same reason the archive's edit dialogs are 17px. */
+  font: 600 17px system-ui, sans-serif;
+}
+
+.draw-target input {
+  width: 72px;
+  text-align: center;
+}
+
+.draw-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entrants ol {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.entrants li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The draw position, which is the number written down the side of the paper sheet.
+   Fixed width so the name fields line up however far the list runs. */
+.entrant-seed {
+  flex: 0 0 22px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+}
+
+.entrant-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.entrants li.is-faulted .entrant-name {
+  border-color: #eb5757;
+}
+
+.entrant-drop {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.entrant-add {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.draw-hint {
+  margin: 0;
+  color: #eb5757;
+  font-size: 12px;
+}
+
+.draw-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.draw-go {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 12px;
+  background: #27ae60;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Loses the green rather than fading it, so it doesn't read as a button waiting to
+   load — the same treatment `.start-game:disabled` gets. */
+.draw-go:disabled {
+  background: var(--panel);
+  color: var(--muted);
+}
+
+
+
+
+.tie-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tie-points {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One column fills the screen and the `‹ ›` buttons step between rounds, because four
+   columns of names in 393px is unreadable at any font the rest of the app uses. */
+@media (max-width: 640px) {
+  .bracket {
+    --box-w: calc(100vw - 60px);
+  }
+
+  .bracket-heads {
+    display: none;
+  }
+
+  .bracket-paging {
+    display: flex;
+  }
+
+  .bracket-scroll {
+    scroll-snap-type: x mandatory;
+  }
+}
