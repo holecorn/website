@@ -1059,6 +1059,28 @@ console.log('\nthe draw is played out a name at a time');
     (await page.locator('.ceremony-sheet li').count()) === 6,
     `${await page.locator('.ceremony-sheet li').count()}`);
 
+  // A row's two cells share one background and round off only their outer corners, so
+  // they have to touch — a column gap puts the page through the middle of what is drawn
+  // as a single pill, and reads as a separator nobody chose. That is not hypothetical:
+  // `.ceremony-sheet` set `gap: 2px` for its rows while it was a flex column, and the
+  // gap survived the change to a grid. Neither this nor the caption below is reachable
+  // from a unit test, and nothing in the components would notice either coming back.
+  const row = await page.$eval('.ceremony-sheet li', (li) => {
+    const [round, tie] = li.children;
+    const rb = round.getBoundingClientRect();
+    const tb = tie.getBoundingClientRect();
+    const ink = document.createRange();
+    ink.selectNodeContents(round);
+    const ib = ink.getBoundingClientRect();
+    return { seam: tb.left - rb.right, above: ib.top - rb.top, below: rb.bottom - ib.bottom };
+  });
+  check('the round and the pairing are one pill', Math.abs(row.seam) < 0.5,
+    `${row.seam.toFixed(1)}px between them`);
+  // The two cells stretch to the taller, which is always the pairing, so a caption left
+  // to flow sits above the middle — and at the very top of a pairing that has wrapped.
+  check('with the round centred against it', Math.abs(row.above - row.below) < 1,
+    `${row.above.toFixed(1)}px above, ${row.below.toFixed(1)}px below`);
+
   await page.locator('.ceremony-pull').click();
   const landed = await settles(() => page.waitForSelector('.bracket-scroll', { timeout: 5000 }));
   check('which opens the bracket just drawn', landed);

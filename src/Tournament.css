@@ -955,24 +955,22 @@ button.tie {
 }
 
 /* The sheet as it fills in. Newest first, so the pull just made sits under the card
-   rather than at the bottom of a list that has to be scrolled to. */
-.ceremony-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* One grid for every row rather than a grid per row, so the round track sizes to the
+   rather than at the bottom of a list that has to be scrolled to.
+   One grid for every row rather than a grid per row, so the round track sizes to the
    widest caption across all of them and the pairings start at one offset — the same trick
    `.field-rows` uses on the setup screen, and for the same reason: ragged left edges down
    a list read as broken. `display: contents` is what keeps the row a real element for the
-   background and the padding to hang off. */
+   background and the padding to hang off.
+   **The column gap has to be zero**: the two cells share one background and round off
+   only their outer corners, so any gap between them puts the page through the middle of
+   what is drawn as a single pill. It read as a separator nobody had chosen. */
 .ceremony-sheet {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .ceremony-sheet li {
@@ -985,7 +983,13 @@ button.tie {
   background: var(--panel);
 }
 
+/* Centred against the row rather than sitting at the top of its own box. The two cells
+   stretch to the taller, which is always the pairing — 13px against 11px — so a caption
+   left to flow lands above the middle, and lands right at the top of a pairing that has
+   wrapped. `white-space: nowrap` is what makes one flex item safe here. */
 .ceremony-sheet-round {
+  display: flex;
+  align-items: center;
   padding-left: 10px;
   padding-right: 10px;
   border-radius: 8px 0 0 8px;
@@ -996,7 +1000,12 @@ button.tie {
   white-space: nowrap;
 }
 
+/* The inset is on the pairing, not extra padding on the caption, because a wrapped
+   pairing's second line starts at the cell edge and would otherwise run into the seam
+   the first line was held clear of. Every side of the pill is 10px, so the two columns
+   are 20px apart. */
 .ceremony-sheet-tie {
+  padding-left: 10px;
   padding-right: 10px;
   border-radius: 0 8px 8px 0;
   overflow-wrap: anywhere;

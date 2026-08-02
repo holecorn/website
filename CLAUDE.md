@@ -1328,6 +1328,24 @@ the alternatives that were rejected; this section holds what breaks when you cha
     entrant with nobody to meet, and left it reading `—` after the very next press had named
     their opponent — a sheet describing the draw as it *was*. A pull with no opponent is on
     the card at the time and in a tie a moment later, so it is never invisible.
+    - **A sheet row is one pill in two cells, so its column gap must be zero.** The two
+      cells share `--panel` and round off only their outer corners, so any gap between
+      them puts the page background through the middle of what is drawn as a single
+      thing. `.ceremony-sheet` was a flex column with `gap: 2px` for its rows before it
+      became a grid, and **the gap survived the change to `display: grid`** — where it
+      applies to columns too. Measured, a 2px seam, and it reads as a separator nobody
+      chose. `gap: 2px 0` now says which axis it is for.
+    - **The round caption is flex-centred, not left to flow.** Both cells stretch to the
+      taller, which is always the pairing at 13px against the caption's 11px, so a caption
+      in normal flow sits 3.1px above the middle — and at the very *top* of a pairing that
+      has wrapped, which a worst-case doubles row does to 9 lines. The 10px inset is on the
+      pairing rather than extra padding on the caption for the same reason: a wrapped
+      second line starts at the cell edge, so padding the caption holds only the first line
+      clear.
+    - **Neither is reachable from a unit test and nothing in the components would notice
+      either coming back**, so `verify-tournament.mjs` measures the first row. Verified by
+      mutation — restoring `gap: 2px` and dropping the centring each fail only their own
+      assertion.
   - **Two beats per press, timed by the phone**, `PULL_MS` 1100. The board animates nothing.
     Same reasoning as `Toss for first`: a press that changes nothing visible reads as a dead
     button. **Firmware animation is deferred, not designed out** — the card shapes and the
