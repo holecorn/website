@@ -429,6 +429,40 @@ actually decided.
 - **Whether the setup screen's mode toggle should be disabled during a tournament**,
   since the tournament fixes it. Planning detail.
 
+## What the scoreboard shows
+
+The external board and the LED panel say **which tie this is**, and deliberately do not
+show the entrants' form.
+
+Form was the obvious thing to reach for, since the pre-game screen already draws it for
+an ordinary game, and it is degenerate here rather than merely thin. A knockout only ever
+puts unbeaten sides in a playable tie — `reachedBy` marks a side `out` the moment any tie
+in its route has a winner that is not them, and an out side is seated in no further ties.
+So at the moment the screen goes up both sides have won every tie they have played, the
+pips read `WWW` against `WWW`, and the only thing that can differ is their length, by one,
+when one side came through a preliminary. The same property rules out an in-tournament
+head-to-head: two sides meet at most once in a bracket, which is what `matchBetween` relies
+on to find a tie at all.
+
+So a third retained topic, `holecorn/<code>/tie`, carries the cup's name and the round
+while the tie has not begun, and is cleared at the first bag the way the lineup is. The
+panel gives the whole screen to it; the tablet has room to keep the form table underneath
+and caption it. The drawing decisions — why the sides stack, why the fixture spreads at 20
+characters and not 21, why there is no first-thrower mark — are in `CLAUDE.md` under **The
+tournament fixture card**, and the panel's own numbers are in `firmware/hub75/README.md`.
+
+Two things fall out that are worth recording:
+
+- **The tie topic is what makes a first tournament visible at all.** The form screen is
+  only published when somebody in the roster has played, so a cup of newcomers — round one
+  of the first tournament — would have shown nothing. The card does not read the archive.
+- **Cycling several screens on a timer was considered and rejected.** Beyond the obvious
+  risk that the pre-game window is however long it takes to walk to the boards, a timer
+  introduces phase, and phase is in no retained message: two boards would drift apart and
+  a reboot would land mid-cycle. The whole-state retained model is what lets a board join
+  late with no resync, and it is worth more than a second screen. If one ever earns its
+  place it should be a layout id — retained, and chosen.
+
 ## Where the rules live
 
 This repo has no pull requests — work goes straight to `main` — so the rules a future change

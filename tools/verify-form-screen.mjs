@@ -502,6 +502,142 @@ console.log('\na career rename does not publish the new name with an empty recor
   await scorer.close();
 }
 
+// The fixture card. Everything about *what* it draws is pinned by the pixel check
+// against render.h, so what is left for a browser is the wiring: that a tie on its
+// own topic reaches both views, wins over a lineup retained at the same time, and
+// clears the way the lineup does. Each was verified by mutation.
+console.log('\na retained tie puts both views on the fixture card');
+// Measured here rather than reusing the count from the top of the file: the roster
+// has been renamed since, so that baseline is a different form screen and comparing
+// against it would pass however the precedence went. The same trap this file has
+// already been caught by twice.
+pub.sendLineup(ROSTER);
+pub.sendTie(null);
+await new Promise((r) => setTimeout(r, 2000));
+const sameRosterFormLit = await litRows(panel);
+pub.sendTie({ t: 'Hole Corn V', r: 'Semi-final' });
+await new Promise((r) => setTimeout(r, 2000));
+const tieCardLit = await litRows(panel);
+{
+  const caption = await panel.locator('.panel-caption').innerText();
+  check('the panel caption names the tie', caption.includes('Tournament tie'), caption);
+  // The precedence, which is the half no unit test sees: both topics are retained
+  // at once and the tie has to win. In a knockout every side arrives unbeaten, so
+  // the form line the panel would otherwise draw says nothing.
+  check('and not the form screen it would draw without one',
+    !caption.includes('Pre-game form'), caption);
+  check('the panel is drawing the card and not that same roster',
+    tieCardLit !== sameRosterFormLit,
+    `${sameRosterFormLit} lit as form, ${tieCardLit} as the card`);
+
+  // The tablet keeps the table underneath and captions it, which is the deliberate
+  // divergence — it has the room the 128x32 strip does not.
+  const title = await display.locator('.form-title').innerText();
+  check('the display captions its form table with the tie', title.includes('SEMI-FINAL'), title);
+  check('and names the cup', title.includes('HOLE CORN V'), title);
+  check('while keeping the rates', (await display.locator('.form-ppr').count()) === 4);
+  await panel.screenshot({ path: `${dir}/tie-panel.png` });
+  await display.screenshot({ path: `${dir}/tie-display.png` });
+}
+
+// A cup whose entrants have never played publishes no lineup at all — round one of
+// a first tournament is exactly that. The panel is unaffected, because the card was
+// never built from the roster; the tablet has to fall back to naming the sides or it
+// would say nothing about the tie in front of it.
+console.log('\na tie with no roster behind it still says what it is');
+pub.sendLineup(null);
+await new Promise((r) => setTimeout(r, 2000));
+{
+  const caption = await panel.locator('.panel-caption').innerText();
+  check('the panel still shows the card', caption.includes('Tournament tie'), caption);
+  check('and draws the same frame as it did with a roster',
+    (await litRows(panel)) === tieCardLit);
+
+  check('the display has no form table to show', (await display.locator('.form-ppr').count()) === 0);
+  const sides = await display.locator('.form-side').allInnerTexts();
+  check('so it names the two sides instead', sides.length === 2, sides.join(' v '));
+  check('with the tie still captioned',
+    (await display.locator('.form-title').innerText()).includes('SEMI-FINAL'));
+  await display.screenshot({ path: `${dir}/tie-newcomers-display.png` });
+}
+
+// The same failure the lineup's clear exists for, and worse: a tie retained from a
+// cup that finished weeks ago would name a fixture nobody is playing.
+console.log('\nclearing the tie puts both back on the score');
+pub.sendTie(null);
+pub.send({ ...SCORE, a: 9, b: 4, round: 3 });
+await new Promise((r) => setTimeout(r, 2000));
+{
+  check('the display score digits are back', (await display.locator('.seg-digit').count()) === 4);
+  check('and the card is gone', (await display.locator('.form-side').count()) === 0);
+  const caption = await panel.locator('.panel-caption').innerText();
+  check('the panel caption is back to the layout', !caption.includes('Tournament tie'), caption);
+}
+
+// The one crossing nothing above can see. Everything so far drove `sendTie` directly,
+// which says nothing about whether picking a tie off a bracket ever calls it — and
+// that path is a chain of derivations in App.jsx (`liveTournament` -> `playingTie` ->
+// `publishedTie`), each individually correct however they are wired together.
+console.log('\npicking a tie off the bracket puts the card on the board');
+{
+  const cupCode = 'cup' + Math.floor(Math.random() * 1e6);
+  const board = await browser.newPage({ viewport: { width: 1000, height: 400 } });
+  board.on('pageerror', (e) => errors.push(e.message));
+  await board.goto(`${BASE}?panel=1&broker=${encodeURIComponent(broker)}&code=${cupCode}`);
+
+  const scorer = await browser.newPage({ viewport: { width: 430, height: 932 } });
+  scorer.on('pageerror', (e) => errors.push(e.message));
+  await scorer.goto(BASE);
+  await scorer.evaluate(([code, broker]) => {
+    localStorage.clear();
+    localStorage.setItem('holecorn.scoreboard.v1', JSON.stringify({
+      broker, username: '', password: '', code, enabled: true, layout: 'full',
+    }));
+  }, [cupCode, broker]);
+  await scorer.reload();
+  await scorer.waitForSelector('.setup');
+
+  // Four entrants, so the opening ties are semi-finals and the round name on the
+  // board is something a mutation could not produce by accident.
+  await scorer.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await scorer.getByRole('button', { name: 'New tournament' }).click();
+  await scorer.locator('.draw-name input').fill('Hole Corn VI');
+  for (let i = 2; i < 4; i += 1) {
+    await scorer.getByRole('button', { name: 'Add entrant' }).click();
+  }
+  for (const [i, n] of ['Rho', 'Phi', 'Tau', 'Psi'].entries()) {
+    await scorer.locator('.entrant-name').nth(i).fill(n);
+  }
+  await scorer.locator('.draw-go').click();
+  await scorer.waitForSelector('.bracket-scroll');
+  await scorer.locator('button.tie').first().click();
+  await scorer.waitForSelector('.setup');
+  await new Promise((r) => setTimeout(r, 5000));
+
+  const caption = await board.locator('.panel-caption').innerText();
+  check('the board is on the fixture card', caption.includes('Tournament tie'), caption);
+  const spoken = await board.locator('.panel-canvas').getAttribute('aria-label');
+  check('naming the round the bracket says', /semi-final/i.test(spoken), spoken);
+  // Both entrants of the tie the phone loaded. A tie's names are locked by the draw,
+  // so they are `.team-name-static` text and not the editable fields — and reading
+  // the wrong one gives an *empty* list, which `every` calls true. Hence the count.
+  const lineup = await scorer.locator('.team-name-static').allInnerTexts();
+  check('and the two sides the phone is holding',
+    lineup.length === 2 && lineup.every((n) => spoken.includes(n.trim())),
+    `${spoken} vs ${JSON.stringify(lineup)}`);
+
+  // Leaving the tie has to take the card with it, or the board names a fixture the
+  // phone is no longer set up for. Gated on `gameStarted`, like the toggle beside it.
+  await scorer.getByRole('button', { name: 'Leave tie' }).click();
+  await new Promise((r) => setTimeout(r, 3000));
+  const after = await board.locator('.panel-caption').innerText();
+  check('leaving the tie clears the card', !after.includes('Tournament tie'), after);
+
+  await board.screenshot({ path: `${dir}/tie-from-bracket.png` });
+  await board.close();
+  await scorer.close();
+}
+
 check('no uncaught errors in either view', errors.length === 0, errors.join(' | '));
 
 pub.close();

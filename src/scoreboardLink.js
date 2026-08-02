@@ -9,7 +9,7 @@
 // WSS with a certificate the phone trusts, which a broker on the LAN can be.
 // See docs/OFFLINE-SCOREBOARD.md before concluding this needs the internet.
 
-import { layoutTopic, lineupTopic, onlineTopic, stateTopic } from './scoreboard.js';
+import { layoutTopic, lineupTopic, onlineTopic, stateTopic, tieTopic } from './scoreboard.js';
 
 const RECONNECT_PERIOD = 4000;
 const CONNECT_TIMEOUT = 8000;
@@ -48,6 +48,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   const online = onlineTopic(config.code);
   const layout = layoutTopic(config.code);
   const lineup = lineupTopic(config.code);
+  const tie = tieTopic(config.code);
   const publisher = role === 'publisher';
 
   onStatus('connecting');
@@ -66,10 +67,12 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   let latest = null;
   let latestLayout = null;
   let latestLineup = null;
+  let latestTie = null;
   // Tracked separately from the value, because a computed null — "the game has
   // begun, clear the form screen" — has to be re-asserted on connect and is
   // otherwise indistinguishable from never having been told.
   let lineupSet = false;
+  let tieSet = false;
   let closed = false;
   let presence = null;
 
@@ -105,6 +108,20 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
     });
   };
 
+  // Retained and cleared exactly like the lineup, and a null must still be
+  // published for the same reason: an empty payload is the only way back to the
+  // score, so a retained tie from an earlier session would otherwise leave a board
+  // showing a fixture card for a game that finished last week.
+  const sendTie = (payload) => {
+    latestTie = payload;
+    tieSet = true;
+    if (closed || !client.connected) return;
+    client.publish(tie, payload ? JSON.stringify(payload) : '', {
+      qos: 1,
+      retain: true,
+    });
+  };
+
   client.on('connect', () => {
     if (closed) return;
     onStatus('connected');
@@ -125,8 +142,9 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       // session has already moved past, and leaving it would strand the board on
       // a form screen for the whole game.
       if (lineupSet) sendLineup(latestLineup);
+      if (tieSet) sendTie(latestTie);
     } else {
-      client.subscribe([state, online, layout, lineup], { qos: 1 }, (err, granted) => {
+      client.subscribe([state, online, layout, lineup, tie], { qos: 1 }, (err, granted) => {
         // A broker with per-topic permissions refuses the subscription rather
         // than the connection, which would otherwise leave the board sitting on
         // "connected" having never received anything. Granted QoS 128 is a
@@ -162,6 +180,20 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       onMessage({ layout: text });
       return;
     }
+    if (topic === tie) {
+      // Empty is the cleared topic, reported as null so the consumer goes back to
+      // the score rather than having to parse "" itself — the lineup's rule.
+      if (text === '') {
+        onMessage({ tie: null });
+        return;
+      }
+      try {
+        onMessage({ tie: JSON.parse(text) });
+      } catch {
+        // Leaves whatever is on screen, as parseTie does.
+      }
+      return;
+    }
     if (topic === lineup) {
       // An empty payload is the cleared topic, reported as null so the consumer
       // goes back to the score rather than having to parse "" itself.
@@ -187,6 +219,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
     send,
     sendLayout,
     sendLineup,
+    sendTie,
     close() {
       if (closed) return;
       closed = true;

@@ -527,6 +527,37 @@ the name gets the rest.
 Doubles fills the panel exactly — four rows is all 32 pixels of height — so there's
 no heading on it. Singles centres its two rows.
 
+### Tournament ties on the board
+
+If the game is a tie picked off a bracket, the board says which one instead of showing
+form:
+
+```
+     HOLE CORN V                        HOLE CORN V
+      SEMI-FINAL                          FINAL
+     NEIL & RHO
+     SIGMA & TAU                     NEIL  V  SIGMA
+```
+
+Form is left out on purpose, and it isn't a matter of space. A knockout only puts
+unbeaten sides in a tie — anyone who has lost is out — so before a tie both sides have
+won every game they've played in the tournament, and a form line reads as five wins for
+everybody. Which round it is changes; how they got there doesn't.
+
+Short names go on one row either side of a **V** and the card spreads out; longer ones
+stack, and keep the "&" they were typed with — a whole row fits far more than half of
+one, so a name that would be cut to nine characters beside the score fits at its full
+length here. It appears when you tap a tie and goes when the first bag lands, like the
+form screen, and **Leave tie** takes it off too.
+
+Who throws first isn't marked here — there's a single pixel between the rows and a line
+in it reads as an underline on the name. The score screen marks it a few seconds later.
+
+The tablet display keeps its form table and puts the cup and the round above it, since
+it has the room the LED panel doesn't. It's also the one place a *first* tournament shows
+anything: with nobody having played before there's no form to publish, so the display
+names the two sides instead.
+
 ### The wordmark at switch-on
 
 For a couple of seconds after the board is powered up it shows the Holecorn logo,

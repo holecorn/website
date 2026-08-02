@@ -125,6 +125,31 @@ export function lineupPayload(game, matches) {
   };
 }
 
+// The tie a game is, or null when it is an ordinary game. Published while the
+// game has not begun and cleared at the first bag, the way the lineup is — so a
+// board joining part way through a tie shows the score, not a fixture card for a
+// game already under way.
+//
+// Deliberately carries no names: the two sides are already in the score payload
+// as joined labels, and two copies of who is playing could disagree. Nothing here
+// is truncated either, because this topic has a packet to itself — the panel cuts
+// to what its line holds and the display shows the lot.
+export function tiePayload(game, tie) {
+  if (gameStarted(game) || !tie) return null;
+  return { t: tie.name, r: tie.round };
+}
+
+// Mirrors parseTie in board_logic.h.
+export function usableTie(next) {
+  return (
+    typeof next === 'object' &&
+    next !== null &&
+    typeof next.r === 'string' &&
+    next.r !== '' &&
+    (next.t === undefined || typeof next.t === 'string')
+  );
+}
+
 // Mirrors parseLineup in board_logic.h. The broker is shared and the code is
 // short, so anything could be on the topic.
 export function usableLineup(next) {
@@ -188,6 +213,15 @@ export function layoutTopic(code) {
 // recovers the form screen the same way it recovers presence.
 export function lineupTopic(code) {
   return `holecorn/${normalizeCode(code)}/lineup`;
+}
+
+// Retained and cleared exactly like the lineup, and for the same reason it is a
+// topic rather than a field: a tie is a different fact with a different lifetime
+// from a roster or a score. Its own topic also keeps the cup's name out of the
+// lineup packet, which at 423 of the board's 512 bytes is the largest message
+// the board receives and has no room for a 32-character name.
+export function tieTopic(code) {
+  return `holecorn/${normalizeCode(code)}/tie`;
 }
 
 export function normalizeCode(raw) {

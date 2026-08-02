@@ -1180,6 +1180,10 @@ the alternatives that were rejected; this section holds what breaks when you cha
 - **The label says "Winner" and the model says `champion`**, deliberately. `winner` is
   already the winner of a single *tie* (`tie.winner`, `.tie-side.is-winner`,
   `.winner-banner`), and one bracket has ten of those and exactly one champion.
+- **The board says which tie it is, and it does not say the entrants' form.** See **The
+  tournament fixture card** under External scoreboard: in a knockout every side arrives
+  at a tie unbeaten, so a form line inside a tournament is all wins for everyone. What
+  changes tie to tie is the round, so that is what `holecorn/<code>/tie` carries.
 - **A tournament runs over weeks, and that is the sharpest risk in the feature.**
   `localStorage` is per browser and a home-screen app is a different container from a Safari
   tab, so whichever device takes the draw must score every tie — and ITP deletes
@@ -1687,6 +1691,74 @@ the alternatives that were rejected; this section holds what breaks when you cha
     `test-firmware.mjs` cannot see it** — hence the separate assertion that some
     scene carries a lineup. Without it the whole screen would be unpinned second
     implementation, which is the one thing `src/panelRender.js` is not allowed to be.
+- **The tournament fixture card is a fourth screen on a third retained topic**, and it
+  is what a tournament shows before a tie instead of the form screen.
+  `holecorn/<code>/tie` carries the cup's name and the round while `gameStarted` is
+  false, and is published **empty** at the first bag exactly as the lineup is.
+  - **Form is not sparse inside a knockout, it is degenerate.** `reachedBy` marks a side
+    `out` the moment any tie in its route has a winner that is not them, and an out side
+    is seated in no further ties — so at the moment the screen is published *both* sides
+    have won every tie they have played. The pips read `WWW` against `WWW`, and the only
+    thing that can differ is their length, by one, when one side came through a
+    preliminary. That is the entire information content, and it is why the card replaces
+    the form screen rather than sitting beside it.
+  - **It carries no names.** The two sides are already in the score payload as joined
+    labels, and two copies of who is playing could disagree — the rule that keeps the
+    colours out of the lineup payload. So `renderBoard` needs `haveState` for a tie
+    where it does not for a lineup: with no score message there is nobody to name, and
+    it falls through to the dashes rather than drawing a heading over nothing.
+  - **A topic and not a field on the lineup, and the byte budget is why.** A tournament
+    name is 32 UTF-16 code units, which is 96 bytes of UTF-8 on top of a lineup packet
+    already at 423 of the board's 512 — measured, that lands at 498 with a 16-character
+    cap and over the buffer without one. On its own topic it is 162 bytes worst case and
+    nothing is truncated on the wire, so the panel cuts to what its row holds and the
+    display shows the lot. Same reasoning as `/layout`, and a tie is a different fact
+    with a different lifetime again: it changes when a tie is picked off a bracket.
+  - **The sides are stacked, not drawn either side of a versus mark, and the reason is
+    characters.** Split across one row each side gets 9 — measured, a 16-character name
+    lands as `ALPHABETA`. A full-width row gives 21 and it fits whole, which is also
+    what lets `fitTieSide` keep the ampersand a pair was typed with rather than always
+    collapsing to `NEIL/RHO` the way the score screen's name row must.
+  - **The fixture collapses onto one row when both sides fit there as typed**, which
+    frees the fourth row and spreads the card. **Never by shortening** — buying air by
+    giving up a name is the wrong way round — so a long pair stacks and keeps its
+    ampersand. The heading stays two rows either way, so a cup does not change shape
+    between its own ties.
+    - **The threshold is 20 characters and not the 21 a line physically holds.** 21 fit,
+      but they run to within a pixel of both edges and read as crowding the frame; 20
+      leaves 4px. `test_render.cpp` pins it with a *pair* of scenes one character apart,
+      because asserting only that 20 spreads passes with the limit at 21.
+  - **No versus mark between stacked sides and no first-thrower rule, and both are the
+    same 1px.** `TIE_ROW_H` is 8 and `FONT_H` is 7, so a rule under a name sits flush
+    against the glyphs and reads as an underscore stuck to it rather than a mark beneath
+    it. The colours are the same two the score screen puts either side of a `V`, so they
+    carry the fixture on their own, and the score screen rules the opening side a few
+    seconds later. **Drawing a rule only in the spread layout, where the room exists, was
+    considered and rejected**: a marker that appears only when the names are short reads
+    as missing information rather than as information never offered.
+  - **Cycling screens on a timer was considered and rejected.** The pre-game window is
+    however long it takes to walk to the boards, so a board you have to *wait* for is
+    worse than one you can read in passing — but the structural objection is the one that
+    settles it: the whole message model is retained whole-state, which is what lets a
+    board reboot or join late and recover with no resync. A timer introduces **phase**,
+    which is in no message, so two boards would drift apart and a reboot would land mid
+    cycle. If a second screen ever earns its place it should be a **layout id**, which is
+    retained and chosen, not a timer.
+  - **The panel gives the whole screen to the card; the display keeps its form table and
+    captions it.** A tablet has the room a 128x32 strip does not, the same divergence the
+    winner flash and the dim grace already make. The display's pre-game branch therefore
+    triggers on *either* topic — a cup whose entrants have never played publishes no
+    lineup at all, which is round one of a first tournament, and without that the tablet
+    would say nothing about the tie in front of it. There it names the two sides instead.
+  - **`boardScreen` is the precedence, asked rather than re-derived.** `Panel.jsx`
+    captions the emulator with it, and a caption that worked the chain out for itself
+    named a screen the canvas was not drawing — verified by mutation, where reversing the
+    order left the words saying "Tournament tie" over a form screen. `render.h` writes the
+    chain out instead, because the firmware draws and never captions; the pixel check is
+    what holds the two together.
+  - **The card has no layout id either**, so `test-firmware.mjs` carries a third
+    standalone assertion that some scene has a tie — the form screen's rule, for the same
+    reason.
 - **The splash is a fourth screen and the second with no layout id**, so it has its own
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at
@@ -2185,6 +2257,22 @@ change silently stops matching the panel until someone regenerates. These were
 manual for a while and drifted twice — a fixture that claimed to be "exactly
 what `scoreboardPayload()` produces" but was missing a field, and two characters
 `FONT_CHARS` advertised with blank glyphs behind them.
+
+The fixture card is covered by `verify-form-screen.mjs` rather than there, because it
+needs a broker. Everything about *what* it draws is pinned by the pixel check, so what is
+left for a browser is the wiring, and the block that matters most is the last one: it
+draws a bracket on a phone, taps a tie, and asserts the board names that round and those
+two entrants. Every other assertion in the file drives `sendTie` directly and so says
+nothing about whether picking a tie ever calls it — a chain of derivations in `App.jsx`
+(`liveTournament` → `playingTie` → `publishedTie`) each individually correct however they
+are wired together. Verified by mutation: publishing `null` instead fails exactly that
+block.
+  - **Two of its assertions were written wrong first, both in the file's own known
+    ways.** Reading the tie's names off `.team-name-input` gave an *empty* list, because
+    a tie's names are locked and render as `.team-name-static` — and `[].every()` is
+    true, so it passed. And the panel's card was compared against a lit count measured at
+    the top of the file, which by then was a *different* roster, so it differed however
+    the precedence went. Both now measure the thing the property is about.
 
 `tools/verify-tournament.mjs` covers the tournament, and the block it exists for is
 **reversibility**: win a tie, undo the winning round, and the bracket goes back to

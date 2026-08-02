@@ -166,6 +166,10 @@ if (!ran['test_render.cpp']) {
     if (!scenes.some((s) => s.lineup)) {
       throw new Error('no scenes carry a lineup — the form screen is unpinned');
     }
+    // And the fixture card, which has no layout id either — a retained tie selects it.
+    if (!scenes.some((s) => s.tie)) {
+      throw new Error('no scenes carry a tie — the fixture card is unpinned');
+    }
     // Same again for the splash, which has no layout id either — a boot selects it.
     if (!scenes.some((s) => s.splash !== null)) {
       throw new Error('no scenes carry a splash — the splash screen is unpinned');
@@ -201,6 +205,8 @@ if (!ran['test_render.cpp']) {
           // Through lineupState() rather than handed over raw, so the JS coercions
           // are compared against parseLineup's and not bypassed.
           scene.lineup ? panel.lineupState(scene.lineup) : null,
+          // Same for the tie, through tieState().
+          scene.tie ? panel.tieState(scene.tie) : null,
         );
       }
 

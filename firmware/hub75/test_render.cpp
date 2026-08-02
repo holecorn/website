@@ -278,14 +278,22 @@ static std::string splashJson(const SplashScene* splash) {
          ",\"elapsed\":" + std::to_string(splash->elapsed) + ",\"order\":" + order + "}";
 }
 
+// The tie as it arrived, so the Node side coerces it through tieState() the way the
+// firmware coerced it through parseTie — the same reasoning as lineupJson.
+static std::string tieJson(const TieState* t) {
+  if (!t || !t->set) return "null";
+  return "{\"t\":" + quoted(t->cup) + ",\"r\":" + quoted(t->round) + "}";
+}
+
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
                    bool blinkOn, PanelLayout layout, const LineupState* lineup,
-                   const SplashScene* splash = nullptr) {
+                   const TieState* tie = nullptr, const SplashScene* splash = nullptr) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
       "{\"name\":" + quoted(name.c_str()) +
       ",\"layout\":" + quoted(PANEL_LAYOUT_IDS[layout]) +
-      ",\"lineup\":" + lineupJson(lineup) + ",\"a\":" + std::to_string(s.a) +
+      ",\"lineup\":" + lineupJson(lineup) + ",\"tie\":" + tieJson(tie) +
+      ",\"a\":" + std::to_string(s.a) +
       ",\"b\":" + std::to_string(s.b) + ",\"round\":" + std::to_string(s.round) +
       ",\"target\":" + std::to_string(s.target) + ",\"winner\":" + teamJson(s.winner) +
       ",\"first\":" + teamJson(s.first) + ",\"teamA\":" + quoted(s.teamA) +
@@ -351,11 +359,11 @@ static void writeScenes() {
 
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
                         bool live, bool blinkOn, PanelLayout layout = PANEL_FULL,
-                        const LineupState* lineup = nullptr) {
+                        const LineupState* lineup = nullptr, const TieState* tie = nullptr) {
   Framebuffer fb;
-  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup);
+  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup, tie);
   fb.write(name);
-  record(name, s, haveState, live, blinkOn, layout, lineup);
+  record(name, s, haveState, live, blinkOn, layout, lineup, tie);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -382,7 +390,7 @@ static Framebuffer splashShot(const std::string& name, const char* hexA, const c
   drawSplash(fb, s.colorA, s.colorB, connect, elapsed, order);
   fb.write(name);
   const SplashScene scene = {connect, elapsed, order};
-  record(name, s, false, true, true, PANEL_FULL, nullptr, &scene);
+  record(name, s, false, true, true, PANEL_FULL, nullptr, nullptr, &scene);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -544,6 +552,64 @@ int main() {
   const Framebuffer formNR =
       shot("form-no-rates", play, true, true, true, PANEL_FULL, &formNoRates);
 
+  // The fixture card. Like the form screen it has no layout id — a tie is a phase of
+  // a tournament, not a preference the scorer sets — so tools/test-firmware.mjs has a
+  // separate assertion that some scene carries one.
+  const auto tieOf = [](const char* cup, const char* round) {
+    TieState t;
+    t.set = true;
+    copyInto(cup, t.cup, TIE_CUP_MAX);
+    copyInto(round, t.round, TIE_ROUND_MAX);
+    return t;
+  };
+  const TieState semi = tieOf("Hole Corn V", "Semi-final");
+  const TieState noCup = tieOf("", "Quarter-final");
+
+  // Singles, short names: 12 characters inline, so the fixture takes one row and the
+  // card spreads.
+  const BoardState tieSingles = makeState(0, 0, 0, "Neil", "Sigma");
+  // Doubles as typed: 24 inline, so the two sides stack and keep their ampersands.
+  const BoardState tieDoubles = makeState(0, 0, 0, "Neil & Rho", "Sigma & Tau");
+  // Exactly TIE_INLINE_CHARS between them, the widest that may spread.
+  const BoardState tieFits = makeState(0, 0, 0, "Rho & Tau", "Phi & Xi");
+  // One character more, which must stack. The pair pins the threshold at 20 rather
+  // than at the 21 a line physically holds: at 21 the row runs to within a pixel of
+  // both edges. A mutation to TIE_LINE_CHARS spreads this one and fails.
+  const BoardState tieOver = makeState(0, 0, 0, "Rho & Tau", "Phi & Chi");
+  // Names at the app's 16-character cap. Singles fits whole on its own row; doubles
+  // is past what even a full row holds and falls back to the slash.
+  const BoardState tieLongSingles =
+      makeState(0, 0, 0, "AlphaBetaGammaDe", "EtaThetaIotaKapp");
+  const BoardState tieLongDoubles = makeState(0, 0, 0, "AlphaBetaGammaDe & DeltaEpsilonZeta",
+                                              "EtaThetaIotaKapp & LambdaMuNuXiOmic");
+
+  const Framebuffer tieSpread =
+      shot("tie-spread", tieSingles, true, true, true, PANEL_FULL, nullptr, &semi);
+  const Framebuffer tieStack =
+      shot("tie-stacked", tieDoubles, true, true, true, PANEL_FULL, nullptr, &semi);
+  const Framebuffer tieAt20 =
+      shot("tie-fits-inline", tieFits, true, true, true, PANEL_FULL, nullptr, &semi);
+  const Framebuffer tieAt21 =
+      shot("tie-over-inline", tieOver, true, true, true, PANEL_FULL, nullptr, &semi);
+  shot("tie-long-singles", tieLongSingles, true, true, true, PANEL_FULL, nullptr, &semi);
+  const Framebuffer tieLong =
+      shot("tie-long-doubles", tieLongDoubles, true, true, true, PANEL_FULL, nullptr, &semi);
+  // No cup name — a hand-edited draw, or a tie published by an app that has one and a
+  // tournament that does not. The heading loses a row rather than the card failing.
+  shot("tie-no-cup", tieSingles, true, true, true, PANEL_FULL, nullptr, &noCup);
+  shot("tie-stale", tieDoubles, true, false, true, PANEL_FULL, nullptr, &semi);
+  // Under PANEL_SCORE, to show the tie overrides the layout rather than combining.
+  shot("tie-over-score", tieDoubles, true, true, true, PANEL_SCORE, nullptr, &semi);
+  // A tie and a lineup retained at once, which is the ordinary case: both are cleared
+  // at the first bag, and the tie is what a tournament shows before it.
+  const Framebuffer tieBeatsForm =
+      shot("tie-over-form", tieDoubles, true, true, true, PANEL_FULL, &doubles, &semi);
+  // No state, so there are no sides to name. Unlike the lineup, the card cannot stand
+  // on its own — it falls through to the dashes rather than drawing a heading over
+  // nobody.
+  const Framebuffer tieNoState =
+      shot("tie-no-state", tieDoubles, false, true, true, PANEL_FULL, nullptr, &semi);
+
   // The splash. Like the form screen it has no layout id, so tools/test-firmware.mjs
   // has a separate assertion that some scene carries one. Two colour pairs because
   // the pair is random at run time and one pair cannot show that the two words take
@@ -595,6 +661,51 @@ int main() {
   // stops being readable for half of every beat.
   check(winOff.lit() > 100, "winner blink blanked too much");
   check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");
+
+  // The fixture card. The spread and the stack are the same four pieces of text at
+  // different rows, so nothing about the *drawing* distinguishes them — what does is
+  // whether a band of the panel is empty between the heading and the fixture.
+  const auto darkestBand = [](const Framebuffer& fb) {
+    int best = 0, run = 0;
+    for (int y = 0; y < PANEL_H; y++) {
+      run = fb.litRow(y, 0, PANEL_W) ? 0 : run + 1;
+      if (run > best) best = run;
+    }
+    return best;
+  };
+  // Stacked fills all four rows, so the only gaps are the single pixel between them.
+  check(darkestBand(tieStack) <= 1, "a stacked card leaves no room to spare");
+  check(darkestBand(tieSpread) >= TIE_SPREAD_GAP,
+        "a spread card puts the spare height between the heading and the fixture");
+  // The threshold, and the pair is the point: one character decides it. Asserting
+  // only that 20 spreads would pass with the limit at the 21 a line physically holds.
+  check(darkestBand(tieAt20) >= TIE_SPREAD_GAP, "20 characters of fixture may spread");
+  check(darkestBand(tieAt21) <= 1, "21 must not — it would run to the panel's edges");
+  // Nobody to name, so the card cannot be drawn at all and the dashes stand.
+  check(memcmp(tieNoState.px_, noState.px_, sizeof noState.px_) == 0,
+        "a tie with no board state falls through to the no-state dashes");
+  check(memcmp(tieBeatsForm.px_, tieStack.px_, sizeof tieStack.px_) == 0,
+        "a tie wins over a lineup retained at the same time");
+  check(memcmp(tieBeatsForm.px_, formD.px_, sizeof formD.px_) != 0,
+        "and is not merely drawing the form screen");
+  // The long doubles card still fits, which is what the slash fallback is for.
+  check(tieLong.outOfBounds == 0, "a card of 16-character pairs stays on the panel");
+
+  // What a full-width row buys over the score screen's name row, stated as the
+  // characters rather than left to the pixels: a pair keeps the ampersand it was
+  // typed with, and a 16-character singles name lands whole where fitLabel would
+  // have cut it to nine.
+  char side[TIE_LINE_CHARS + 1];
+  fitTieSide("Neil & Rho", side, sizeof side);
+  check(!strcmp(side, "Neil & Rho"), "a pair that fits the row keeps its ampersand");
+  fitTieSide("AlphaBetaGammaDe", side, sizeof side);
+  check(!strcmp(side, "AlphaBetaGammaDe"), "a name at the app's cap fits a whole row");
+  char narrow[NAME_CHARS + 1];
+  fitLabel("AlphaBetaGammaDe", narrow, sizeof narrow);
+  check(strlen(narrow) < strlen("AlphaBetaGammaDe"),
+        "which the score screen's own name row could not do");
+  fitTieSide("AlphaBetaGammaDe & DeltaEpsilonZeta", side, sizeof side);
+  check(!strcmp(side, "AlphaBetaG/DeltaEpsil"), "a pair too wide for the row still shortens");
 
   // The splash. logo.h is generated from public/logo.svg by a browser, so the thing
   // worth asserting here is that what came out is usable at all — an empty mask would

@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  boardScreen,
   LINEUP_FORM_MAX,
   LIVE_GRACE_MS,
   TEAM_LABEL_MAX,
@@ -256,5 +257,35 @@ describe('boardLiveness', () => {
       live: true,
       dimAt: droppedAt + LIVE_GRACE_MS,
     });
+  });
+});
+
+describe('boardScreen', () => {
+  const lineup = { count: 2, rows: [] };
+  const tie = { set: true, cup: new Uint8Array(), round: new Uint8Array() };
+
+  // The precedence renderBoard draws by, asked as a question so the emulator's
+  // caption can use the same answer instead of re-deriving it.
+  it('puts a tie above a lineup retained at the same time', () => {
+    expect(boardScreen({ haveState: true, lineup, tie })).toBe('tie');
+    expect(boardScreen({ haveState: true, lineup })).toBe('form');
+  });
+
+  // Unlike the lineup, the card is drawn from the two sides in the score message,
+  // so with no state there is nobody to name and the dashes stand.
+  it('needs board state for a tie, where a lineup does not', () => {
+    expect(boardScreen({ haveState: false, tie })).toBe('no-state');
+    expect(boardScreen({ haveState: false, lineup })).toBe('form');
+  });
+
+  it('leaves the scorer’s layout underneath both', () => {
+    expect(boardScreen({ haveState: true, layout: 'score', tie })).toBe('tie');
+    expect(boardScreen({ haveState: true, layout: 'score' })).toBe('score');
+    expect(boardScreen({ haveState: true })).toBe('full');
+  });
+
+  it('ignores a cleared tie and an empty lineup', () => {
+    expect(boardScreen({ haveState: true, tie: { set: false } })).toBe('full');
+    expect(boardScreen({ haveState: true, lineup: { count: 0 } })).toBe('full');
   });
 });

@@ -54,6 +54,7 @@ const STATE = 'holecorn/abc12/state';
 const ONLINE = 'holecorn/abc12/online';
 const LAYOUT = 'holecorn/abc12/layout';
 const LINEUP = 'holecorn/abc12/lineup';
+const TIE = 'holecorn/abc12/tie';
 const PAYLOAD = { a: 3, b: 1 };
 const ROSTER = { rows: [{ n: 'Neil', w: 6, l: 4, p: 72, f: 'LWLWW' }, { n: 'Sigma', w: 4, l: 6, p: 60, f: 'WLWLL' }] };
 
@@ -282,7 +283,7 @@ describe('panel layout', () => {
   it('subscribes a display to the layout and lineup alongside state and presence', async () => {
     await open('display');
     broker.goOnline();
-    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT, LINEUP]);
+    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT, LINEUP, TIE]);
   });
 
   it('routes a layout message to its own handler, not the state parser', async () => {
@@ -376,6 +377,77 @@ describe('the pre-game lineup', () => {
     await open('display', { onMessage: (m) => seen.push(m) });
     broker.goOnline();
     broker.fire('message', LINEUP, Buffer.from('{not json'));
+    expect(seen).toEqual([]);
+  });
+});
+
+describe('the tournament tie', () => {
+  const TIE_MSG = { t: 'Hole Corn V', r: 'Semi-final' };
+
+  it('publishes the tie retained on its own topic', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendTie(TIE_MSG);
+
+    const [msg] = broker.of(TIE);
+    expect(JSON.parse(msg.payload)).toEqual(TIE_MSG);
+    expect(msg.opts).toMatchObject({ retain: true, qos: 1 });
+    // Neither of the other two topics carries it: the score payload has no room
+    // and the lineup packet is already the largest the board receives.
+    expect(broker.of(STATE)).toHaveLength(0);
+    expect(broker.of(LINEUP)).toHaveLength(0);
+  });
+
+  // The same trap the lineup has, and worse: a tie retained from a cup that
+  // finished weeks ago would leave a board naming a fixture nobody is playing.
+  it('re-asserts a cleared tie on reconnect, not just a set one', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendTie(null);
+    expect(broker.of(TIE).map((m) => m.payload)).toEqual(['']);
+
+    broker.client.connected = false;
+    broker.fire('close');
+    broker.goOnline();
+    expect(broker.of(TIE).map((m) => m.payload)).toEqual(['', '']);
+  });
+
+  it('says nothing on connect before the publisher has computed one', async () => {
+    await open('publisher');
+    broker.goOnline();
+    expect(broker.of(TIE)).toHaveLength(0);
+  });
+
+  it('holds a tie sent before the link opened', async () => {
+    const link = await open('publisher');
+    link.sendTie(TIE_MSG);
+    expect(broker.of(TIE)).toHaveLength(0);
+    broker.goOnline();
+    expect(broker.of(TIE)).toHaveLength(1);
+  });
+
+  it('ignores a tie send after close', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.close();
+    link.sendTie(TIE_MSG);
+    expect(broker.of(TIE)).toHaveLength(0);
+  });
+
+  it('reports a cleared topic as null so the display goes back to the score', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', TIE, Buffer.from(JSON.stringify(TIE_MSG)));
+    broker.fire('message', TIE, Buffer.from(''));
+    expect(seen).toEqual([{ tie: TIE_MSG }, { tie: null }]);
+  });
+
+  it('drops an unparseable tie instead of reporting it as cleared', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', TIE, Buffer.from('{not json'));
     expect(seen).toEqual([]);
   });
 });

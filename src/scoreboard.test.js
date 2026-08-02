@@ -17,7 +17,10 @@ import {
   scoreboardPayload,
   segmentDigits,
   stateTopic,
+  tiePayload,
+  tieTopic,
   usableLineup,
+  usableTie,
 } from './scoreboard.js';
 import { matchRecord } from './archive.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
@@ -421,6 +424,61 @@ describe('the pre-game lineup', () => {
     it('refuses anything that is not a roster', () => {
       for (const bad of [null, undefined, 'rows', 3, {}, { rows: 'two' }]) {
         expect(usableLineup(bad)).toBe(false);
+      }
+    });
+  });
+});
+
+describe('the tournament tie', () => {
+  const setup = () => ({ ...newGame(21), players: { a: ['Neil', 'P2'], b: ['Sigma', 'P2'] } });
+  const tie = { name: 'Hole Corn V', round: 'Semi-final' };
+
+  // Its own topic rather than a field, for the reason the layout has one: the
+  // lineup packet is the largest the board receives and a 32-character cup name
+  // has nowhere to go in it.
+  it('has its own retained topic and stays out of the other two payloads', () => {
+    expect(tieTopic('K3PQM')).toBe('holecorn/k3pqm/tie');
+    expect(tieTopic(' k3 pqm ')).toBe(tieTopic('k3pqm'));
+    expect(scoreboardPayload(newGame())).not.toHaveProperty('r');
+    expect(lineupPayload(setup(), [])).toBeNull();
+  });
+
+  // toEqual, not toMatchObject: the two sides are already on the score topic as
+  // joined labels, so a name creeping in here has to fail rather than ship two
+  // copies of who is playing that could disagree.
+  it('carries the cup and the round, and no names', () => {
+    expect(tiePayload(setup(), tie)).toEqual({ t: 'Hole Corn V', r: 'Semi-final' });
+  });
+
+  it('is null for a game that is not a tie', () => {
+    expect(tiePayload(setup(), null)).toBeNull();
+  });
+
+  // Null clears the retained message, which is the only way a board leaves the
+  // fixture card — the lineup's rule, and for the same reason.
+  it('is null once a bag has been thrown', () => {
+    const started = throwAll(setup(), 'a', ['hole', 'unthrown', 'unthrown', 'unthrown']);
+    expect(tiePayload(started, tie)).toBeNull();
+  });
+
+  // Nothing is cut on the wire: this topic has a packet to itself, so the panel
+  // truncates to what its row holds and the display shows the whole thing.
+  it('sends a long cup name whole', () => {
+    const long = { name: 'A'.repeat(32), round: 'Round of 16' };
+    expect(tiePayload(setup(), long).t).toHaveLength(32);
+  });
+
+  describe('usableTie', () => {
+    it('needs a round, which is what makes a tie a tie', () => {
+      expect(usableTie({ t: 'Hole Corn V', r: 'Final' })).toBe(true);
+      expect(usableTie({ r: 'Final' })).toBe(true);
+      expect(usableTie({ t: 'Hole Corn V' })).toBe(false);
+      expect(usableTie({ t: 'Hole Corn V', r: '' })).toBe(false);
+    });
+
+    it('refuses anything that is not a tie', () => {
+      for (const bad of [null, undefined, 'Final', 3, {}, { r: 3 }, { r: 'Final', t: 3 }]) {
+        expect(usableTie(bad)).toBe(false);
       }
     });
   });

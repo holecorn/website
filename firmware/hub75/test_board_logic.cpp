@@ -318,6 +318,48 @@ int main() {
     CHECK(wideL.size() + overhead < 512);
   }
 
+  printf("parseTie\n");
+  {
+    TieState t;
+    CHECK(parseTie("{\"t\":\"Hole Corn V\",\"r\":\"Semi-final\"}", 36, t));
+    CHECK(t.set && !strcmp(t.cup, "Hole Corn V") && !strcmp(t.round, "Semi-final"));
+
+    // The clear, which is the only way back to the score once a card is up — so
+    // it succeeds rather than being treated as a malformed message.
+    CHECK(parseTie("", 0, t));
+    CHECK(!t.set);
+
+    // The round is what makes a tie a tie. Without one there is nothing to draw,
+    // so this leaves whatever is on screen rather than blanking it — the rule
+    // parseLineup and parseLayout both follow.
+    TieState keep;
+    keep.set = true;
+    copyInto("Hole Corn V", keep.cup, TIE_CUP_MAX);
+    copyInto("Final", keep.round, TIE_ROUND_MAX);
+    CHECK(!parseTie("{\"t\":\"Hole Corn V\"}", 19, keep));
+    CHECK(!parseTie("{not json", 9, keep));
+    CHECK(keep.set && !strcmp(keep.round, "Final"));
+
+    // A cup with no name still draws: the heading loses a row rather than the
+    // card failing, which is what a hand-edited draw would otherwise cost.
+    CHECK(parseTie("{\"r\":\"Final\"}", 13, t));
+    CHECK(t.set && t.cup[0] == '\0' && !strcmp(t.round, "Final"));
+
+    // Sizing the buffer. The app caps a tournament name at 32 UTF-16 code units,
+    // which is 96 bytes of UTF-8, and nothing is cut on the wire because this
+    // topic has a packet to itself. Far below the score's, so MQTT_BUFFER is
+    // still bounded by the lineup.
+    std::string euro;
+    for (int i = 0; i < 32; i++) euro += "€";
+    const std::string wideTie = "{\"t\":\"" + euro + "\",\"r\":\"Quarter-final\"}";
+    CHECK(parseTie(wideTie.c_str(), wideTie.size(), t));
+    CHECK(strlen(t.cup) == 96);
+    const size_t tieOverhead = 9 + 16 + 4 + 2 + 2 + 5;  // holecorn/<code>/tie + headers
+    printf("  worst UTF-8 tie: %zu bytes, packet ~%zu\n", wideTie.size(),
+           wideTie.size() + tieOverhead);
+    CHECK(wideTie.size() + tieOverhead < 512);
+  }
+
   printf("stepBrightness\n");
   {
     CHECK(stepBrightness(0, 1) == 1);

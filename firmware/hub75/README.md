@@ -301,7 +301,7 @@ against no names rather than against a bare score.
 board on what it was already drawing — an app newer than the firmware must not be
 able to blank it or drop it to a layout nobody chose.
 
-### And a third screen that is not a layout
+### A third screen that is not a layout
 
 Before the first bag there is no score, so a retained roster on
 `holecorn/<code>/lineup` puts the board on a **form** screen instead: one row per
@@ -350,7 +350,51 @@ Because the form screen has no layout id, the coverage check in
 `tools/test-firmware.mjs` cannot see it through `PANEL_LAYOUTS`, so it separately
 refuses to pass unless some scene carries a lineup.
 
-### And a fourth: the wordmark at power-on
+### A fourth screen: a tournament tie
+
+A retained `holecorn/<code>/tie` — the cup's name and the round — puts the board on a
+**fixture card** and wins over the form screen, because inside a knockout a form line
+says nothing: every side arrives at a tie unbeaten, so the pips read `WWW` against
+`WWW`. What changes tie to tie is the round.
+
+```
+     HOLE CORN V                        HOLE CORN V
+      SEMI-FINAL                          FINAL
+     NEIL & RHO
+     SIGMA & TAU                     NEIL  V  SIGMA
+```
+
+The fixture collapses onto one row when both sides fit there **as typed**, freeing the
+fourth row and spreading the card. Never by shortening — buying air by giving up a name
+is the wrong way round — so a long pair stacks and keeps its ampersand. The heading is
+always two rows, so a cup does not change shape between its own ties.
+
+Like the form screen it is not an entry in `PANEL_LAYOUT_IDS`, so `renderBoard` takes an
+optional `const TieState*` and `tools/test-firmware.mjs` carries a third standalone
+assertion that some scene has one.
+
+| | value |
+| --- | --- |
+| rows | 4 stacked, 3 spread (`TIE_ROW_H` = 8) |
+| line | **21 characters**; the fixture spreads at **20** or fewer |
+| worst-case duty | **22.7%**, against `DUTY_CEILING`'s 30% |
+
+Four things worth knowing before changing it:
+
+- **It carries no names.** The two sides come from the score message, already joined —
+  two copies of who is playing could disagree. So unlike the lineup the card needs
+  `haveState`: with no score there is nobody to name, and it falls through to the dashes.
+- **Stacking is what buys the characters.** Either side of a versus mark each side gets
+  9, so a 16-character name lands as `ALPHABETA`. A full row gives 21 and it fits whole.
+- **20 and not 21.** A 21-character fixture fits, but runs to within a pixel of both
+  edges. `test_render.cpp` pins the threshold with a *pair* of scenes one character
+  apart, since asserting only that 20 spreads passes with the limit at 21.
+- **No versus mark between stacked sides and no first-thrower rule.** `TIE_ROW_H` is 8
+  and `FONT_H` is 7, so anything between two rows is 1px and reads as an underscore
+  stuck to the name above it. The colours are the two the score screen already puts
+  either side of a `V`, and the score screen rules the opening side moments later.
+
+### And a fifth: the wordmark at power-on
 
 For `SPLASH_MS` (5 s) after `panel->begin()` the board shows the Holecorn
 wordmark, in **two of the app's four team colours picked at random each boot**, with

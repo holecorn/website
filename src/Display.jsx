@@ -174,7 +174,7 @@ export default function Display() {
   });
 
   useWakeLock();
-  const { payload, status, error, senderOnline, lineup } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, lineup, tie } = useScoreboardDisplay(config);
   const hollow = useWinnerFlash(payload?.winner ?? null);
 
   if (!configComplete(config)) {
@@ -204,18 +204,28 @@ export default function Display() {
         ? 'connecting…'
         : (error ?? status);
 
-  // A retained lineup means the game has not begun, so there is no score worth
-  // the whole screen. Unlike the panel — which has 128x32 and four rows of 5x7 to
-  // spend — a tablet can show the rates as well, so it does. The two diverging is
+  // Either topic means the game has not begun, so there is no score worth the whole
+  // screen. A tie alone still gets this branch: a tournament whose entrants have
+  // never played publishes no lineup at all, and round one of a first cup is exactly
+  // that — without it the tablet would say nothing about the tie it is watching.
+  //
+  // Unlike the panel — 128x32 and four rows of 5x7, so the fixture takes the lot —
+  // a tablet has room for the rates underneath, so it keeps them. That divergence is
   // deliberate, the same as the winner flash and the dim grace.
-  if (lineup) {
+  if (lineup || tie) {
     return (
       <div
         className={`display display-form${stale ? ' is-stale' : ''}`}
         onClick={toggleFullscreen}
         title="Tap for fullscreen"
       >
-        <FormTable lineup={lineup} colorA={colorA} colorB={colorB} />
+        <FormTable
+          lineup={lineup}
+          tie={tie}
+          sides={[payload?.teamA ?? 'Team A', payload?.teamB ?? 'Team B']}
+          colorA={colorA}
+          colorB={colorB}
+        />
         <p className="display-status">{statusText}</p>
       </div>
     );
@@ -280,18 +290,46 @@ export default function Display() {
 // The pre-game roster. Rows arrive in lane order — team A's slots then team B's —
 // so which half a row is in is the team it belongs to; usableLineup refuses a
 // count that cannot be halved, which is what makes that safe here too.
-function FormTable({ lineup, colorA, colorB }) {
-  const rows = lineup.rows;
+function FormTable({ lineup, tie, sides, colorA, colorB }) {
+  const rows = lineup?.rows ?? [];
   const half = rows.length / 2;
   return (
-    <div className="form-table">
-      <p className="form-title">Form</p>
-      <div className="form-head" aria-hidden="true">
-        <span />
-        <span>W–L</span>
-        <span>Last 5</span>
-        <span>PPR</span>
-      </div>
+    <div className={`form-table${rows.length === 0 ? ' is-card' : ''}`}>
+      {/* The tie replaces the title rather than sitting beside it: "Form" is the
+          one line here the columns below already say for themselves, so the round
+          costs no height at all.
+          A tablet keeps the form table underneath, where the panel gives the whole
+          screen to the fixture — it has the room, and the two diverging is the same
+          call the winner flash and the dim grace already make. */}
+      <p className="form-title">
+        {tie ? (
+          <>
+            {tie.t ? <span className="form-cup">{tie.t} · </span> : null}
+            <span className="form-tie">{tie.r}</span>
+          </>
+        ) : (
+          'Form'
+        )}
+      </p>
+      {/* With no roster there are no columns to caption, and the two sides stand on
+          their own — the panel's fixture card, on a screen that could have held more
+          and has nothing to put there. */}
+      {rows.length === 0 ? (
+        sides.map((side, i) => (
+          <div className="form-row" key={i}>
+            <span className="form-name form-side" style={{ color: i === 0 ? colorA : colorB }}>
+              {side}
+            </span>
+          </div>
+        ))
+      ) : (
+        <div className="form-head" aria-hidden="true">
+          <span />
+          <span>W–L</span>
+          <span>Last 5</span>
+          <span>PPR</span>
+        </div>
+      )}
       {rows.map((row, i) => {
         const color = i < half ? colorA : colorB;
         const form = typeof row.f === 'string' ? row.f : '';

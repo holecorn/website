@@ -29,7 +29,9 @@ import {
   drawSplash,
   lineupState,
   parseColor,
+  boardScreen,
   renderBoard,
+  tieState,
 } from './panelRender.js';
 // Straight from the generated asset, because how many letters there are to throw is the
 // mark's own business rather than the renderer's.
@@ -172,12 +174,22 @@ export default function Panel() {
     return merged;
   });
 
-  const { payload, status, error, senderOnline, layout, lineup } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, layout, lineup, tie } = useScoreboardDisplay(config);
   const blinkOn = useBlink(payload?.winner ?? null);
   const live = useBoardLive(status === 'connected', senderOnline);
   // Coerced through the same function the pixel check drives, so what is drawn
   // here is what parseLineup would have made of the message.
   const drawn = useMemo(() => lineupState(lineup), [lineup]);
+  // Same again for the tie, through parseTie's own coercions.
+  const drawnTie = useMemo(() => tieState(tie), [tie]);
+  // Asked of renderBoard's own rule rather than re-derived, so the caption cannot
+  // name a screen the canvas is not drawing.
+  const screen = boardScreen({
+    haveState: payload !== null,
+    layout,
+    lineup: drawn,
+    tie: drawnTie,
+  });
 
   const splash = useSplash(status);
   const [splashColors] = useState(splashPair);
@@ -193,10 +205,10 @@ export default function Panel() {
     if (splash.showing) {
       drawSplash(fb, splashColors[0], splashColors[1], splash.connect, splash.elapsed, splashOrder);
     } else {
-      renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn);
+      renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn, drawnTie);
     }
     paintPanel(canvasRef.current, fb, cell);
-  }, [payload, live, blinkOn, cell, layout, drawn, splash, splashColors, splashOrder]);
+  }, [payload, live, blinkOn, cell, layout, drawn, drawnTie, splash, splashColors, splashOrder]);
 
   if (!configComplete(config)) {
     return (
@@ -222,12 +234,15 @@ export default function Panel() {
           aria-label={
             splash.showing
               ? 'Panel showing the Holecorn logo while it starts up'
-              : drawn
-                ? `Panel showing pre-game form for ${drawn.count} players`
-                : payload
-                  ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
-                    `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
-                  : 'Panel showing no score yet'
+              : screen === 'tie'
+                ? `Panel showing ${payload.teamA ?? 'team A'} against ` +
+                  `${payload.teamB ?? 'team B'} in the ${tie.r}`
+                : screen === 'form'
+                  ? `Panel showing pre-game form for ${drawn.count} players`
+                  : payload
+                    ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                      `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
+                    : 'Panel showing no score yet'
           }
         />
       </div>
@@ -237,9 +252,11 @@ export default function Panel() {
             up would describe something not on screen. */}
         {splash.showing
           ? 'Starting up'
-          : drawn
-            ? 'Pre-game form'
-            : (LAYOUT_LABELS[layout] ?? layout)}{' '}
+          : screen === 'tie'
+            ? 'Tournament tie'
+            : screen === 'form'
+              ? 'Pre-game form'
+              : (LAYOUT_LABELS[layout] ?? layout)}{' '}
         ·{' '}
         {status === 'connected'
           ? live

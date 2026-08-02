@@ -119,6 +119,34 @@ static const int FORM_PIPS_X = PANEL_W - FORM_PIPS_W;
 static const int FORM_WL_MAX = 7;
 static const int FORM_PPR_MAX = 4;
 
+// ------------------------------------------------- tie card layout geometry --
+//
+// The fixture card, drawn while a tie is retained on the tie topic. Four rows of
+// 5x7 is the whole panel, the same budget the form screen has, but a row here is
+// the full width rather than four columns — which is the whole reason the sides
+// are stacked instead of drawn either side of a versus mark. Measured: split
+// across one row each side gets 9 characters, so a 16-character name lands as
+// "ALPHABETA"; stacked it gets 21 and fits whole.
+static const int TIE_ROW_H = FONT_H + 1;
+static const int TIE_LINE_CHARS = PANEL_W / FONT_ADVANCE;
+
+// The fixture collapses onto one row when both sides fit there *as typed*, which
+// frees the fourth row and lets the card breathe. Never by shortening: giving up
+// "Neil & Rho" for "NEIL/RHO" to buy air is the wrong way round, so a long pair
+// stacks and keeps its ampersand.
+//
+// One character short of the line, not the whole line. 21 fit, but they run to
+// within a pixel of both edges and read as crowding the frame; 20 leaves 4px.
+static const int TIE_INLINE_CHARS = TIE_LINE_CHARS - 1;
+// The space, the mark and the space between the two sides.
+static const int TIE_VERSUS_CHARS = 3;
+
+// Spread rows sit as one block with the spare height around it, rather than
+// spaced evenly: the cup and the round are one thing to read and the fixture is
+// another, so the gap goes between them and not inside the heading.
+static const int TIE_SPREAD_TOP = 2;
+static const int TIE_SPREAD_GAP = 6;
+
 // ---------------------------------------------------- splash layout geometry --
 //
 // The wordmark, shown while the board comes up. The masks in logo.h are the panel's
@@ -419,13 +447,17 @@ inline int writeAbbreviated(const char* label, int k, char* dst, int cap) {
 // was tried and was wrong: it cut "Lambda" — which fits — to "Lamb" because
 // the opposing label was long. Partners within a label do still share one, so
 // a shortened pair still looks deliberate.
-inline int fitLabel(const char* label, char* out, int cap) {
+inline int fitLabelTo(const char* label, char* out, int cap, int maxChars) {
   for (int k = int(TEAM_LABEL_MAX); k >= 1; k--) {
-    if (abbreviatedLen(label, k) <= NAME_CHARS) return writeAbbreviated(label, k, out, cap);
+    if (abbreviatedLen(label, k) <= maxChars) return writeAbbreviated(label, k, out, cap);
   }
   // Unreachable for a pair — "A/B" is three characters — but a single name
   // longer than the slot still has to land somewhere.
   return writeAbbreviated(label, 1, out, cap);
+}
+
+inline int fitLabel(const char* label, char* out, int cap) {
+  return fitLabelTo(label, out, cap, NAME_CHARS);
 }
 
 // Span of one half of a fitted label, given where the fit put the join.
@@ -638,6 +670,82 @@ void drawForm(Canvas& c, const BoardState& s, const LineupState& l, uint8_t leve
   }
 }
 
+template <typename Canvas>
+void drawTextCentred(Canvas& c, const char* s, int y, Rgb color, int maxChars) {
+  drawText(c, s, (PANEL_W - textWidth(s, maxChars)) / 2, y, color, maxChars);
+}
+
+// A side as the fixture card writes it: whole, with the ampersand it was typed
+// with, when the line has room — which is the one thing a full-width row buys
+// over the score screen's name row — and the same slash shortening as a
+// fallback when it does not.
+inline void fitTieSide(const char* label, char* out, int cap) {
+  if (cStrLen(label) <= TIE_LINE_CHARS) {
+    copyInto(label, out, size_t(cap));
+    return;
+  }
+  fitLabelTo(label, out, cap, TIE_LINE_CHARS);
+}
+
+// Whether both sides fit on one row with the mark between them. Measured on the
+// labels as published, not on the shortened forms: shortening to earn the spread
+// would trade a name for a gap.
+inline bool tieSpreads(const BoardState& s) {
+  return cStrLen(s.teamA) + TIE_VERSUS_CHARS + cStrLen(s.teamB) <= TIE_INLINE_CHARS;
+}
+
+// The two sides on one row, centred as a single run. Only reached when
+// tieSpreads says they fit, so neither side is cut here.
+template <typename Canvas>
+void drawTieFixture(Canvas& c, const BoardState& s, int y, Rgb colorA, Rgb colorB, Rgb grey) {
+  const int aLen = cStrLen(s.teamA);
+  const int bLen = cStrLen(s.teamB);
+  const int chars = aLen + TIE_VERSUS_CHARS + bLen;
+  const int x = (PANEL_W - (chars * FONT_ADVANCE - 1)) / 2;
+  drawText(c, s.teamA, x, y, colorA, TIE_LINE_CHARS);
+  // Belongs to neither team, so it takes the neutral colour — the same rule the
+  // full layout's mark follows.
+  drawText(c, "V", x + (aLen + 1) * FONT_ADVANCE, y, grey, 1);
+  drawText(c, s.teamB, x + (aLen + TIE_VERSUS_CHARS) * FONT_ADVANCE, y, colorB, TIE_LINE_CHARS);
+}
+
+// Who is playing and what it is, in the two teams' own colours. No versus mark
+// when the sides are stacked: the colours are the same two the score screen puts
+// either side of one, so a mark between two rows says nothing a row of pixels can
+// carry — there is exactly 1px between them, and a rule there reads as an
+// underscore stuck to the name.
+//
+// No first-thrower rule for the same reason, and the score screen carries one a
+// few seconds later. Drawing it only in the spread layout, where the room exists,
+// was considered and rejected: a marker that appears only when the names are short
+// reads as missing information rather than as information never offered.
+template <typename Canvas>
+void drawTie(Canvas& c, const BoardState& s, const TieState& t, uint8_t level) {
+  const Rgb colorA = scaled(s.colorA, level);
+  const Rgb colorB = scaled(s.colorB, level);
+  const Rgb grey = scaled(MARKER_COLOR, level);
+  const Rgb white = scaled(Rgb{0xff, 0xff, 0xff}, level);
+
+  const bool spread = tieSpreads(s);
+  // The heading is always two rows, so a cup does not change shape between its
+  // own ties: only the fixture adapts, and the mode a tie is played in is fixed
+  // by the draw.
+  const int top = spread ? TIE_SPREAD_TOP : 0;
+  drawTextCentred(c, t.cup, top, grey, TIE_LINE_CHARS);
+  drawTextCentred(c, t.round, top + TIE_ROW_H, white, TIE_LINE_CHARS);
+
+  if (spread) {
+    drawTieFixture(c, s, top + TIE_ROW_H + FONT_H + TIE_SPREAD_GAP, colorA, colorB, grey);
+    return;
+  }
+
+  char sideA[TIE_LINE_CHARS + 1], sideB[TIE_LINE_CHARS + 1];
+  fitTieSide(s.teamA, sideA, TIE_LINE_CHARS + 1);
+  fitTieSide(s.teamB, sideB, TIE_LINE_CHARS + 1);
+  drawTextCentred(c, sideA, top + TIE_ROW_H * 2, colorA, TIE_LINE_CHARS);
+  drawTextCentred(c, sideB, top + TIE_ROW_H * 3, colorB, TIE_LINE_CHARS);
+}
+
 // Two pixels to a byte, low nibble first, so a row reads left to right.
 inline uint8_t logoLevel(const uint8_t* row, int x) {
   return (row[x >> 1] >> ((x & 1) * 4)) & 0x0f;
@@ -726,11 +834,23 @@ void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed
 // it is only ever published before the first bag, so while it is there the score
 // is 0-0 and there is nothing to cover up. The scorer's chosen layout is
 // untouched underneath and comes back when the lineup is cleared.
+//
+// A retained tie wins over the lineup in turn, and needs `haveState` where the
+// lineup does not: the card is drawn from the two sides in the score message, so
+// without one there is nobody to name. Both are cleared at the first bag, so the
+// order between them only decides what a tournament shows before it — form, which
+// in a knockout is every side unbeaten, or which tie this is.
 template <typename Canvas>
 void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn,
-                 PanelLayout layout = PANEL_FULL, const LineupState* lineup = nullptr) {
+                 PanelLayout layout = PANEL_FULL, const LineupState* lineup = nullptr,
+                 const TieState* tie = nullptr) {
   const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;
   const bool score = layout == PANEL_SCORE;
+
+  if (tie && tie->set && haveState) {
+    drawTie(c, s, *tie, level);
+    return;
+  }
 
   if (lineup && lineup->count > 0) {
     drawForm(c, s, *lineup, level);

@@ -230,6 +230,32 @@
   color: #6b7885;
 }
 
+/* The round is the half that changes tie to tie, so it takes the light; the cup's
+   name is fixed for weeks and stays at the title's own grey. Both are clipped
+   rather than wrapped — a second line here would push the rows down. */
+.form-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-tie {
+  color: #cfd8e3;
+}
+
+/* A side with no record beside it spans the row rather than sitting in the name
+   track, which without the numeric columns to hold them open would leave it
+   squeezed against the left edge. The heading follows it: left-aligned over
+   centred names reads as a table that lost its rows. */
+.form-side {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
+.form-table.is-card .form-title {
+  text-align: center;
+}
+
 .form-head > span {
   font-size: 0.28em;
   letter-spacing: 0.08em;

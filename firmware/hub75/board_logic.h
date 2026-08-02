@@ -123,6 +123,29 @@ struct LineupState {
   LineupRow rows[LINEUP_MAX];
 };
 
+// -------------------------------------------------------------- tournament tie --
+//
+// The tie arrives on holecorn/<code>/tie, retained, and is cleared at the first bag
+// exactly as the lineup is. It carries only the cup's name and the round, because
+// the two sides are already in the score message as joined labels and two copies of
+// who is playing could disagree.
+//
+// It wins over the form screen rather than sitting beside it: in a knockout both
+// sides arrive at a tie unbeaten, so a form line inside a tournament is all wins for
+// everyone and says nothing. Which tie this is says something.
+//
+// The app caps a tournament's name at 32 UTF-16 code units, which is 96 bytes of
+// UTF-8. Nothing is truncated on the wire — this topic has its own packet — so the
+// buffer is sized for the name rather than for what a panel line can draw.
+static const size_t TIE_CUP_MAX = 97;
+static const size_t TIE_ROUND_MAX = 33;
+
+struct TieState {
+  bool set = false;
+  char cup[TIE_CUP_MAX] = {0};
+  char round[TIE_ROUND_MAX] = {0};
+};
+
 struct BoardState {
   int a = 0;
   int b = 0;
@@ -156,12 +179,14 @@ inline void parseColor(const char* hex, Rgb& out) {
   out.b = uint8_t(v);
 }
 
-inline void copyLabel(const char* src, char* dst) {
+inline void copyInto(const char* src, char* dst, size_t cap) {
   if (!src) { dst[0] = '\0'; return; }
   size_t i = 0;
-  for (; src[i] && i < TEAM_LABEL_MAX - 1; i++) dst[i] = src[i];
+  for (; src[i] && i < cap - 1; i++) dst[i] = src[i];
   dst[i] = '\0';
 }
+
+inline void copyLabel(const char* src, char* dst) { copyInto(src, dst, TEAM_LABEL_MAX); }
 
 // An empty payload is the publisher clearing the topic, and is the *only* way
 // back to the score screen — so it succeeds with a count of 0 rather than being
@@ -211,6 +236,32 @@ inline bool parseLineup(const char* json, size_t length, LineupState& out) {
       r.form[j] = '\0';
     }
   }
+  out = next;
+  return true;
+}
+
+// An empty payload clears the tie, exactly as it clears the lineup, and is the
+// only way back to the score once a fixture card is up — so it succeeds with
+// `set` false rather than being treated as malformed.
+//
+// The round is what makes a tie a tie, so a message without one is refused and
+// leaves `out` alone; the cup's name is optional and simply comes out empty,
+// which draws one fewer row rather than failing.
+inline bool parseTie(const char* json, size_t length, TieState& out) {
+  if (!json) return false;
+  if (length == 0) {
+    out.set = false;
+    return true;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, json, length)) return false;
+  const char* round = doc["r"].as<const char*>();
+  if (!round || round[0] == '\0') return false;
+
+  TieState next;
+  next.set = true;
+  copyInto(round, next.round, TIE_ROUND_MAX);
+  copyInto(doc["t"].as<const char*>(), next.cup, TIE_CUP_MAX);
   out = next;
   return true;
 }

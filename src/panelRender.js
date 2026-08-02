@@ -77,6 +77,15 @@ const FORM_PIPS_X = PANEL_W - FORM_PIPS_W;
 const FORM_WL_MAX = 7;
 const FORM_PPR_MAX = 4;
 
+const TIE_ROW_H = FONT_H + 1;
+const TIE_LINE_CHARS = idiv(PANEL_W, FONT_ADVANCE);
+const TIE_INLINE_CHARS = TIE_LINE_CHARS - 1;
+const TIE_VERSUS_CHARS = 3;
+const TIE_SPREAD_TOP = 2;
+const TIE_SPREAD_GAP = 6;
+const TIE_CUP_MAX = 97;
+const TIE_ROUND_MAX = 33;
+
 // How long the board shows the wordmark at power-on. Mirrored in sketch.ino, the
 // same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
 // The throws are the other way round — they are drawing, so render.h owns them and this
@@ -368,6 +377,26 @@ export function lineupState(payload) {
   };
 }
 
+// parseTie's coercions: the round is what makes a tie a tie, so null for a
+// message without one leaves whatever is on screen; the cup's name is optional
+// and comes out empty. Bytes rather than strings for the same reason a lineup
+// row's name is — a label is cut to what the buffer holds, mid-character if that
+// is where the cut falls, and the point of the emulator is to see that.
+export function tieState(payload) {
+  const round = payload?.r;
+  if (typeof round !== 'string' || round === '') return null;
+  return {
+    set: true,
+    cup: labelSlice(payload?.t, TIE_CUP_MAX),
+    round: labelSlice(round, TIE_ROUND_MAX),
+  };
+}
+
+function labelSlice(value, max) {
+  const bytes = encoder.encode(typeof value === 'string' ? value : '');
+  return bytes.subarray(0, Math.min(bytes.length, max - 1));
+}
+
 // `lastLive` is when the link was last actually up, or 0 if never. The C++
 // relies on unsigned wrap to survive millis() overflowing at ~49 days; these are
 // Date.now() stamps, so there is no wrap to survive and a `lastLive` in the
@@ -433,11 +462,15 @@ function writeAbbreviated(bytes, k, cap) {
   return { bytes: Uint8Array.from(out), joinAt };
 }
 
-function fitLabel(bytes, cap) {
+function fitLabelTo(bytes, cap, maxChars) {
   for (let k = TEAM_LABEL_MAX; k >= 1; k -= 1) {
-    if (abbreviatedLen(bytes, k) <= NAME_CHARS) return writeAbbreviated(bytes, k, cap);
+    if (abbreviatedLen(bytes, k) <= maxChars) return writeAbbreviated(bytes, k, cap);
   }
   return writeAbbreviated(bytes, 1, cap);
+}
+
+function fitLabel(bytes, cap) {
+  return fitLabelTo(bytes, cap, NAME_CHARS);
 }
 
 // Null when that half came out empty, which a blank player name does.
@@ -601,6 +634,49 @@ const splashThrownAt = (board, slot) => (slot * SPLASH_BOARDS + board) * SPLASH_
 const splashLandedAt = (board, slot) => splashThrownAt(board, slot) + SPLASH_FLIGHT_MS;
 const splashLanded = (board, slot, elapsed) => elapsed >= splashLandedAt(board, slot);
 
+function drawTextCentred(fb, bytes, y, color, maxChars) {
+  drawText(fb, bytes, idiv(PANEL_W - textWidth(bytes, maxChars), 2), y, color, maxChars);
+}
+
+function fitTieSide(bytes, cap) {
+  if (bytes.length <= TIE_LINE_CHARS) return bytes.subarray(0, Math.min(bytes.length, cap - 1));
+  return fitLabelTo(bytes, cap, TIE_LINE_CHARS).bytes;
+}
+
+function tieSpreads(s) {
+  return s.teamA.length + TIE_VERSUS_CHARS + s.teamB.length <= TIE_INLINE_CHARS;
+}
+
+function drawTieFixture(fb, s, y, colorA, colorB, grey) {
+  const aLen = s.teamA.length;
+  const bLen = s.teamB.length;
+  const chars = aLen + TIE_VERSUS_CHARS + bLen;
+  const x = idiv(PANEL_W - (chars * FONT_ADVANCE - 1), 2);
+  drawText(fb, s.teamA, x, y, colorA, TIE_LINE_CHARS);
+  drawText(fb, VERSUS, x + (aLen + 1) * FONT_ADVANCE, y, grey, 1);
+  drawText(fb, s.teamB, x + (aLen + TIE_VERSUS_CHARS) * FONT_ADVANCE, y, colorB, TIE_LINE_CHARS);
+}
+
+function drawTie(fb, s, t, level) {
+  const colorA = scaled(s.colorA, level);
+  const colorB = scaled(s.colorB, level);
+  const grey = scaled(MARKER_COLOR, level);
+  const white = scaled(WHITE, level);
+
+  const spread = tieSpreads(s);
+  const top = spread ? TIE_SPREAD_TOP : 0;
+  drawTextCentred(fb, t.cup, top, grey, TIE_LINE_CHARS);
+  drawTextCentred(fb, t.round, top + TIE_ROW_H, white, TIE_LINE_CHARS);
+
+  if (spread) {
+    drawTieFixture(fb, s, top + TIE_ROW_H + FONT_H + TIE_SPREAD_GAP, colorA, colorB, grey);
+    return;
+  }
+
+  drawTextCentred(fb, fitTieSide(s.teamA, TIE_LINE_CHARS + 1), top + TIE_ROW_H * 2, colorA, TIE_LINE_CHARS);
+  drawTextCentred(fb, fitTieSide(s.teamB, TIE_LINE_CHARS + 1), top + TIE_ROW_H * 3, colorB, TIE_LINE_CHARS);
+}
+
 export function splashThump(board, elapsed) {
   for (let slot = 0; slot < LOGO_LETTERS; slot += 1) {
     const at = splashLandedAt(board, slot);
@@ -671,16 +747,47 @@ export function drawSplash(fb, colorA, colorB, connect, elapsed, order) {
   }
 }
 
-export function renderBoard(fb, s, haveState, live, blinkOn, layout = 'full', lineup = null) {
+// Which screen the board is on, given what has arrived. Exported because
+// `Panel.jsx` captions the emulator with it: the precedence between a tie, a
+// lineup and the two score layouts is a rule, and a caption that re-derived it
+// could name a screen the canvas is not drawing — which a mutation proved, since
+// the frames differ and the words did not.
+//
+// render.h has the same chain written out rather than calling anything: the
+// firmware draws and never captions, and the pixel check is what holds the two
+// together.
+export function boardScreen({ haveState, layout = 'full', lineup = null, tie = null }) {
+  if (tie && tie.set && haveState) return 'tie';
+  if (lineup && lineup.count > 0) return 'form';
+  if (!haveState) return 'no-state';
+  return layout === 'score' ? 'score' : 'full';
+}
+
+export function renderBoard(
+  fb,
+  s,
+  haveState,
+  live,
+  blinkOn,
+  layout = 'full',
+  lineup = null,
+  tie = null,
+) {
   const level = live ? LEVEL_LIVE : LEVEL_STALE;
   const score = layout === 'score';
+  const screen = boardScreen({ haveState, layout, lineup, tie });
 
-  if (lineup && lineup.count > 0) {
+  if (screen === 'tie') {
+    drawTie(fb, s, tie, level);
+    return fb;
+  }
+
+  if (screen === 'form') {
     drawForm(fb, s, lineup, level);
     return fb;
   }
 
-  if (!haveState) {
+  if (screen === 'no-state') {
     const grey = scaled(MARKER_COLOR, level);
     const font = score ? GLYPH_BIG : GLYPH_SMALL;
     const y = score ? SCORE_DIGIT_Y : DIGIT_Y;

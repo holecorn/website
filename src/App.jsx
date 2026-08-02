@@ -291,7 +291,29 @@ export default function App() {
     };
   }, []);
 
-  const scoreboard = useScoreboardPublisher(game, sbConfig, matches);
+  // The tie this game is. Nothing on the game says which one — the bracket works it
+  // out from the two sides — so this is a derivation, and it is memoised because it
+  // rebuilds a whole bracket from the archive on a render that happens per bag.
+  const liveTournament = useMemo(
+    () => tournaments.find((t) => t.id === game.tournament) ?? null,
+    [tournaments, game.tournament],
+  );
+  const liveView = useMemo(
+    () => (liveTournament ? bracket(liveTournament, matches) : null),
+    [liveTournament, matches],
+  );
+  const playingTie = useMemo(() => tieFor(liveView, game), [liveView, game]);
+  // What the board is told: the cup and the round, and no names — the two sides are
+  // already in the score payload as joined labels.
+  const publishedTie = useMemo(
+    () =>
+      liveTournament && playingTie
+        ? { name: liveTournament.name, round: levelName(playingTie.level, liveView.shape) }
+        : null,
+    [liveTournament, playingTie, liveView],
+  );
+
+  const scoreboard = useScoreboardPublisher(game, sbConfig, matches, publishedTie);
 
   // Flash a cornhole callout when a round is committed: WASH on a tie, GAME on
   // the winning throw, SKUNK when the loser is left on zero.
@@ -468,11 +490,6 @@ export default function App() {
       />
     );
   }
-
-  // The tournament this game is a tie in.
-  const liveTournament = tournaments.find((t) => t.id === game.tournament) ?? null;
-  const liveView = liveTournament ? bracket(liveTournament, matches) : null;
-  const playingTie = tieFor(liveView, game);
 
   if (screen === 'setup') {
     const faults = lineupFaults(game);

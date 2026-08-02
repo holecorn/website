@@ -5,7 +5,9 @@ import {
   lineupPayload,
   normalizeLayout,
   scoreboardPayload,
+  tiePayload,
   usableLineup,
+  usableTie,
 } from './scoreboard.js';
 import { openScoreboardLink } from './scoreboardLink.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
@@ -41,6 +43,8 @@ function useLink({ config, role, active, onMessage }) {
   // instruction — clear the form screen — and has to be told apart from nothing
   // pending yet.
   const pendingLineupRef = useRef(null);
+  // Same again for the tie: a null clears the fixture card.
+  const pendingTieRef = useRef(null);
   const messageRef = useRef(onMessage);
   messageRef.current = onMessage;
 
@@ -85,6 +89,7 @@ function useLink({ config, role, active, onMessage }) {
         if (pendingRef.current) handle.send(pendingRef.current);
         if (pendingLayoutRef.current) handle.sendLayout(pendingLayoutRef.current);
         if (pendingLineupRef.current) handle.sendLineup(pendingLineupRef.current.value);
+        if (pendingTieRef.current) handle.sendTie(pendingTieRef.current.value);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -99,14 +104,22 @@ function useLink({ config, role, active, onMessage }) {
     };
   }, [active, role, broker, username, password, code]);
 
-  return { status, error, linkRef, pendingRef, pendingLayoutRef, pendingLineupRef };
+  return { status, error, linkRef, pendingRef, pendingLayoutRef, pendingLineupRef, pendingTieRef };
 }
 
 // Publishes the logged score whenever it changes. Fire and forget: nothing here
 // blocks the UI, and a broker that is unreachable just leaves a status pill.
-export function useScoreboardPublisher(game, config, matches) {
+export function useScoreboardPublisher(game, config, matches, tie) {
   const active = Boolean(config.enabled);
-  const { status, error, linkRef, pendingRef, pendingLayoutRef, pendingLineupRef } = useLink({
+  const {
+    status,
+    error,
+    linkRef,
+    pendingRef,
+    pendingLayoutRef,
+    pendingLineupRef,
+    pendingTieRef,
+  } = useLink({
     config,
     role: 'publisher',
     active,
@@ -151,6 +164,21 @@ export function useScoreboardPublisher(game, config, matches) {
     return () => clearTimeout(id);
   }, [lineup, linkRef, pendingLineupRef]);
 
+  // Debounced like the lineup, and held as `{ value }` for the same reason: a
+  // computed null is the instruction to clear the topic, not the absence of one.
+  const tiePayloadValue = useMemo(() => tiePayload(game, tie), [game, tie]);
+  const sentTieRef = useRef(undefined);
+  useEffect(() => {
+    pendingTieRef.current = { value: tiePayloadValue };
+    const json = JSON.stringify(tiePayloadValue ?? null);
+    if (json === sentTieRef.current) return undefined;
+    const id = setTimeout(() => {
+      sentTieRef.current = json;
+      linkRef.current?.sendTie(tiePayloadValue);
+    }, PUBLISH_DEBOUNCE);
+    return () => clearTimeout(id);
+  }, [tiePayloadValue, linkRef, pendingTieRef]);
+
   return { status, error };
 }
 
@@ -159,6 +187,7 @@ export function useScoreboardDisplay(config) {
   const [senderOnline, setSenderOnline] = useState(false);
   const [layout, setLayout] = useState(PANEL_LAYOUTS[0]);
   const [lineup, setLineup] = useState(null);
+  const [tie, setTie] = useState(null);
   const versionRef = useRef(-1);
 
   const { status, error } = useLink({
@@ -177,6 +206,13 @@ export function useScoreboardDisplay(config) {
         if (PANEL_LAYOUTS.includes(msg.layout)) setLayout(msg.layout);
         return;
       }
+      if ('tie' in msg) {
+        // Null is the cleared topic. Anything else unusable leaves what is on
+        // screen, mirroring parseTie.
+        if (msg.tie === null) setTie(null);
+        else if (usableTie(msg.tie)) setTie(msg.tie);
+        return;
+      }
       if ('lineup' in msg) {
         // Null is the cleared topic and means "back to the score". Anything else
         // that isn't usable leaves what is on screen, mirroring parseLineup.
@@ -191,5 +227,5 @@ export function useScoreboardDisplay(config) {
     },
   });
 
-  return { payload, status, error, senderOnline, layout, lineup };
+  return { payload, status, error, senderOnline, layout, lineup, tie };
 }
