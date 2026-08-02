@@ -94,6 +94,17 @@ Also note `act` skips `actions/checkout` by default, so its green tick means
 nothing — pass `--no-skip-checkout` to actually exercise it, and expect it to fail
 on any commit you haven't pushed, because it fetches the SHA from the remote.
 
+**The container's locale data is not the runner's, so seven date checks fail there
+and none of them is real.** `dropRepeatedYear` in `src/dates.test.js` gets `Sep`
+where CLDR gives `Sept`, and the six `every row says when the tournament happened`
+checks in `verify-tournament.mjs` come out US-ordered (`Jul 28, 26` rather than
+`28 Jul 26`) because `en-GB` resolves to a fallback. The real runner has the full
+data and passes all seven — confirmed against a green deploy. **Do not "fix" them
+to match `act`**, and note that the first one aborts `npm test` before the browser
+checks run at all, so a layout change needs that assertion relaxed locally for the
+run to reach the part you wanted. This is the one thing `act` cannot answer for
+this repo; everything font-related it answers well.
+
 ## What runs automatically
 
 `npm run test:browser` starts a preview server, runs the hermetic checks against
