@@ -1,0 +1,144 @@
+# Firmware
+
+One target: **`firmware/hub75/`** — 2x Waveshare P5 64x32 chained to 128x32
+(640x160mm), Adafruit MatrixPortal S3, ESP32. Score *and* team names in team
+colours. **Wokwi has no HUB75 part**, so it is verified by a host renderer
+instead. Full reasoning for everything here is in `README.md`.
+
+A second SevSeg target in `firmware/wokwi/` was removed on 2026-07-27, once the two
+`sketch.ino` files had diverged enough that simulating it proved nothing about what
+ships. **The cost is that nothing exercises WiFi or MQTT until the board is on the
+bench** — the host suites stop at parsing, layout and duty. **Don't reintroduce a
+second target to get coverage back**: a divergent copy reads as coverage without
+being it.
+
+## `src/panelRender.js` is a second implementation of `render.h`
+
+The only reason that is allowed is the pixel check. It exists so the panel can be
+watched in a browser during a real game (`?panel=1`), which stills can't show.
+`test_render.cpp` writes `out/scenes.json` describing every scene it dumped, and
+`tools/test-firmware.mjs` renders each through `src/panelRender.js` and compares
+framebuffers byte for byte. **Change `render.h` and the JS fails until it matches** —
+treat them as one thing in two languages and don't "tidy" either alone. The scene
+list lives in the C++ on purpose; a scene table maintained in two languages is the
+drift being guarded against.
+
+- **Every division in `panelRender.js` truncates**, because these are `int`
+  expressions in C++. `idiv` is load-bearing, not stylistic: at `LEVEL_STALE` the
+  blue channel of `#2f80ed` is 55 truncated and 56 rounded, and that one pixel fails
+  the check.
+- **Labels are UTF-8 byte arrays, not strings**, because that is what reaches the
+  board — a 40-byte label is cut mid-character and a name outside the 5x7 font draws
+  one `FONT_UNKNOWN` per byte. **Don't "fix" either on the JS side alone**; the
+  limitation is the firmware's and the point is to see it.
+  - **A missing character draws a dash, not a space.** As a space, two Greek-script
+    names lit **13** pixels of the name row against 181 for two Latin ones — a whole
+    name vanishing reads as a fault rather than a limitation. Now 103.
+  - **The alternatives are all worse.** `.` is one pixel and the panel is read at 7m,
+    so nine of them are invisible. `/` is taken — `fitLabel` separates a shortened
+    doubles pair with it. `'` is two pixels and sits high, reading as punctuation.
+  - **`FONT_UNKNOWN` is emitted by `generate_glyphs.mjs`** into both `glyphs.h` and
+    `src/panelGlyphs.js`, because `fontIndex` exists twice (generated into the header,
+    hand-written in `panelRender.js`). Written down twice they could drift.
+  - Accented Latin degrades readably where a non-Latin script does not: `José` draws
+    as `JOS-`. That is why the fixtures carry an accent and deliberately no Greek.
+- **`glyphs.h` and `src/panelGlyphs.js` come from one run** of `generate_glyphs.mjs`,
+  so the emulator can't quantise the polygons differently. Both checked for staleness.
+- **`src/panelPaint.js` is outside the pixel check** — it draws the framebuffer as
+  dots, which no framebuffer comparison can see. `tools/verify-panel.mjs` covers it,
+  and is the only thing that would notice a blank canvas.
+- The emulator exercises publish → retain → subscribe over a real broker, which the
+  host suites can't. **It still says nothing about WiFi or PubSubClient.**
+- **It ships to everyone**, not behind a lazy boundary: 3.53 kB gzipped of the main
+  chunk plus 0.19 kB of CSS, against the 104 kB the mqtt chunk already costs
+  `?panel=1`. 4 kB doesn't pay for the boundary. **Re-measure before adding
+  panel-side features** rather than assuming it stays small — the second glyph size
+  and the score layout together cost 0.66 kB of that. Note `scoreboard.js` imports
+  `PANEL_LAYOUTS` from `panelRender.js`, so the glyph tables are reachable from
+  `?display=1` too — irrelevant while `Panel` is statically imported, but it would
+  defeat a lazy boundary if one were added.
+
+## The rest, before touching it
+
+- **`board_logic.h` is deliberately Arduino-free** so it host-compiles against desktop
+  ArduinoJson — `test_board_logic.cpp` is how `MQTT_BUFFER` was sized rather than
+  guessed. Keep parsing and digit formatting there, not in the `.ino`.
+- **The panel is sized against 7m, not "as big as possible."** 100mm digits (11.4m)
+  and 9-char names clear it, the names marginally. Width buys name length, height buys
+  digit height; four digits run out of width first, which is why two rows are dark *in
+  the `full` layout*. The `score` layout spends that height, and the only way to spend
+  it is to give up the names — the two compete for the same 32 rows, which is the trade
+  the two layouts exist to offer.
+- **`glyphs.h` is generated** from `src/segments.js` by `generate_glyphs.mjs`, so the
+  panel's digits are the browser's geometry rather than a redrawing. The dash for the
+  no-state screen is defined in the *generator*, because nothing else needs one.
+- **UP and DOWN step brightness, and that is all they may ever do.** Everything else
+  the panel shows is published state, so a local override would fight the app;
+  brightness is the one setting with no app-side representation and no retained topic
+  to disagree with. `BRIGHTNESS_LEVELS` and `stepBrightness()` live in `board_logic.h`
+  so the host suite covers them — nothing reaches `render.h`, so the pixel check is
+  untouched.
+  - **The range is 40 to 255 and neither end is arbitrary.** The floor is where every
+    faint thing was judged: `COVERAGE_FLOOR` drops splash pixels under ~40% *because*
+    at brightness 40 they read as off, and a loss pip is one pixel. Neither has been
+    seen on hardware, so **a darker step waits until the pip has been eyeballed at
+    dusk.** The ceiling is the power budget — 0.98 A worst case against a 3 A fold-back.
+  - **It clamps rather than wrapping**, which is the only reason the step is a tested
+    function instead of arithmetic: wrapping puts one press between darkest and 255.
+    Not persisted across a reboot — brightness tracks the light on the day, and 40 is
+    the step that cannot dazzle.
+  - **No on-screen indicator**: the panel is the readout, and drawing one would put it
+    inside the pixel-checked renderer to say what the eye already has.
+- **It runs off a USB power bank, so there is no fuse and no supply to size.** A 15 W
+  bank is itself the current limit and folds back, so a fuse downstream protects
+  nothing — the docs said to fuse for the 40 W peak back when mains was assumed, and
+  **that advice is gone.** Overrunning the budget trips the bank rather than being
+  unsafe, and the layout draws a third of it even at full brightness, so power does not
+  constrain `PANEL_BRIGHTNESS` either. The risks
+  are the opposite of overcurrent: the bank refusing to start under switch-on load,
+  and the **1.4%-duty no-state screen** being too quiet to keep it awake.
+- **One USB-C cable feeds everything, through the controller.** The MatrixPortal's two
+  M3 standoffs either side of the HUB75 socket are USB power brought straight out, and
+  Adafruit's instruction is to power from USB and hang the matrix off them — so there
+  is no 5 V bus, no chopped lead, no lever connectors, no second port.
+  - **They are outputs only. Never feed 5 V in.** Anything in the USB port at the same
+    time can damage the board, and flashing always puts something there — and the
+    casualty may be the laptop, since the standoffs *are* VBUS with no diode between.
+  - **Back-feeding looks identical to the correct wiring** (same screws, same wires,
+    opposite direction) and works until the first flash. See `How to destroy it` in
+    `README.md`. They take crimped spade terminals, not bare wire under the screw, and
+    the lug end is the one place in the build where polarity is unprotected.
+- **Two independent bounds make that safe, and one is fragile.** Adafruit say
+  multi-panel builds need their own supply, but that assumes ~4 A per panel all-white,
+  as does the vendor's "≤20 W per panel". This layout measures 19.8% duty worst case,
+  so ~0.98 A for both at full brightness — bound one, asserted by `test_render.cpp` as
+  `DUTY_CEILING` (30%), because nothing else would notice a layout change that filled
+  the panel. Bound two is the bank folding back at 3 A, so no fault can pull the 8 A
+  the panels are rated for. **Swapping the bank for mains removes bound two**, and then
+  the panels must be fed directly.
+- **A brighter panel-side effect is limited by duty x brightness, not duty.** At
+  `PANEL_BRIGHTNESS = 40` even an all-white flood is 1.25 A and fits; only high duty
+  *and* daylight brightness together exceed the bank. If it is ever needed the answer
+  is a PD bank with a buck converter feeding the panels directly — not mains, and not
+  bulk capacitance (a 50 ms flood would want 0.5 F). **But the retained whole-state
+  message model blocks it first**: an animation is an event, a retained `fourBagger`
+  replays on every display reboot, and a four bagger is not derivable from the
+  published score under cancellation.
+- **A HUB75 panel does not power up dark**, which is why bound two is load-bearing
+  rather than spare. OE is active low, so from power-on until `panel->begin()` the
+  outputs are enabled over random shift-register state at full drive with no
+  `PANEL_BRIGHTNESS` applied. It is also the likelier reason a bank refuses to start
+  the board — likelier than capacitor inrush — and the fix is a 10k pull-up on OE, not
+  a bigger bank.
+- **Nothing in `loop()` may block, but not for the reason you'd guess.** The panel
+  refreshes from DMA in hardware, so blocking would *not* flicker the digits — the
+  `millis()` timers are there because a blocking reconnect stalls MQTT, which is what
+  makes the board miss a round.
+- **PubSubClient's 256-byte default is too small.** ASCII names land ~251 bytes
+  including topic and headers and non-ASCII reach ~379, because the app caps names at
+  16 UTF-16 code units rather than 16 bytes. Oversized messages are dropped silently,
+  with no error to notice. `test_board_logic.cpp` measures this and
+  `npm run test:firmware` runs it. The budget is why `src/scoreboard.test.js` asserts
+  the payload with `toEqual`: a field nothing renders should fail rather than quietly
+  ship.
+- **Free Wokwi projects are public** — no real broker credentials in one.

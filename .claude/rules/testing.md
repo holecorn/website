@@ -1,0 +1,224 @@
+---
+paths:
+  - "src/*.test.js"
+  - "tools/*.mjs"
+  - "firmware/hub75/test_*.cpp"
+---
+
+# Testing
+
+Detail behind **Testing** in the root `CLAUDE.md`, which holds the three facts that
+apply whatever you are testing.
+
+## What each suite and check is for
+
+`src/scoring.js` is pure and fully testable; the suite is the safety net for the
+rules above. When changing scoring behaviour, update the tests too — and for a
+bug fix, add a test that fails without the fix first, and *check that it does*.
+
+The scoreboard's failure paths are covered by `src/scoreboardLink.test.js`, which
+drives the transport with a fake MQTT client, because the cases that matter — a
+lost acknowledgement, a refused subscription, a half-open socket — are ones a
+real broker will not reproduce on demand. `openScoreboardLink` takes an
+injectable `connect` for exactly this; production never passes it.
+
+`tools/verify-positions.mjs` covers the court and in-game stats panels, and the
+assertion it exists for is that **the court names the same thrower the scoring
+lanes do**. Both sides derive the parity correctly and are unit tested; nothing
+below `App.jsx` can catch it handing the wrong one to the wrong component, and
+crossing them over passes all 131 unit tests. Checked by inverting `activeIdx`,
+which fails that assertion and nothing else. **The arrangement controls are there
+for the same reason, and more so now that they sit in a different panel from the
+drawing they change**: a bag wired to the partner of its own row, and the setup
+handlers reaching the play screen's edit dialog, both pass all 220 unit tests and
+fail only here. **Which screen the court is on is the same kind of gap**: nothing
+below `App.jsx` can see it, so the `setup` prop passed at neither call site or at
+both is invisible to the unit tests either way round. Verified by mutation — each
+fails only its own half, the missing prop on the setup assertions and the extra one
+on `singles leaves the far end empty`. The toss is covered there too, and only *properties* can be —
+the draw is random, so it asserts that both start-board players come up over 20
+presses, that no far partner ever does, and that the four names never move. It also
+holds the pause: the result faded out inside the window, the marker still where it
+was, **and the button not having moved** — that last one is the only thing that
+would notice the line being emptied rather than faded. Verified by mutation:
+pointing the toss at slot 1, pinning it to team A, reading the line off the other
+team, dispatching on the press with no pause, and emptying the line each fail only
+their own assertions.
+  - **Every wait in that block reports rather than throws**, and the no-pause
+    mutation is why: `waitForSelector` on a class that never appears ended the run
+    with a stack trace instead of naming the fault. Same lesson as the ordering of
+    `verify-stats.mjs`'s absence assertions.
+  - **The reveal has to be waited out separately from the class**, which goes at the
+    *start* of the fade back — reading opacity on the class detaching measured ~0 and
+    failed three runs out of three. The mid-toss read is taken 220ms in for the mirror
+    of that reason: at the instant of the press the 150ms transition has gone nowhere,
+    so an immediate read says nothing either way and passed and failed at random. It also asserts what the controls' *absence* is worth — no bag or
+chip in that dialog — because nothing in `TeamsFields` itself would notice.
+
+`src/stats.test.js` builds its fixtures by playing rounds through the real
+scoring functions and archiving the result, rather than hand-writing record
+blobs, so a rules change that breaks attribution surfaces there instead of
+quietly agreeing with a stale fixture. `tools/verify-stats.mjs` covers what the
+unit tests can't: that the effect in `App.jsx` fires on the right transitions.
+That is the part which would otherwise either lose every match or file each one
+twice, with the pure helpers passing throughout. It covers the same gap for
+renaming — that a career rename reaches the setup lineup and a per-match fix does
+not — where both halves of each are individually correct and only the wiring
+between them can be wrong.
+
+It covers a third such gap for **a match imported with no round detail**, seeded
+beside a real one because both have to be true at once. `finalScore` and `summary`
+are unit tested, but `Stats.jsx` reading the score off `totals()` instead compiles,
+passes all 275 unit tests and puts **0–0** on every imported row — and the same is
+true of a rate keyed on `played` rather than on the round count. The skunk
+assertion needs the real match to be **24–12 rather than a skunk itself**, or the
+chip reads 1 whether the guard is there or not.
+
+The same is true of the guest-game guard, and both ways round of getting it wrong
+are silent: either a stranger is folded into somebody's career, or every real match
+quietly stops being filed. So that block plays a casual game to a win and then
+**turns the toggle off and plays a real one**, which is what makes the guard the
+flag rather than a break in archiving. Verified by mutation: dropping the guard
+fails the first, and latching it in a ref — the plausible mistake, since the effect
+already keeps `archivedId` that way — fails only the second. Guarding
+unconditionally is caught by the checks at the top of the file instead.
+
+The lineup-faults block spends most of its checks on the lineups that must
+*start*, not on the ones that must not: a rule that never lets go is the same bug
+as one that never bites, and `lineupFaults` is already unit tested. So it covers
+the defaults the app opens on, a save written when both teams defaulted alike,
+four different people in doubles, and a guest game. Verified by mutation —
+dropping the `disabled`, the `casual` guard, the blank fault, the joined hint, the
+`loadGame` rewrite and the new defaults each fail only their own assertions.
+
+That run also found an inert line: **whether blanks are counted alongside names
+changes nothing**, because which fault a slot gets reads off its key rather than
+off the count. The comment there says what the code does instead of implying that
+line is the guard — the unit test still pins the rule, since deriving the fault
+from the count is a plausible rewrite that would break it.
+
+It also ends by stripping the secure-context-only APIs and reloading, because
+**every other browser check runs on `localhost`, which is a secure context** —
+so none of them can catch a secure-context regression, and a blank page on a LAN
+IP would otherwise only turn up on a phone. The APIs are deleted rather than the
+build being served on a real IP, so it stays deterministic in CI. That block
+checks the page rendered *before* clicking anything: the failure is a blank page,
+and waiting on a button that will never appear times out the whole run instead
+of reporting.
+
+`npm run test:firmware` compiles and runs both host C++ suites, checks that
+`glyphs.h` and `src/panelGlyphs.js` still match `src/segments.js`, and compares
+`src/panelRender.js` against the framebuffers `test_render.cpp` just produced.
+That last one is what makes a browser copy of `render.h` safe to have at all — see
+`firmware/hub75/CLAUDE.md`. One assertion in `test_render.cpp`
+is not about rendering at all: `DUTY_CEILING` caps how much of the panel any
+scene may light, because the decision to run both panels through the
+controller's 5 V terminals depends on it and no electrical test exists to catch
+a layout that broke it. That last check is why it is worth
+having: the generated header is the app's own digit geometry, so an app-side
+change silently stops matching the panel until someone regenerates. These were
+manual for a while and drifted twice — a fixture that claimed to be "exactly
+what `scoreboardPayload()` produces" but was missing a field, and two characters
+`FONT_CHARS` advertised with blank glyphs behind them.
+
+The fixture card is covered by `verify-form-screen.mjs` rather than there, because it
+needs a broker. Everything about *what* it draws is pinned by the pixel check, so what is
+left for a browser is the wiring, and the block that matters most is the last one: it
+draws a bracket on a phone, taps a tie, and asserts the board names that round and those
+two entrants. Every other assertion in the file drives `sendTie` directly and so says
+nothing about whether picking a tie ever calls it — a chain of derivations in `App.jsx`
+(`liveTournament` → `playingTie` → `publishedTie`) each individually correct however they
+are wired together. Verified by mutation: publishing `null` instead fails exactly that
+block.
+  - **Two of its assertions were written wrong first, both in the file's own known
+    ways.** Reading the tie's names off `.team-name-input` gave an *empty* list, because
+    a tie's names are locked and render as `.team-name-static` — and `[].every()` is
+    true, so it passed. And the panel's card was compared against a lit count measured at
+    the top of the file, which by then was a *different* roster, so it differed however
+    the precedence went. Both now measure the thing the property is about.
+
+**The draw card is covered there too, and it shares that last block.** The same gap and
+the same shape: everything else drives `sendDraw` directly, so the phone's own `Pull` is
+pressed inside the bracket block and the board is asked to name the entrant the phone just
+pulled — read off the phone rather than written down, because the draw is random and the
+check cannot know it. Two mutations were run and each failed only its own assertions:
+handing `Tournament` an `onReveal` that does nothing kills the two crossing assertions,
+and dropping the clear-on-unmount leaves the card up through the tie that follows. Its
+other blocks cover what only a live board can show — the card beating a retained score,
+lineup and tie all at once, and standing on a board that has **never** been sent a score,
+which the fixture card structurally cannot do.
+
+`tools/verify-tournament.mjs` covers the tournament, and the block it exists for is
+**reversibility**: win a tie, undo the winning round, and the bracket goes back to
+nothing played with every opening tie live again. `tournament.js` is pure and unit
+tested, so everything here is about the wiring — that a tie loads locked and tagged,
+that `New game` clears the tie-ness, that an imported bracket appears without a
+reload. Each was verified by mutation.
+
+The draw ceremony's block is there for one crossing: `drawSteps` is pure and unit
+tested against the pairings `bracket()` draws, so what is left is whether the screen
+is playing out **the tournament that was actually saved**. A re-shuffle anywhere
+between `Draw` and `Ceremony` would announce pairings the bracket never draws, and by
+the time the bracket is up the card is gone — so it asserts the order pulled equals
+the order stored. Every draw in that file now goes through `skipCeremony`, which
+reports rather than throwing: the first version waited bare on `.bracket-scroll` and a
+missed site ended the run at the block that drew first, which is the file's own
+recorded lesson happening again.
+
+The Stats tab's block is there for the same kind of gap. The derivations behind it are
+pure and unit tested, so it asserts only what crosses a boundary: that selecting an
+entrant on one tab lights their route on the other, that the lit boxes agree with the
+table's own count of that entrant's ties, and that a cup with no round detail loses its
+rate columns while one played through the app keeps them. Verified by mutation — cutting
+the route off from the bracket, dropping the reset when a row shuts, and pinning the
+detail gate on each fail only their own assertions.
+
+**That file taught the same two lessons repeatedly, and they are worth knowing before
+adding to it:**
+
+- **A bare `waitForSelector` swallows a mutation.** Three times, a mutation removed
+  the thing under test, the wait timed out, and the run *ended* — naming nothing and
+  skipping every block below. Waits that are really assertions go through a helper
+  that reports instead of throwing.
+- **An assertion that passes for the wrong reason is the normal failure mode, not a
+  rare one.** Five in this file: two measured `0 of 0` on a fixture with nothing to
+  count, two compared rendered text width where the property was about available
+  space (`45px vs 135px` looked like a regression and was not), and one ran on a
+  fresh tournament whose live ties are in the outermost round anyway, so pinning the
+  opening round to zero passed. The habit is reaching for whatever is easiest to
+  query rather than the quantity the property is about. **Check what a mutation
+  actually prints**, not merely that something failed.
+
+**The browser checks take a different branch on the runners than they do locally**
+— `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so
+passing locally is not evidence they pass in CI. `act` covers that gap for the
+`build` and `firmware` jobs; the `deploy` job can't run locally at all. See
+`tools/README.md`.
+
+**The browser binary is the smaller half of that gap; the *fonts* are the bigger
+one.** `system-ui` is SF Pro on a Mac and whatever fontconfig picks on the runner,
+so every check that measures a text-sized box reads a different number there —
+measured, 22px across `.setup-top`, which is what turned a row with 10px of slack
+into a failed deploy. Nothing about that is visible from a local run, in either
+browser, because both use the Mac's fonts. **So `act` is the only way to check a
+layout change, not merely a workflow change** — run it before pushing anything that
+moves a width, and treat a local pass as saying nothing. `--with-deps` is kept in
+the workflow for the same reason: part of what it installs is those fonts.
+
+CI runs `npm test`, the build and `npm run test:browser` in one job, and
+`npm run test:firmware` in a parallel one. All of them gate the deploy —
+including the firmware, even though it doesn't ship with the app, because the
+two share a contract and nothing else notices when it breaks.
+`verify-winner-flash` and `verify-form-screen` are deliberately **not** in that
+set: they need a real broker, and a deploy should not fail because a third party is
+down. `verify-form-screen` covers the one thing nothing hermetic can — publish →
+retain → subscribe → override the chosen layout → clear → back to the score, on
+both `?display=1` and `?panel=1`, plus a display opened late recovering the
+retained roster. It is also the only place a career rename can be watched reaching
+the board while the stats screen is still open, which is the window the app's own
+copy of the archive used to be stale in — see **Editing names** in
+`.claude/rules/archive.md`. Everything either
+side of that is covered without a broker: the
+payload and the clear in `scoreboard.test.js`, the retain-and-re-assert behaviour
+against a fake client in `scoreboardLink.test.js`, and the drawing itself by the
+pixel check.
