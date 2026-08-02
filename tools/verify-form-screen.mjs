@@ -574,6 +574,104 @@ await new Promise((r) => setTimeout(r, 2000));
   check('the panel caption is back to the layout', !caption.includes('Tournament tie'), caption);
 }
 
+// The draw card, on the same broker. Everything about *what* it draws is pinned by the
+// pixel check, so what is left for a browser is the wiring — and the two properties that
+// only a live board can show: that the card beats everything retained underneath it, and
+// that it needs no score message at all.
+console.log('\nthe draw card overrides everything retained under it');
+pub.sendDraw({ r: 'Quarter-final', n: 'Kappa', o: ['Omega', 'Iota'], d: 9, e: 11 });
+await new Promise((r) => setTimeout(r, 2000));
+{
+  // A score, a lineup and a tie are all still retained from the blocks above, so this is
+  // the card winning against three topics rather than against an empty broker.
+  check('the display is on the draw card', (await display.locator('.draw-card').count()) === 1);
+  check('naming who came out of the hat',
+    (await display.locator('.draw-card-name').innerText()).includes('Kappa'));
+  check('and who they meet',
+    (await display.locator('.draw-card-meets').innerText()) === 'plays the winner of Omega v Iota');
+  // The one thing the panel has no row for, which is why the count is published at all.
+  check('with the progress the panel has no room for',
+    (await display.locator('.draw-card-count').innerText()).toLowerCase() === '9 of 11 drawn');
+  check('no score digits while it is up', (await display.locator('.seg-digit').count()) === 0);
+
+  const caption = await panel.locator('.panel-caption').innerText();
+  check('the panel caption says the draw', caption.includes('Tournament draw'), caption);
+  const spoken = await panel.locator('.panel-canvas').getAttribute('aria-label');
+  check('and the emulator names the same entrant', spoken.includes('Kappa'), spoken);
+  await display.screenshot({ path: `${dir}/draw-card-display.png` });
+  await panel.screenshot({ path: `${dir}/draw-card-panel.png` });
+}
+
+// Absent `n` is the beat before the name lands, and it has to reach the board as a drum
+// roll rather than as an empty reveal — the press has to change something or it reads as
+// a dead button.
+console.log('\nthe withheld beat draws a drum roll, not a blank name');
+pub.sendDraw({ r: 'Quarter-final', d: 9, e: 11 });
+await new Promise((r) => setTimeout(r, 2000));
+{
+  const name = await display.locator('.draw-card-name').innerText();
+  check('the display says a name is being pulled', /pulling/i.test(name), name);
+  check('and shows no opponent', (await display.locator('.draw-card-meets').count()) === 0);
+  const spoken = await panel.locator('.panel-canvas').getAttribute('aria-label');
+  check('the emulator says so too', /pulled out of the hat/i.test(spoken), spoken);
+}
+
+// The opening card, which is the shape the board holds longest and the only one that
+// names the cup. Sent last of the three so it is also the card replacing a reveal, which
+// is the direction a draw never goes — the board must not keep the pull underneath it.
+console.log('\nthe opening card names the cup and no round');
+pub.sendDraw({ t: 'Hole Corn VI', d: 0, e: 11 });
+await new Promise((r) => setTimeout(r, 2000));
+{
+  check('the display names the cup',
+    (await display.locator('.draw-card-name').innerText()).includes('Hole Corn VI'));
+  check('and says what it is',
+    (await display.locator('.draw-card-title').innerText()).toLowerCase() === 'draw');
+  check('with no round line', (await display.locator('.draw-card-round').count()) === 0);
+  check('and no name left over from the pull before it',
+    (await display.locator('.draw-card-meets').count()) === 0);
+  const spoken = await panel.locator('.panel-canvas').getAttribute('aria-label');
+  check('the emulator names the cup too', spoken.includes('Hole Corn VI'), spoken);
+  await display.screenshot({ path: `${dir}/draw-title-display.png` });
+  await panel.screenshot({ path: `${dir}/draw-title-panel.png` });
+}
+
+// The property no other screen has. A draw is taken before any game exists, so the card
+// has to stand on a board that has never been sent a score — where the fixture card
+// structurally falls through to the dashes.
+console.log('\nthe card stands on a board with no score message at all');
+{
+  const bare = 'bare' + Math.floor(Math.random() * 1e6);
+  const barePub = await openScoreboardLink({
+    config: { broker, username: '', password: '', code: bare },
+    role: 'publisher',
+    onStatus: () => {},
+    onMessage: () => {},
+  });
+  await new Promise((r) => setTimeout(r, 2000));
+  barePub.sendDraw({ r: 'Preliminary', n: 'Tau', o: ['Rho'], d: 2, e: 11 });
+
+  const fresh = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  fresh.on('pageerror', (e) => errors.push(e.message));
+  await fresh.goto(`${BASE}?display=1&broker=${encodeURIComponent(broker)}&code=${bare}`);
+  await new Promise((r) => setTimeout(r, 5000));
+  check('a display that has never had a score still draws the card',
+    (await fresh.locator('.draw-card-name').innerText()).includes('Tau'));
+  await fresh.close();
+  barePub.sendDraw(null);
+  await new Promise((r) => setTimeout(r, 500));
+  barePub.close();
+}
+
+console.log('\nclearing the card puts both back on the score');
+pub.sendDraw(null);
+await new Promise((r) => setTimeout(r, 2000));
+{
+  check('the display leaves the card', (await display.locator('.draw-card').count()) === 0);
+  const caption = await panel.locator('.panel-caption').innerText();
+  check('and the panel caption with it', !caption.includes('Tournament draw'), caption);
+}
+
 // The one crossing nothing above can see. Everything so far drove `sendTie` directly,
 // which says nothing about whether picking a tie off a bracket ever calls it — and
 // that path is a chain of derivations in App.jsx (`liveTournament` -> `playingTie` ->
@@ -602,14 +700,54 @@ console.log('\npicking a tie off the bracket puts the card on the board');
   await scorer.getByRole('button', { name: 'Tournaments', exact: true }).click();
   await scorer.getByRole('button', { name: 'New tournament' }).click();
   await scorer.locator('.draw-name input').fill('Hole Corn VI');
-  for (let i = 2; i < 4; i += 1) {
-    await scorer.getByRole('button', { name: 'Add entrant' }).click();
+  for (let i = 0; i < 4; i += 1) {
+    await scorer.getByRole('button', { name: 'Add new entrant' }).click();
   }
   for (const [i, n] of ['Rho', 'Phi', 'Tau', 'Psi'].entries()) {
     await scorer.locator('.entrant-name').nth(i).fill(n);
   }
   await scorer.locator('.draw-go').click();
+  await scorer.waitForSelector('.ceremony');
+
+  // Before a single press. The opening card is the one the board holds longest — from
+  // opening the ceremony until somebody reaches into the hat — and it is the only reveal
+  // the screen publishes without being pressed, so nothing else here would notice it
+  // never being sent.
+  await new Promise((r) => setTimeout(r, 6000));
+  {
+    const spoken = await board.locator('.panel-canvas').getAttribute('aria-label');
+    check('opening the ceremony puts the cup on the board', spoken.includes('Hole Corn VI'),
+      spoken);
+    check('and says the draw has not started', /about to begin/i.test(spoken), spoken);
+  }
+
+  // The draw's own crossing, and the same gap the tie block below exists for: every
+  // assertion above drove `sendDraw` directly, which says nothing about whether pressing
+  // Pull ever calls it. The chain is `Ceremony` -> `onReveal` -> App's `drawReveal` ->
+  // the publisher, each individually correct however they are joined up.
+  await scorer.locator('.ceremony-pull').click();
+  await new Promise((r) => setTimeout(r, 6000));
+  {
+    const caption = await board.locator('.panel-caption').innerText();
+    check('pressing Pull puts the draw on the board', caption.includes('Tournament draw'), caption);
+    const spoken = await board.locator('.panel-canvas').getAttribute('aria-label');
+    // Whoever the shuffle produced — read off the phone rather than written down, because
+    // the draw is random and this check cannot know it.
+    const pulled = (await scorer.locator('.ceremony-name').innerText()).trim();
+    check('naming the entrant the phone just pulled', spoken.includes(pulled),
+      `${spoken} vs ${pulled}`);
+  }
+
+  await scorer.getByRole('button', { name: 'Skip' }).click();
   await scorer.waitForSelector('.bracket-scroll');
+  await new Promise((r) => setTimeout(r, 3000));
+  {
+    // Skip has to take the card down, or the board sits on a draw that finished — and
+    // nothing about starting a game clears this topic the way the first bag clears the
+    // other two.
+    const caption = await board.locator('.panel-caption').innerText();
+    check('and skipping the rest clears it', !caption.includes('Tournament draw'), caption);
+  }
   await scorer.locator('button.tie').first().click();
   await scorer.waitForSelector('.setup');
   await new Promise((r) => setTimeout(r, 5000));
@@ -628,7 +766,7 @@ console.log('\npicking a tie off the bracket puts the card on the board');
 
   // Leaving the tie has to take the card with it, or the board names a fixture the
   // phone is no longer set up for. Gated on `gameStarted`, like the toggle beside it.
-  await scorer.getByRole('button', { name: 'Leave tie' }).click();
+  await scorer.getByRole('button', { name: 'Play something else' }).click();
   await new Promise((r) => setTimeout(r, 3000));
   const after = await board.locator('.panel-caption').innerText();
   check('leaving the tie clears the card', !after.includes('Tournament tie'), after);

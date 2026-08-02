@@ -285,14 +285,32 @@ static std::string tieJson(const TieState* t) {
   return "{\"t\":" + quoted(t->cup) + ",\"r\":" + quoted(t->round) + "}";
 }
 
+// The card as it arrived, so the Node side coerces it through drawState() the way the
+// firmware coerced it through parseDraw — tieJson's reasoning. The count the app sends
+// is absent because DrawState does not hold it: the panel draws no progress line.
+static std::string drawJson(const DrawState* d) {
+  if (!d || !d->set) return "null";
+  std::string out = "{\"r\":" + quoted(d->round);
+  if (d->cup[0] != '\0') out += ",\"t\":" + quoted(d->cup);
+  if (d->named) out += ",\"n\":" + quoted(d->name);
+  if (d->opponents > 0) {
+    out += ",\"o\":[";
+    for (int i = 0; i < d->opponents; i++) out += (i ? "," : "") + quoted(d->opponent[i]);
+    out += "]";
+  }
+  return out + "}";
+}
+
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
                    bool blinkOn, PanelLayout layout, const LineupState* lineup,
-                   const TieState* tie = nullptr, const SplashScene* splash = nullptr) {
+                   const TieState* tie = nullptr, const SplashScene* splash = nullptr,
+                   const DrawState* draw = nullptr) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
       "{\"name\":" + quoted(name.c_str()) +
       ",\"layout\":" + quoted(PANEL_LAYOUT_IDS[layout]) +
       ",\"lineup\":" + lineupJson(lineup) + ",\"tie\":" + tieJson(tie) +
+      ",\"draw\":" + drawJson(draw) +
       ",\"a\":" + std::to_string(s.a) +
       ",\"b\":" + std::to_string(s.b) + ",\"round\":" + std::to_string(s.round) +
       ",\"target\":" + std::to_string(s.target) + ",\"winner\":" + teamJson(s.winner) +
@@ -359,11 +377,12 @@ static void writeScenes() {
 
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
                         bool live, bool blinkOn, PanelLayout layout = PANEL_FULL,
-                        const LineupState* lineup = nullptr, const TieState* tie = nullptr) {
+                        const LineupState* lineup = nullptr, const TieState* tie = nullptr,
+                        const DrawState* draw = nullptr) {
   Framebuffer fb;
-  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup, tie);
+  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup, tie, draw);
   fb.write(name);
-  record(name, s, haveState, live, blinkOn, layout, lineup, tie);
+  record(name, s, haveState, live, blinkOn, layout, lineup, tie, nullptr, draw);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -609,6 +628,128 @@ int main() {
   // nobody.
   const Framebuffer tieNoState =
       shot("tie-no-state", tieDoubles, false, true, true, PANEL_FULL, nullptr, &semi);
+
+  // The draw card. A third screen with no layout id, so tools/test-firmware.mjs carries a
+  // third standalone assertion that some scene has one.
+  const auto drawOf = [](const char* round, const char* name, const char* oppA = "",
+                         const char* oppB = "") {
+    DrawState d;
+    d.set = true;
+    copyInto(round, d.round, DRAW_ROUND_MAX);
+    d.named = name[0] != '\0';
+    copyInto(name, d.name, DRAW_SIDE_MAX);
+    for (const char* opp : {oppA, oppB}) {
+      if (opp[0]) copyInto(opp, d.opponent[d.opponents++], DRAW_SIDE_MAX);
+    }
+    return d;
+  };
+  // The beat before a name lands: no "n" at all, which is what makes it a drum roll
+  // rather than a nameless reveal.
+  const DrawState drawPulling = drawOf("Preliminary", "");
+  // A bye whose sibling seat is still in the hat. Resolves on the very next pull, which
+  // is why it needs no wording of its own.
+  const DrawState drawWaiting = drawOf("Quarter-final", "Chi");
+  const DrawState drawPlays = drawOf("Preliminary", "Tau", "Rho");
+  // The one thing a paper draw says that a finished bracket cannot.
+  const DrawState drawWinnerOf = drawOf("Quarter-final", "Kappa", "Omega", "Iota");
+  // Doubles at the app's 16-character cap. On its own row a side gets 21 characters, so
+  // this one falls back to the slash; the shot() bounds check is what proves it fits,
+  // because an unshortened 35-character label centres to a negative x.
+  const DrawState drawLong =
+      drawOf("Semi-final", "AlphaBetaGammaDe & DeltaEpsilonZeta", "EtaThetaIotaKapp");
+  // Two long sides sharing the last row, which is the one place the card gives up
+  // characters — 9 each, the same as the score screen's names.
+  const DrawState drawLongPair = drawOf("Final", "Rho", "AlphaBetaGammaDe & DeltaEpsilonZeta",
+                                        "EtaThetaIotaKapp & LambdaMuNuXiOmic");
+  // The opening card: a cup and no round, which is the one shape that says what is about
+  // to happen rather than what just did.
+  const auto titleOf = [&drawOf](const char* cup, const char* round = "") {
+    DrawState d = drawOf(round, "");
+    copyInto(cup, d.cup, DRAW_CUP_MAX);
+    return d;
+  };
+  const DrawState drawTitle = titleOf("Hole Corn VI");
+  // Past the 21 characters a row holds, so the cut is drawn rather than assumed. Not
+  // shortened the way a side is: a cup is not a pair and has no join to give up.
+  const DrawState drawTitleLong = titleOf("AlphaBetaGammaDeltaEpsilonZeta");
+  // A round *and* a cup, which the app never sends. The round wins, so a pull can never
+  // come out captioned with the cup — the byte budget the whole split rests on.
+  const DrawState drawBoth = titleOf("Hole Corn VI", "Preliminary");
+
+  const Framebuffer cardPulling = shot("draw-pulling", tieSingles, true, true, true, PANEL_FULL,
+                                       nullptr, nullptr, &drawPulling);
+  shot("draw-waiting", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr, &drawWaiting);
+  shot("draw-plays", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr, &drawPlays);
+  const Framebuffer cardWinner = shot("draw-winner-of", tieSingles, true, true, true, PANEL_FULL,
+                                      nullptr, nullptr, &drawWinnerOf);
+  shot("draw-long-doubles", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr, &drawLong);
+  shot("draw-winner-of-long", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr,
+       &drawLongPair);
+  shot("draw-stale", tieSingles, true, false, true, PANEL_FULL, nullptr, nullptr, &drawWinnerOf);
+  // Over a tie, over a lineup and over the score layout, so the precedence is drawn rather
+  // than only written down in renderBoard.
+  const Framebuffer cardOverTie = shot("draw-over-tie", tieDoubles, true, true, true, PANEL_FULL,
+                                       &doubles, &semi, &drawWinnerOf);
+  shot("draw-over-score", tieDoubles, true, true, true, PANEL_SCORE, nullptr, nullptr,
+       &drawWinnerOf);
+  // The one the fixture card structurally cannot do: no score message at all. A draw is
+  // taken before any game exists, so the card has to stand on its own.
+  const Framebuffer cardNoState = shot("draw-no-state", makeState(0, 0, 0, "", ""), false, true,
+                                       true, PANEL_FULL, nullptr, nullptr, &drawWinnerOf);
+
+  const Framebuffer cardTitle = shot("draw-title", tieSingles, true, true, true, PANEL_FULL,
+                                     nullptr, nullptr, &drawTitle);
+  shot("draw-title-long", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr,
+       &drawTitleLong);
+  const Framebuffer cardTitleNoState = shot("draw-title-no-state", makeState(0, 0, 0, "", ""),
+                                            false, true, true, PANEL_FULL, nullptr, nullptr,
+                                            &drawTitle);
+  const Framebuffer cardBoth = shot("draw-round-beats-cup", tieSingles, true, true, true,
+                                    PANEL_FULL, nullptr, nullptr, &drawBoth);
+
+  // **The card reads nothing but its own payload.** These two differ in every other input
+  // there is — a full board state with two doubles labels, a retained tie and a retained
+  // lineup against no state at all — and must draw the same pixels. That is what lets the
+  // draw happen on a board that has never been sent a game, and no other assertion here
+  // would notice a colour or a name leaking in from the score message.
+  check(memcmp(cardNoState.px_, cardOverTie.px_, sizeof cardOverTie.px_) == 0,
+        "the draw card must not depend on the score message");
+  // The same for the opening card, which is the one most often up on a board that has
+  // never been sent a game — the draw is taken before there is anything to send.
+  check(memcmp(cardTitleNoState.px_, cardTitle.px_, sizeof cardTitle.px_) == 0,
+        "the opening draw card must not depend on the score message");
+
+  // A cup rides only on the card with no pull on it, so a card carrying both draws as the
+  // pull alone. Without this the split that keeps the packet inside MQTT_BUFFER is a
+  // convention of the app's rather than something the board holds to.
+  check(memcmp(cardBoth.px_, cardPulling.px_, sizeof cardPulling.px_) == 0,
+        "a round must beat a cup on the same draw card");
+
+  // Two rows or four, centred in the panel either way, so a short card does not hang under
+  // the round line with the bottom half of the screen empty. Stated as the property rather
+  // than against the constant that drew it, the lesson SPLASH_THUMP taught.
+  const auto topLit = [](const Framebuffer& fb) {
+    for (int y = 0; y < PANEL_H; y++) {
+      if (fb.litRow(y, 0, PANEL_W)) return y;
+    }
+    return PANEL_H;
+  };
+  check(topLit(cardPulling) > topLit(cardWinner),
+        "a two-row draw card must sit lower than a four-row one");
+  check(cardPulling.litBottom(0, PANEL_W) < cardWinner.litBottom(0, PANEL_W),
+        "a two-row draw card must end higher than a four-row one");
+  // The opening card is the same two rows in the same place, so the card does not jump up
+  // the panel on the first press — it is the same screen with the words replaced.
+  check(topLit(cardTitle) == topLit(cardPulling) &&
+            cardTitle.litBottom(0, PANEL_W) == cardPulling.litBottom(0, PANEL_W),
+        "the opening draw card must share the two-row geometry");
+
+  // Both potential opponents drawn, either side of the mark. A card that rendered only the
+  // first would pass every other check in this block.
+  const int oppRow = cardWinner.litBottom(0, PANEL_W) - FONT_H + 1;
+  check(cardWinner.litCount(oppRow, 0, PANEL_W / 2) > 0 &&
+            cardWinner.litCount(oppRow, PANEL_W / 2, PANEL_W) > 0,
+        "a winner-of card must name both halves of the preliminary");
 
   // The splash. Like the form screen it has no layout id, so tools/test-firmware.mjs
   // has a separate assertion that some scene carries one. Two colour pairs because

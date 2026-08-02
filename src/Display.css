@@ -325,7 +325,8 @@
   background: #232a31;
 }
 
-.display.is-stale .form-table {
+.display.is-stale .form-table,
+.display.is-stale .draw-card {
   opacity: 0.45;
 }
 
@@ -343,4 +344,70 @@
     flex-direction: row;
     gap: 3vmin;
   }
+}
+
+/* --------------------------------------------------------------- the draw card -- */
+
+/* One pull of the tournament draw. Sized the way `.form-table` and `.seg-digit` are —
+   one `min(vw, vh)` term, so the tighter dimension binds and the whole card scales
+   together. Bigger than the form table's term because there are three short lines here
+   rather than four rows of columns, and this is read from further back: the family is
+   standing around the phone, and the board is for everyone else. */
+.display-draw {
+  align-items: center;
+  justify-content: center;
+}
+
+.draw-card {
+  --draw-size: min(9vw, 13vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(0.25 * var(--draw-size));
+  max-width: 92vw;
+  text-align: center;
+}
+
+.draw-card p {
+  margin: 0;
+}
+
+/* No team colours, matching the panel: nobody has been given one yet.
+   The opening card's word shares the round's treatment rather than getting its own — it
+   sits *under* the name where the round sits over it, which is the panel's ordering and
+   the only difference between the two. */
+.draw-card-round,
+.draw-card-title {
+  color: var(--muted);
+  font-size: calc(0.5 * var(--draw-size));
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* The one thing everyone is looking at, so it takes the whole term. Wrapped rather than
+   clipped: a doubles pair at the app's cap is 35 characters and a tablet has the room the
+   panel does not — the same split the tie topic already makes by truncating nothing on
+   the wire. */
+.draw-card-name {
+  overflow-wrap: anywhere;
+  font-size: var(--draw-size);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.draw-card-meets {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: calc(0.42 * var(--draw-size));
+}
+
+/* The one thing the panel has no row for: a completing card needs all four of its rows,
+   so the count lives here alone. */
+.draw-card-count {
+  margin-top: calc(0.25 * var(--draw-size));
+  color: var(--muted);
+  font-size: calc(0.3 * var(--draw-size));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }

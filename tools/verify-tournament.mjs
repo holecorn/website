@@ -37,9 +37,21 @@ const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' 
 
 // Waits that are really assertions have to report rather than throw. A timeout that
 // ends the run names nothing and takes every block below it with it — verified by
-// mutation, where a dead `Leave tie` button killed the run at the third of seven
+// mutation, where a dead `Play something else` button killed the run at the third of seven
 // blocks. Same lesson as verify-positions.mjs and verify-stats.mjs.
 const settles = (fn) => fn().then(() => true, () => false);
+
+// Every draw lands on the ceremony now — `Make the draw` always plays it out, and Skip is
+// one press. A check that wants a bracket goes through it, and reports rather than
+// throwing for the reason above: a ceremony that stopped appearing would otherwise end the
+// run at whichever block drew first and name nothing.
+async function skipCeremony(page) {
+  if (!(await settles(() => page.waitForSelector('.ceremony', { timeout: 5000 })))) {
+    check('the draw lands on the ceremony', false);
+    return;
+  }
+  await page.getByRole('button', { name: 'Skip' }).click();
+}
 
 async function open(names = ELEVEN, mode = 'Singles') {
   const page = await browser.newPage({ viewport: PHONE });
@@ -54,13 +66,23 @@ async function open(names = ELEVEN, mode = 'Singles') {
   await page.locator('.draw-name input').fill('Hole Corn VI');
   if (mode !== 'Singles') await page.locator('.draw .mode-toggle').getByText(mode).click();
   const fields = mode === 'Singles' ? 1 : 2;
-  for (let i = 2; i < names.length / fields; i += 1) {
-    await page.getByRole('button', { name: 'Add entrant' }).click();
+  for (let i = 0; i < names.length / fields; i += 1) {
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
   }
   for (const [i, n] of names.entries()) await page.locator('.entrant-name').nth(i).fill(n);
-  await page.locator('.draw-go').click();
+  // Reported rather than thrown, the rule the waits below already follow. Almost every
+  // block starts here, so a mutation that leaves the form unsubmittable — a fault gate
+  // stuck shut, an extra blank row the field never fills — otherwise ends the whole run
+  // on the first block and names nothing.
+  if (!(await settles(() => page.locator('.draw-go').click({ timeout: 5000 })))) {
+    check('the form the checks are built on can be drawn', false, 'Make the draw stayed off');
+    return page;
+  }
+  await skipCeremony(page);
   // The one just drawn opens itself, so the bracket is on screen without a tap.
-  await page.waitForSelector('.bracket-scroll');
+  if (!(await settles(() => page.waitForSelector('.bracket-scroll', { timeout: 5000 })))) {
+    check('and lands on its bracket', false);
+  }
   return page;
 }
 
@@ -98,7 +120,106 @@ const backToBracket = async (page) => {
   await page.waitForSelector('.bracket-scroll');
 };
 
-console.log('the draw builds the bracket the paper sheet has');
+console.log('an empty draw form does not tell you off before you have typed');
+{
+  // `entrantFaults` is pure and unit tested, and it reports an empty row from the moment
+  // one exists — correctly, since it is not a person. What only a browser can see is
+  // whether the screen *says* so before anybody has typed, which is the one moment you
+  // are least in the wrong: you got here by pressing New.
+  //
+  // **First in the file on purpose**, the way verify-stats.mjs orders its absence
+  // assertions. Everything below builds a bracket through `open()`, so a mutation that
+  // puts blank rows back on arrival leaves that helper's field short and every later block
+  // reading a screen that never arrived — reported now rather than thrown, but still a
+  // wall of noise the actual fault is buried in. Run first, it names itself.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.getByRole('button', { name: 'New tournament' }).click();
+  if (!(await settles(() => page.waitForSelector('.draw', { timeout: 5000 })))) {
+    check('the draw form opens', false);
+  } else {
+    // The roster is how somebody the app knows gets in, so the form opens on it rather
+    // than on boxes most draws never type into.
+    check(
+      'the form opens with no name boxes at all',
+      (await page.locator('.entrant-name').count()) === 0,
+      `${await page.locator('.entrant-name').count()} fields`,
+    );
+    check('nothing is reported on arrival', (await page.locator('.draw-hint').count()) === 0);
+    check(
+      'and the note says nothing about a field nobody has started',
+      (await page.locator('.draw-note').innerText()).trim() === 'The draw is random and final.',
+      (await page.locator('.draw-note').innerText()).trim(),
+    );
+    // Held off all the same. A disabled button over an empty form explains itself, which
+    // is what makes the quiet safe rather than merely quieter.
+    check('the draw is refused all the same', await page.locator('.draw-go').isDisabled());
+
+    // Asking for a row is something you did, so the count is said at once — the half of
+    // the gate that is about the field's size rather than about its names.
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
+    const alone = await page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+    check('one row in, the count is reported', /at least 2 entrants/i.test(alone), alone);
+    check(
+      'but neither empty box is, since nobody has typed',
+      !/needs a name/i.test(alone),
+      alone,
+    );
+    check(
+      'and nothing is marked',
+      (await page.locator('.entrants .is-faulted, .draw-name input[aria-invalid]').count()) === 0,
+    );
+
+    // And the moment there is somebody, the row with nobody in it is at fault and says so —
+    // the half a gate stuck shut would break. The cup's own name is on the same gate, so it
+    // is reported here too, and the two are said together rather than one visit each.
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
+    await page.locator('.entrant-name').first().fill('Rho');
+    // Read so it *reports* when there is no hint at all — `innerText` on a locator that
+    // matches nothing throws, which ends the run and names nothing. A gate stuck shut is
+    // exactly the mutation that would take it, so this is the file's own lesson again.
+    const hint = await page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+    check('one name in, the empty row is reported', /Everyone entering needs a name/i.test(hint), hint);
+    check('and so is the unnamed cup', /tournament needs a name/i.test(hint), hint);
+    check(
+      'both boxes at fault are marked, and only those',
+      (await page.locator('.entrants .is-faulted').count()) === 1 &&
+        (await page.locator('.draw-name input[aria-invalid]').count()) === 1,
+      `${await page.locator('.entrants .is-faulted').count()} rows, ${await page
+        .locator('.draw-name input[aria-invalid]')
+        .count()} name fields`,
+    );
+
+    // Naming it clears its own line and leaves the other, so the two are separate rules
+    // rather than one message covering whatever is wrong.
+    await page.locator('.draw-name input').fill('Hole Corn VI');
+    const named = await page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+    check('naming it drops that line', !/tournament needs a name/i.test(named), named);
+    check('and leaves the empty row reported', /Everyone entering needs a name/i.test(named), named);
+    check(
+      'and unmarks the field',
+      (await page.locator('.draw-name input[aria-invalid]').count()) === 0,
+    );
+    check('the draw is still refused', await page.locator('.draw-go').isDisabled());
+
+    // Derived rather than remembered, so an emptied form is quiet again. Asserted because
+    // it is the known difference from a `touched` flag rather than an accident.
+    await page.locator('.entrant-name').first().fill('');
+    check('clearing it goes quiet again', (await page.locator('.draw-hint').count()) === 0);
+    // Held off all the same, which is what makes the quiet safe: the two rows are blank
+    // whatever the screen has stopped saying about them.
+    check('with the draw still refused', await page.locator('.draw-go').isDisabled());
+  }
+  await page.close();
+}
+
+console.log('\nthe draw builds the bracket the paper sheet has');
 {
   const page = await open();
   check(
@@ -168,6 +289,9 @@ console.log('\nthe draw offers archived names, less the ones already entered');
   await page.waitForSelector('.setup');
   await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
   await page.getByRole('button', { name: 'New tournament' }).click();
+  for (let i = 0; i < 2; i += 1) {
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
+  }
   const offered = () =>
     page.locator('#tournament-names option').evaluateAll((o) => o.map((e) => e.value).sort());
   check(
@@ -241,9 +365,17 @@ console.log('\nname fields refuse the browser\'s own contact autofill');
     page.evaluate(() =>
       [...document.querySelectorAll('input')]
         .filter((e) => !e.type || e.type === 'text')
-        .filter((e) => /name|entrant/i.test(e.getAttribute('aria-label') || '') || e.list)
+        // Placeholder as well as `aria-label`, because the tournament's own name field has
+        // neither an `aria-label` nor a `list` and so escaped this entirely — the one field
+        // on the screen whose visible label is the bare word Safari's heuristic reads.
+        .filter(
+          (e) =>
+            /name|entrant/i.test(
+              `${e.getAttribute('aria-label') || ''} ${e.getAttribute('placeholder') || ''}`,
+            ) || e.list,
+        )
         .map((e) => ({
-          label: (e.getAttribute('aria-label') || e.className).slice(0, 40),
+          label: (e.getAttribute('aria-label') || e.placeholder || e.className).slice(0, 40),
           off: e.getAttribute('autocomplete') === 'off',
           options: e.list ? e.list.options.length : -1,
         })),
@@ -256,6 +388,9 @@ console.log('\nname fields refuse the browser\'s own contact autofill');
       async () => {
         await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
         await page.getByRole('button', { name: 'New tournament' }).click();
+        // The form opens on the roster with no boxes, so one has to be asked for before
+        // there is a name field on this screen to check at all.
+        await page.getByRole('button', { name: 'Add new entrant' }).click();
       },
     ],
   ]) {
@@ -277,10 +412,9 @@ console.log('\nname fields refuse the browser\'s own contact autofill');
   await page.close();
 }
 
-console.log('\nthe roster enters people by tapping rather than typing');
-{
-  // Typing eleven names the app already holds is the real cost of setting a tournament
-  // up. The chips are a toggle, so they double as the answer to who is in so far.
+// An empty draw form with the eleven already in the archive, which is what the roster
+// draws its chips from.
+async function rosterForm() {
   const page = await browser.newPage({ viewport: PHONE });
   page.on('pageerror', (e) => {
     console.log('  PAGE ERROR', e.message);
@@ -304,8 +438,19 @@ console.log('\nthe roster enters people by tapping rather than typing');
   await page.waitForSelector('.setup');
   await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
   await page.getByRole('button', { name: 'New tournament' }).click();
+  return page;
+}
 
-  const rows = () => page.locator('.entrant-name').evaluateAll((e) => e.map((x) => x.value));
+const entered = (page) =>
+  page.locator('.entrant-name').evaluateAll((e) => e.map((x) => x.value));
+
+console.log('\nthe roster enters people by tapping rather than typing');
+{
+  // Typing eleven names the app already holds is the real cost of setting a tournament
+  // up. The chips are a toggle, so they double as the answer to who is in so far.
+  const page = await rosterForm();
+
+  const rows = () => entered(page);
   check('a chip per archived name', (await page.locator('.roster-chip').count()) === 11);
   check('none lit to begin with', (await page.locator('.roster-chip.is-on').count()) === 0);
 
@@ -316,10 +461,17 @@ console.log('\nthe roster enters people by tapping rather than typing');
     JSON.stringify(await rows()),
   );
   check('every chip is lit', (await page.locator('.roster-chip.is-on').count()) === 11);
+  // The field costs no typing; the cup's own name still does, and it is the only thing
+  // between eleven taps and a bracket.
   check(
-    'and the draw is ready with no typing at all',
-    await page.locator('.draw-go').isEnabled(),
+    'the whole field is in without a keystroke, and only the cup is unnamed',
+    (await page.locator('.draw-go').isDisabled()) &&
+      /needs a name/i.test(await page.locator('.draw-hint').innerText().catch(() => '')) &&
+      (await page.locator('.entrants .is-faulted').count()) === 0,
+    await page.locator('.draw-hint').innerText().catch(() => '(no hint)'),
   );
+  await page.locator('.draw-name input').fill('Hole Corn VI');
+  check('naming it is all that was left', await page.locator('.draw-go').isEnabled());
 
   // A second tap takes them out again, and the entrant goes with them rather than
   // leaving a blank the draw would refuse.
@@ -332,6 +484,51 @@ console.log('\nthe roster enters people by tapping rather than typing');
     (await page.locator('.roster-chip.is-on').count()) === 10,
   );
   check('the draw is still ready', await page.locator('.draw-go').isEnabled());
+
+  await page.close();
+}
+
+console.log('\nSelect all enters the whole roster in one press');
+{
+  // Everybody usually plays, so the ordinary field is the roster and the chips are then
+  // eleven taps to say so. `place` is shared with the chips, and the property that has to
+  // hold is that one press seats the field exactly as tapping down the roster would —
+  // nothing below `Draw` can see that, since both callers are inside it.
+  const page = await rosterForm();
+  const chips = await page.locator('.roster-chip').allInnerTexts();
+  const all = page.getByRole('button', { name: 'Select all' });
+
+  await all.click();
+  check(
+    'one press enters everybody, in chip order',
+    JSON.stringify(await entered(page)) === JSON.stringify(chips),
+    JSON.stringify(await entered(page)),
+  );
+  check('every chip is lit', (await page.locator('.roster-chip.is-on').count()) === 11);
+  // One press for the field; the cup's own name is the only keystroke left.
+  await page.locator('.draw-name input').fill('Hole Corn VI');
+  check('and the draw is ready', await page.locator('.draw-go').isEnabled());
+  // Not flipped to a clear, so it has to say for itself that there is nobody left.
+  check('with nobody left to add, the button goes quiet', await all.isDisabled());
+
+  // It adds who is missing rather than starting again, which is the half that would
+  // destroy a name typed into the fields for somebody the archive has never seen.
+  await page.getByRole('button', { name: 'Sigma', exact: true }).click();
+  check('taking one out offers the button again', await all.isEnabled());
+  await page.getByRole('button', { name: 'Add new entrant' }).click();
+  await page.locator('.entrant-name').last().fill('Delta');
+  await all.click();
+  const after = await entered(page);
+  check(
+    'a newcomer typed in is kept',
+    after.filter((n) => n === 'Delta').length === 1,
+    JSON.stringify(after),
+  );
+  check(
+    'and nobody already in is entered twice',
+    after.length === 12 && new Set(after).size === 12,
+    `${after.length} rows, ${new Set(after).size} distinct`,
+  );
 
   await page.close();
 }
@@ -378,7 +575,11 @@ console.log('\nin doubles a tap fills the next half of a pair');
     JSON.stringify(await pairs()) === '[["Rho","Tau"],["Sigma","Phi"]]',
     JSON.stringify(await pairs()),
   );
-  check('which is a bracket of one tie', (await page.locator('.draw-note').innerText()).includes('1 ties') || (await page.locator('.draw-note').innerText()).includes('2 entrants'), (await page.locator('.draw-note').innerText()).trim());
+  check(
+    'which is a bracket of one tie, said in the singular',
+    (await page.locator('.draw-note').innerText()).includes('2 entrants, so 1 tie.'),
+    (await page.locator('.draw-note').innerText()).trim(),
+  );
   // Removing half a pair leaves the partner with a gap rather than dropping them both.
   await page.getByRole('button', { name: 'Rho', exact: true }).click();
   check(
@@ -693,7 +894,7 @@ console.log('\na tie picked by mistake can be put back');
   const page = await open();
   await playFirst(page);
   await page.waitForSelector('.tie-banner');
-  await page.getByRole('button', { name: 'Leave tie' }).click();
+  await page.getByRole('button', { name: 'Play something else' }).click();
   const left = await settles(() =>
     page.waitForSelector('.tie-banner', { state: 'detached', timeout: 3000 }),
   );
@@ -704,6 +905,46 @@ console.log('\na tie picked by mistake can be put back');
   check('and Guests is back', !(await page.locator('.casual-toggle').isDisabled()));
   await backToBracket(page);
   check('the tie is still there, unplayed', (await progress(page)).trim() === '0 of 10 ties');
+  await page.close();
+}
+
+console.log('\nabandoning a tournament puts back a tie of it');
+{
+  // The bracket is gone, so nothing is left to say which tie this was or to take it back
+  // out of. Left tagged, the setup screen keeps a banner naming no tournament with the
+  // names, mode and target locked by a draw that does not exist. Only this can see it:
+  // `clearTie` and the deletion are each correct on their own, and nothing joins them up
+  // but `App.jsx`.
+  const page = await open();
+  await playFirst(page);
+  await page.waitForSelector('.tie-banner');
+  const before = await page.locator('.team-name-static').allInnerTexts();
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.waitForSelector('.tournament-list');
+  await page.locator('.tournament-row').first().click();
+  await page.locator('.tournament-drop').first().click();
+  await page.waitForSelector('.modal');
+  await page.locator('.modal').getByRole('button', { name: 'Abandon' }).click();
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  const gone = await settles(() =>
+    page.waitForSelector('.tie-banner', { state: 'detached', timeout: 3000 }),
+  );
+  check('the banner goes with the bracket', gone, gone ? '' : 'the banner outlived the draw');
+  check('and the game is no longer a tie', (await game(page)).tournament === null);
+  check('the names are editable again', (await page.locator('.team-name-input').count()) === 2);
+  check('the mode is unlocked', !(await page.locator('.mode-toggle button').first().isDisabled()));
+  check('and the target is a field again', (await page.locator('.target-field').count()) === 1);
+  // `clearTie` keeps the lineup on purpose — two people who were about to play is a
+  // reasonable thing to start an ordinary game from, and clearing it destroys something
+  // to make a point.
+  const after = await page.locator('.team-name-input').evaluateAll((els) =>
+    els.map((e) => e.value),
+  );
+  check(
+    'the two who were about to play are still in the lineup',
+    after.join('|') === before.join('|'),
+    `${after.join('|')} (was ${before.join('|')})`,
+  );
   await page.close();
 }
 
@@ -721,14 +962,17 @@ console.log('\nthe draw cannot set a target the app would refuse');
   await page.waitForSelector('.setup');
   await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
   await page.getByRole('button', { name: 'New tournament' }).click();
+  await page.locator('.draw-name input').fill('Hole Corn VI');
   await page.locator('.draw-target input').fill('5000');
   await page.waitForTimeout(150);
   const shown = await page.locator('.draw-target input').inputValue();
   check('a silly target is clamped as it is typed', Number(shown) === 99, shown);
   for (const [i, n] of ['Rho', 'Tau'].entries()) {
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
     await page.locator('.entrant-name').nth(i).fill(n);
   }
   await page.locator('.draw-go').click();
+  await skipCeremony(page);
   await page.waitForSelector('.bracket-scroll');
   const stored = await page.evaluate(
     () => JSON.parse(localStorage.getItem('holecorn.tournaments.v1'))[0].target,
@@ -741,6 +985,98 @@ console.log('\nthe draw cannot set a target the app would refuse');
     (await page.locator('.target-fixed').innerText()).trim() === 'Play to 99',
     await page.locator('.target-fixed').innerText(),
   );
+  await page.close();
+}
+
+console.log('\nthe draw is played out a name at a time');
+{
+  // `drawSteps` is pure and unit tested, and `tournament.test.js` already holds it to the
+  // pairings `bracket()` goes on to draw. What only a browser can see is that the screen
+  // is playing out **the tournament that was actually saved** — `Draw` shuffles, stores,
+  // and hands the same object on, and a re-shuffle anywhere in that chain would announce
+  // pairings the bracket never draws with nothing on either screen to say so.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.getByRole('button', { name: 'New tournament' }).click();
+  await page.locator('.draw-name input').fill('Hole Corn VI');
+  for (let i = 0; i < ELEVEN.length; i += 1) {
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
+  }
+  for (const [i, n] of ELEVEN.entries()) await page.locator('.entrant-name').nth(i).fill(n);
+  await page.locator('.draw-go').click();
+
+  const arrived = await settles(() => page.waitForSelector('.ceremony', { timeout: 5000 }));
+  check('taking the draw lands on the ceremony, not the bracket', arrived);
+  const count = async () => (await page.locator('.ceremony-count').innerText()).toLowerCase();
+  check('with nothing pulled yet', (await count()) === '0 of 11 drawn', await count());
+  check('and no bracket behind it', (await page.locator('.bracket-scroll').count()) === 0);
+
+  // The pause is the whole point: a press has to change something before the name lands
+  // or it reads as a dead button, which is the reasoning `Toss for first` already carries.
+  await page.locator('.ceremony-pull').click();
+  await page.waitForTimeout(300);
+  const held = await page.locator('.ceremony-name').innerText();
+  check('the name is withheld for a beat', /pulling/i.test(held), held);
+  check('and the button is held with it', await page.locator('.ceremony-pull').isDisabled());
+
+  await page.waitForTimeout(1200);
+  check('then the name lands', !/pulling/i.test(await page.locator('.ceremony-name').innerText()));
+  check('and the count moves', (await count()) === '1 of 11 drawn', await count());
+
+  // Every name, in the order the screen pulls them.
+  const pulled = [await page.locator('.ceremony-name').innerText()];
+  for (let i = 1; i < ELEVEN.length; i += 1) {
+    await page.locator('.ceremony-pull').click();
+    await page.waitForTimeout(1250);
+    pulled.push(await page.locator('.ceremony-name').innerText());
+  }
+  check('the last press ends the draw', (await count()) === '11 of 11 drawn', await count());
+  check('everyone came out of the hat exactly once',
+    [...pulled].sort().join('|') === [...ELEVEN].sort().join('|'),
+    pulled.join(', '));
+
+  // The crossing. `entrants` in draw order *is* the seating, so the order the ceremony
+  // pulled them in has to be the order the stored tournament holds — otherwise the card
+  // named a draw nobody is about to play.
+  const entrants = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('holecorn.tournaments.v1'))[0].entrants.flat(),
+  );
+  check('in the order the tournament was stored in', pulled.join('|') === entrants.join('|'),
+    `${pulled.join(', ')} vs ${entrants.join(', ')}`);
+
+  // A finished draw offers the bracket rather than another pull, and the sheet holds the
+  // pairings — the ties both sides of which came out of the hat. The tie between two
+  // preliminary winners is announced by no pull, so it is not among them.
+  check('the button becomes the way on',
+    (await page.locator('.ceremony-pull').innerText()) === 'See the bracket');
+  check('and the sheet lists the pairings made',
+    (await page.locator('.ceremony-sheet li').count()) === 6,
+    `${await page.locator('.ceremony-sheet li').count()}`);
+
+  await page.locator('.ceremony-pull').click();
+  const landed = await settles(() => page.waitForSelector('.bracket-scroll', { timeout: 5000 }));
+  check('which opens the bracket just drawn', landed);
+  await page.close();
+}
+
+console.log('\nthe ceremony can be skipped, and the draw stands either way');
+{
+  // Always ceremonial and always skippable, which is what a toggle would have bought and
+  // this does not have to remember. The draw is stored before a single name is revealed,
+  // so skipping cannot lose one.
+  const page = await open(['Rho', 'Tau', 'Sigma', 'Phi']);
+  const entrants = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('holecorn.tournaments.v1'))[0].entrants.flat(),
+  );
+  check('skipping still stores the whole field', entrants.length === 4, entrants.join(', '));
+  check('and the bracket is drawn from it',
+    (await page.locator('.tie').count()) > 0);
   await page.close();
 }
 
@@ -1285,12 +1621,45 @@ console.log('\nseveral tournaments can run at once');
 
   await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
   await page.getByRole('button', { name: 'New tournament' }).click();
-  await page.locator('.draw-name input').fill('Doubles Cup');
+
+  // Several cups run at once by decision, and both lists show the name and a date, so two
+  // of a name is a screen you cannot pick from. Checked here rather than in the arrival
+  // block because it needs a tournament to already exist — `open()` drew Hole Corn VI —
+  // and because the block goes on to draw a real second one, which is the half that would
+  // break if the rule matched too much.
+  const nameHint = () => page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+  // The field goes in *first*, so the name is the only thing left wrong. Asserting the
+  // button on an empty form would pass on the entrant count whatever the name rule did —
+  // this file's own recorded failure, and verified by mutation: dropping `duplicate` from
+  // the button's gate passes the whole run when this is checked before the entrants.
   for (const [i, n] of ['Chi', 'Psi', 'Omega', 'Iota'].entries()) {
-    if (i > 1) await page.getByRole('button', { name: 'Add entrant' }).click();
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
     await page.locator('.entrant-name').nth(i).fill(n);
   }
+  await page.locator('.draw-name input').fill('Hole Corn VI');
+  check('a name already in use is refused', /already a tournament/i.test(await nameHint()), await nameHint());
+  check('and the field says which box', (await page.locator('.draw-name input[aria-invalid]').count()) === 1);
+  check(
+    'with the draw held off, and nothing else wrong with the form',
+    (await page.locator('.draw-go').isDisabled()) &&
+      (await page.locator('.entrants .is-faulted').count()) === 0,
+    await nameHint(),
+  );
+  // Compared the way a person's name is, so the case it was typed in cannot smuggle a
+  // second one past.
+  await page.locator('.draw-name input').fill('  hole corn vi ');
+  check(
+    'however it was cased or spaced',
+    /already a tournament/i.test(await nameHint()),
+    await nameHint(),
+  );
+
+  await page.locator('.draw-name input').fill('Doubles Cup');
+  check('a name of its own is not', !/already a tournament/i.test(await nameHint()), await nameHint());
+  check('and unmarks the field', (await page.locator('.draw-name input[aria-invalid]').count()) === 0);
+  check('so the second draw is ready', await page.locator('.draw-go').isEnabled());
   await page.locator('.draw-go').click();
+  await skipCeremony(page);
   await page.waitForSelector('.bracket');
   // Newest first, so the one just drawn heads the list rather than sitting under the
   // one it followed.

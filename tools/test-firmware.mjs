@@ -174,6 +174,11 @@ if (!ran['test_render.cpp']) {
     if (!scenes.some((s) => s.splash !== null)) {
       throw new Error('no scenes carry a splash — the splash screen is unpinned');
     }
+    // And the draw card, selected by a retained card on the draw topic. A fourth screen
+    // outside PANEL_LAYOUTS, so a fourth assertion of its own.
+    if (!scenes.some((s) => s.draw)) {
+      throw new Error('no scenes carry a draw card — the draw screen is unpinned');
+    }
 
     for (const scene of scenes) {
       const buf = readFileSync(resolve(dir, `${scene.name}.ppm`));
@@ -207,6 +212,8 @@ if (!ran['test_render.cpp']) {
           scene.lineup ? panel.lineupState(scene.lineup) : null,
           // Same for the tie, through tieState().
           scene.tie ? panel.tieState(scene.tie) : null,
+          // And the draw card, through drawState().
+          scene.draw ? panel.drawState(scene.draw) : null,
         );
       }
 

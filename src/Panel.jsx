@@ -30,6 +30,7 @@ import {
   lineupState,
   parseColor,
   boardScreen,
+  drawState,
   renderBoard,
   tieState,
 } from './panelRender.js';
@@ -174,7 +175,8 @@ export default function Panel() {
     return merged;
   });
 
-  const { payload, status, error, senderOnline, layout, lineup, tie } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, layout, lineup, tie, draw } =
+    useScoreboardDisplay(config);
   const blinkOn = useBlink(payload?.winner ?? null);
   const live = useBoardLive(status === 'connected', senderOnline);
   // Coerced through the same function the pixel check drives, so what is drawn
@@ -182,6 +184,8 @@ export default function Panel() {
   const drawn = useMemo(() => lineupState(lineup), [lineup]);
   // Same again for the tie, through parseTie's own coercions.
   const drawnTie = useMemo(() => tieState(tie), [tie]);
+  // And the draw card, through parseDraw's.
+  const drawnCard = useMemo(() => drawState(draw), [draw]);
   // Asked of renderBoard's own rule rather than re-derived, so the caption cannot
   // name a screen the canvas is not drawing.
   const screen = boardScreen({
@@ -189,6 +193,7 @@ export default function Panel() {
     layout,
     lineup: drawn,
     tie: drawnTie,
+    draw: drawnCard,
   });
 
   const splash = useSplash(status);
@@ -205,10 +210,32 @@ export default function Panel() {
     if (splash.showing) {
       drawSplash(fb, splashColors[0], splashColors[1], splash.connect, splash.elapsed, splashOrder);
     } else {
-      renderBoard(fb, boardState(payload), payload !== null, live, blinkOn, layout, drawn, drawnTie);
+      renderBoard(
+        fb,
+        boardState(payload),
+        payload !== null,
+        live,
+        blinkOn,
+        layout,
+        drawn,
+        drawnTie,
+        drawnCard,
+      );
     }
     paintPanel(canvasRef.current, fb, cell);
-  }, [payload, live, blinkOn, cell, layout, drawn, drawnTie, splash, splashColors, splashOrder]);
+  }, [
+    payload,
+    live,
+    blinkOn,
+    cell,
+    layout,
+    drawn,
+    drawnTie,
+    drawnCard,
+    splash,
+    splashColors,
+    splashOrder,
+  ]);
 
   if (!configComplete(config)) {
     return (
@@ -234,15 +261,20 @@ export default function Panel() {
           aria-label={
             splash.showing
               ? 'Panel showing the Holecorn logo while it starts up'
-              : screen === 'tie'
-                ? `Panel showing ${payload.teamA ?? 'team A'} against ` +
-                  `${payload.teamB ?? 'team B'} in the ${tie.r}`
-                : screen === 'form'
-                  ? `Panel showing pre-game form for ${drawn.count} players`
-                  : payload
-                    ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
-                      `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
-                    : 'Panel showing no score yet'
+              : screen === 'draw'
+                ? draw.r
+                  ? `Panel showing the ${draw.r} draw: ` +
+                    `${draw.n ?? 'a name being pulled out of the hat'}`
+                  : `Panel showing the ${draw.t} draw, about to begin`
+                : screen === 'tie'
+                  ? `Panel showing ${payload.teamA ?? 'team A'} against ` +
+                    `${payload.teamB ?? 'team B'} in the ${tie.r}`
+                  : screen === 'form'
+                    ? `Panel showing pre-game form for ${drawn.count} players`
+                    : payload
+                      ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                        `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
+                      : 'Panel showing no score yet'
           }
         />
       </div>
@@ -252,11 +284,13 @@ export default function Panel() {
             up would describe something not on screen. */}
         {splash.showing
           ? 'Starting up'
-          : screen === 'tie'
-            ? 'Tournament tie'
-            : screen === 'form'
-              ? 'Pre-game form'
-              : (LAYOUT_LABELS[layout] ?? layout)}{' '}
+          : screen === 'draw'
+            ? 'Tournament draw'
+            : screen === 'tie'
+              ? 'Tournament tie'
+              : screen === 'form'
+                ? 'Pre-game form'
+                : (LAYOUT_LABELS[layout] ?? layout)}{' '}
         ·{' '}
         {status === 'connected'
           ? live

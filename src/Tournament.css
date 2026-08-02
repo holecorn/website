@@ -25,6 +25,7 @@
 /* Capped as an element rather than by narrowing the screen, so widening the screen for
    the bracket does not stretch a column of name fields across an iPad. */
 .draw,
+.ceremony,
 .tournament-empty {
   width: 100%;
   max-width: var(--row-w);
@@ -578,7 +579,6 @@ button.tie {
 
 .draw-cancel,
 .tournament-drop {
-  align-self: center;
   padding: 10px 18px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -586,6 +586,20 @@ button.tie {
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
+}
+
+.tournament-drop {
+  align-self: center;
+}
+
+/* Ends where every other control in the form ends, rather than being centred. Centred it
+   lined up with nothing — the form's controls all run the full `--row-w` — and on a wide
+   screen it was worse than untidy: the form is capped and sits left, so a button centred
+   in the *screen* sat clear of it altogether. Measured at 1024px, 470px against a form
+   ending at 576px. That is also why it is inside `.draw` and not beside it; outside that
+   column there is no edge to align to. */
+.draw-cancel {
+  align-self: flex-end;
 }
 
 /* In the header, pushed to the right by `margin-left: auto` rather than by `.stats-head`
@@ -625,6 +639,13 @@ button.tie {
   gap: 8px;
 }
 
+.roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .roster h3 {
   margin: 0;
   color: var(--muted);
@@ -632,6 +653,26 @@ button.tie {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* Beside the heading rather than after the chips: the chips wrap to four rows on a
+   phone, so below them it is off the fold on the one screen it exists to shorten. */
+.roster-all {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.roster-all:disabled {
+  color: var(--muted);
+  opacity: 0.5;
+  text-decoration: none;
 }
 
 .roster-chips {
@@ -735,7 +776,10 @@ button.tie {
   min-width: 0;
 }
 
-.entrants li.is-faulted .entrant-name {
+/* The same mark a faulted entrant gets, so one hint above four boxes and a name field
+   points at whichever of them is at fault. */
+.entrants li.is-faulted .entrant-name,
+.draw-name input[aria-invalid] {
   border-color: #eb5757;
 }
 
@@ -789,6 +833,179 @@ button.tie {
 .draw-go:disabled {
   background: var(--panel);
   color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- the ceremony -- */
+
+/* The draw played out a name at a time. The phone is what the child pressing holds, so
+   the card is the biggest thing on it and the sheet below is for everyone leaning in. */
+.ceremony {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.ceremony h2 {
+  margin: 0;
+  font-size: 18px;
+  text-align: center;
+}
+
+.ceremony-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* A fixed height, so the card does not resize between its two shapes and walk the button
+   up and down the screen under the thumb about to press it again. Sized to the tallest —
+   round, name and the versus line — which is what a completing pull draws.
+   `.toss-result`'s reasoning, one size up. */
+.ceremony-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 128px;
+  padding: 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  text-align: center;
+}
+
+.ceremony-round {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The one thing everybody is looking at. `overflow-wrap` rather than a cut, because a
+   doubles pair at the 16-character cap is 35 characters and the phone has the room the
+   panel does not — the same split the tie topic already makes. */
+.ceremony-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.ceremony-versus {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* Fades while the name is withheld rather than emptying the box, so nothing moves at the
+   reveal — `.toss-result.is-tossing`'s rule, and the reason the card has a fixed height. */
+.ceremony-card.is-pulling .ceremony-name {
+  animation: ceremony-pulse 1.1s ease-in-out;
+}
+
+@keyframes ceremony-pulse {
+  0% { opacity: 0.35; }
+  50% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+
+.ceremony-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ceremony-pull {
+  flex: 1 1 auto;
+  max-width: 320px;
+  padding: 16px 18px;
+  border: none;
+  border-radius: 12px;
+  background: #27ae60;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Held rather than faded out: the pause is the point, and a button that vanishes for a
+   second reads as the app having lost the press. */
+.ceremony-pull:disabled {
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.ceremony-skip {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The sheet as it fills in. Newest first, so the pull just made sits under the card
+   rather than at the bottom of a list that has to be scrolled to. */
+.ceremony-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One grid for every row rather than a grid per row, so the round track sizes to the
+   widest caption across all of them and the pairings start at one offset — the same trick
+   `.field-rows` uses on the setup screen, and for the same reason: ragged left edges down
+   a list read as broken. `display: contents` is what keeps the row a real element for the
+   background and the padding to hang off. */
+.ceremony-sheet {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.ceremony-sheet li {
+  display: contents;
+}
+
+.ceremony-sheet-round,
+.ceremony-sheet-tie {
+  padding: 7px 0;
+  background: var(--panel);
+}
+
+.ceremony-sheet-round {
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: 8px 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ceremony-sheet-tie {
+  padding-right: 10px;
+  border-radius: 0 8px 8px 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ceremony-sheet-tie b {
+  color: var(--text);
 }
 
 
@@ -991,5 +1208,13 @@ button.tie {
 
   .bracket-scroll {
     scroll-snap-type: x mandatory;
+  }
+}
+
+/* The pulse goes and the pause stays, which is the same split the toss makes: withholding
+   the result is a delay rather than motion, and it is the whole point of the beat. */
+@media (prefers-reduced-motion: reduce) {
+  .ceremony-card.is-pulling .ceremony-name {
+    animation: none;
   }
 }

@@ -414,18 +414,49 @@ own career, so use a separate browser or clear it afterwards.
 ## Tournaments
 
 The **Tournaments** button on the setup screen runs a knockout: enter everyone
-playing, the app takes the draw, and it tells you which ties can be played. Each
+playing, the app makes the draw, and it tells you which ties can be played. Each
 tie is scored exactly like any other game and lands in your history.
 
-Enter the field by tapping names from your archive — anyone the app already knows
-is a chip you tap to add, tap again to remove — and type any newcomers. Then
-**Take the draw**. The draw is random and final: it puts the excess into
+The form opens on the roster with no boxes to fill in. Enter the field by tapping
+names from your archive — anyone the app already knows is a chip you tap to add,
+tap again to remove. **Select all** enters everybody at once, which is usually the
+field, and then you tap off whoever isn't here; it only adds people who aren't in
+yet, so anything already typed stays put. **Add new entrant** gives you a box for
+somebody the app has never seen. Give the tournament a name — several can run at
+once and the lists show nothing but the name and a date, so a blank one is refused
+and so is one you have used before, however you capitalise it. Then
+**Make the draw**. The draw is random and final: it puts the excess into
 preliminary ties so the rest of the bracket is a power of two, and gives everyone
 else a bye. For eleven entrants that's three preliminaries and five byes.
 
 Who has the harder path isn't something the draw decides. For eleven, six people
 must win four ties and five must win three — in *every* possible arrangement, so
 no draw is kinder than another.
+
+### Pulling the names out of the hat
+
+**Make the draw** doesn't show you the bracket. It hands you a hat: press **Pull a
+name** and, after a beat, one name comes out and lands where it landed — *Tau
+plays Rho*, *Kappa plays the winner of Omega v Iota*. Press again for the next.
+The phone is meant to be passed to whoever normally does the pulling.
+
+If the external scoreboard is on, the board follows every press, so everyone
+watching sees the draw being made rather than being told about it afterwards. It
+puts the cup's name up as soon as the ceremony opens — *Hole Corn VI · Draw* —
+so the board says what everyone is standing around for before the first name is
+out. The tablet view also counts down — *9 of 11 drawn*.
+
+Sometimes a name comes out with nobody to meet yet. That always sorts itself out
+on the very next press, so it is never more than one press of waiting, and the
+draw always ends on a completed pairing rather than trailing off.
+
+**Skip** ends the ceremony and goes straight to the bracket. Nothing is lost by
+it: the draw is made and stored the moment you press **Make the draw**, and the
+ceremony only plays back what is already decided. Leaving the screen part-way
+through has the same effect.
+
+There is one tie no press announces — the one between two preliminary winners,
+where neither side is known yet. The bracket draws it.
 
 ### Playing a tie
 
@@ -435,8 +466,9 @@ to start it. Several are usually playable at once, and there is no required
 order — play whoever is there, which is how it actually goes.
 
 A tie loads with the names, the mode and the target fixed by the draw, and a line
-saying which tournament and round it is. **Leave tie** puts it back if you tapped
-the wrong one. Everything else works as normal: the toss, the colours, who throws
+saying which tournament and round it is. **Play something else** puts it back if you
+tapped the wrong one — the tie stays on the bracket, and nothing about the tournament
+changes. Everything else works as normal: the toss, the colours, who throws
 first.
 
 On a phone the bracket shows one round at a time with **‹ ›** to step between
@@ -616,7 +648,7 @@ Short names go on one row either side of a **V** and the card spreads out; longe
 stack, and keep the "&" they were typed with — a whole row fits far more than half of
 one, so a name that would be cut to nine characters beside the score fits at its full
 length here. It appears when you tap a tie and goes when the first bag lands, like the
-form screen, and **Leave tie** takes it off too.
+form screen, and **Play something else** takes it off too.
 
 Who throws first isn't marked here — there's a single pixel between the rows and a line
 in it reads as an underline on the name. The score screen marks it a few seconds later.

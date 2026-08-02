@@ -4,6 +4,7 @@ import {
   bracket,
   bracketShape,
   bracketTree,
+  drawSteps,
   entrantFaults,
   entrantStats,
   lastPlayed,
@@ -134,6 +135,139 @@ describe('levelName', () => {
     expect(levelName(1, shape)).toBe('Final');
     expect(levelName(2, shape)).toBe('Semi-final');
     expect(levelName(3, shape)).toBe('Quarter-final');
+  });
+});
+
+// One line per pull, the way the card reads it, so a sequence can be asserted whole
+// rather than field by field.
+function sketch(steps) {
+  const label = (side) => side.names.join(' & ');
+  return steps.map((s) => {
+    if (s.opponents.length === 0) return `${s.round}: ${label(s.side)} (waiting)`;
+    if (s.opponents.length === 1) return `${s.round}: ${label(s.side)} v ${label(s.opponents[0])}`;
+    return `${s.round}: ${label(s.side)} v winner of ${s.opponents.map(label).join(' / ')}`;
+  });
+}
+
+describe('drawSteps', () => {
+  it('reproduces the paper draw for eleven', () => {
+    expect(sketch(drawSteps(tournamentOf(ELEVEN)))).toEqual([
+      'Preliminary: Rho (waiting)',
+      'Preliminary: Tau v Rho',
+      'Preliminary: Sigma (waiting)',
+      'Preliminary: Phi v Sigma',
+      'Quarter-final: Chi (waiting)',
+      'Quarter-final: Psi v Chi',
+      'Preliminary: Omega (waiting)',
+      'Preliminary: Iota v Omega',
+      'Quarter-final: Kappa v winner of Omega / Iota',
+      'Quarter-final: Zeta (waiting)',
+      'Quarter-final: Beta v Zeta',
+    ]);
+  });
+
+  it('pulls every entrant exactly once, in draw order', () => {
+    for (let n = MIN_ENTRANTS; n <= 33; n += 1) {
+      const entrants = Array.from({ length: n }, (_, i) => `P${i}`);
+      const steps = drawSteps(tournamentOf(entrants));
+      expect(steps.map((s) => s.side.names[0])).toEqual(entrants);
+    }
+  });
+
+  // The property that makes the ceremony bearable: nobody is left looking at a name with
+  // no opponent for more than one press.
+  it('resolves a waiting entrant on the very next pull', () => {
+    for (let n = MIN_ENTRANTS; n <= 33; n += 1) {
+      const steps = drawSteps(tournamentOf(Array.from({ length: n }, (_, i) => `P${i}`)));
+      steps.forEach((step, i) => {
+        if (step.opponents.length > 0) return;
+        expect(steps[i + 1]).toBeDefined();
+        expect(steps[i + 1].opponents.map((o) => o.key)).toContain(step.side.key);
+      });
+    }
+  });
+
+  // So the draw does not trail off into byes, which is what it looked like it would do.
+  it('always ends on a completed pairing', () => {
+    for (let n = MIN_ENTRANTS; n <= 33; n += 1) {
+      const steps = drawSteps(tournamentOf(Array.from({ length: n }, (_, i) => `P${i}`)));
+      expect(steps[steps.length - 1].opponents.length).toBeGreaterThan(0);
+    }
+  });
+
+  // The one that matters: the ceremony and the bracket must be describing the same draw.
+  // Both derive from `entrants`, and `seatSides` is shared, but the two walks could still
+  // come to disagree about which tie a name landed in — and nothing on either screen
+  // would say so, because the card is gone by the time the bracket is drawn.
+  it('announces pairings the bracket goes on to draw', () => {
+    for (let n = MIN_ENTRANTS; n <= 33; n += 1) {
+      const t = tournamentOf(Array.from({ length: n }, (_, i) => `P${i}`));
+      const view = bracket(t);
+      const meets = (x, y) =>
+        view.ties.some(
+          (tie) =>
+            tie.level === x.level &&
+            ((tie.a?.key === x.side.key && tie.b?.key === y) ||
+              (tie.b?.key === x.side.key && tie.a?.key === y)),
+        );
+      for (const step of drawSteps(t)) {
+        if (step.opponents.length === 1) {
+          expect(meets(step, step.opponents[0].key)).toBe(true);
+        }
+        if (step.opponents.length === 2) {
+          // The two named are a preliminary, and its winner feeds the tie this entrant
+          // is waiting in — so the card's "winner of" is the bracket's connector.
+          const below = view.ties.find(
+            (tie) =>
+              tie.a?.key === step.opponents[0].key && tie.b?.key === step.opponents[1].key,
+          );
+          expect(below).toBeDefined();
+          const above = view.ties.find(
+            (tie) => tie.level === step.level && (tie.fromA === below.id || tie.fromB === below.id),
+          );
+          expect(above).toBeDefined();
+          expect([above.a?.key, above.b?.key]).toContain(step.side.key);
+        }
+      }
+    }
+  });
+
+  it('never names an opponent nobody has pulled yet', () => {
+    for (let n = MIN_ENTRANTS; n <= 33; n += 1) {
+      const steps = drawSteps(tournamentOf(Array.from({ length: n }, (_, i) => `P${i}`)));
+      const out = new Set();
+      for (const step of steps) {
+        for (const o of step.opponents) expect(out.has(o.key)).toBe(true);
+        out.add(step.side.key);
+      }
+    }
+  });
+
+  // Nobody has a bye when the field is a power of two, so the card must not offer one:
+  // every pull there is an ordinary first-round seat.
+  it('has no preliminary at a power of two', () => {
+    const rounds = drawSteps(tournamentOf(Array.from({ length: 8 }, (_, i) => `P${i}`))).map(
+      (s) => s.round,
+    );
+    expect(new Set(rounds)).toEqual(new Set(['Quarter-final']));
+  });
+
+  it('reads a doubles pair as one entrant and one pull', () => {
+    const steps = drawSteps(
+      tournamentOf([['Rho', 'Tau'], ['Sigma', 'Phi']], 'doubles'),
+    );
+    expect(sketch(steps)).toEqual([
+      'Final: Rho & Tau (waiting)',
+      'Final: Sigma & Phi v Rho & Tau',
+    ]);
+  });
+
+  it('has nothing to reveal for a field too small to draw, or a recorded result', () => {
+    expect(drawSteps(tournamentOf(['Rho']))).toEqual([]);
+    expect(drawSteps(null)).toEqual([]);
+    expect(
+      drawSteps(recordedTournament({ id: 'r', name: 'Hole Corn I', createdAt: 1, champion: 'Rho' })),
+    ).toEqual([]);
   });
 });
 

@@ -80,11 +80,19 @@ const FORM_PPR_MAX = 4;
 const TIE_ROW_H = FONT_H + 1;
 const TIE_LINE_CHARS = idiv(PANEL_W, FONT_ADVANCE);
 const TIE_INLINE_CHARS = TIE_LINE_CHARS - 1;
-const TIE_VERSUS_CHARS = 3;
+const VERSUS_CHARS = 3;
 const TIE_SPREAD_TOP = 2;
 const TIE_SPREAD_GAP = 6;
 const TIE_CUP_MAX = 97;
 const TIE_ROUND_MAX = 33;
+
+const DRAW_ROW_H = FONT_H + 1;
+const DRAW_LINE_CHARS = idiv(PANEL_W, FONT_ADVANCE);
+const DRAW_PAIR_CHARS = idiv(DRAW_LINE_CHARS - VERSUS_CHARS, 2);
+const DRAW_ROUND_MAX = 33;
+const DRAW_CUP_MAX = 97;
+const DRAW_SIDE_MAX = 100;
+const DRAW_OPPONENTS_MAX = 2;
 
 // How long the board shows the wordmark at power-on. Mirrored in sketch.ino, the
 // same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
@@ -150,6 +158,10 @@ const codes = (s) => Uint8Array.from(s, (c) => c.charCodeAt(0));
 const GLYPH_CODES = codes(GLYPH_CHARS);
 const FONT_CODES = codes(FONT_CHARS);
 const VERSUS = codes('V');
+const DRAW_PULLING = codes('PULLING...');
+const DRAW_PLAYS = codes('PLAYS');
+const DRAW_PLAYS_WINNER = codes('PLAYS WINNER OF');
+const DRAW_TITLE = codes('DRAW');
 
 // Unknown characters fall back to index 0 — a space in both tables — rather
 // than being skipped, so a name the font can't draw still takes up its slots.
@@ -397,6 +409,34 @@ function labelSlice(value, max) {
   return bytes.subarray(0, Math.min(bytes.length, max - 1));
 }
 
+// parseDraw's coercions. A card is a round or a cup, so a message with neither leaves
+// whatever is up; a missing name is the beat before it lands, not an empty one, and a cup
+// with no round is the opening card.
+//
+// `d` and `e` are deliberately not read, because the panel draws no progress line — see
+// the draw card geometry in render.h. The emulator shows what the panel shows, so it does
+// not hold them either.
+export function drawState(payload) {
+  const round = typeof payload?.r === 'string' ? payload.r : '';
+  const cup = typeof payload?.t === 'string' ? payload.t : '';
+  if (round === '' && cup === '') return null;
+  const name = typeof payload?.n === 'string' ? payload.n : '';
+  const opponents = [];
+  for (const side of Array.isArray(payload?.o) ? payload.o : []) {
+    if (opponents.length >= DRAW_OPPONENTS_MAX) break;
+    if (typeof side !== 'string' || side === '') continue;
+    opponents.push(labelSlice(side, DRAW_SIDE_MAX));
+  }
+  return {
+    set: true,
+    named: name !== '',
+    cup: labelSlice(cup, DRAW_CUP_MAX),
+    round: labelSlice(round, DRAW_ROUND_MAX),
+    name: labelSlice(name, DRAW_SIDE_MAX),
+    opponents,
+  };
+}
+
 // `lastLive` is when the link was last actually up, or 0 if never. The C++
 // relies on unsigned wrap to survive millis() overflowing at ~49 days; these are
 // Date.now() stamps, so there is no wrap to survive and a `lastLive` in the
@@ -638,23 +678,31 @@ function drawTextCentred(fb, bytes, y, color, maxChars) {
   drawText(fb, bytes, idiv(PANEL_W - textWidth(bytes, maxChars), 2), y, color, maxChars);
 }
 
+function fitSideTo(bytes, cap, maxChars) {
+  if (bytes.length <= maxChars) return bytes.subarray(0, Math.min(bytes.length, cap - 1));
+  return fitLabelTo(bytes, cap, maxChars).bytes;
+}
+
 function fitTieSide(bytes, cap) {
-  if (bytes.length <= TIE_LINE_CHARS) return bytes.subarray(0, Math.min(bytes.length, cap - 1));
-  return fitLabelTo(bytes, cap, TIE_LINE_CHARS).bytes;
+  return fitSideTo(bytes, cap, TIE_LINE_CHARS);
 }
 
 function tieSpreads(s) {
-  return s.teamA.length + TIE_VERSUS_CHARS + s.teamB.length <= TIE_INLINE_CHARS;
+  return s.teamA.length + VERSUS_CHARS + s.teamB.length <= TIE_INLINE_CHARS;
+}
+
+function drawVersusRow(fb, left, right, y, colorL, colorR, grey, maxChars) {
+  const aLen = left.length;
+  const bLen = right.length;
+  const chars = aLen + VERSUS_CHARS + bLen;
+  const x = idiv(PANEL_W - (chars * FONT_ADVANCE - 1), 2);
+  drawText(fb, left, x, y, colorL, maxChars);
+  drawText(fb, VERSUS, x + (aLen + 1) * FONT_ADVANCE, y, grey, 1);
+  drawText(fb, right, x + (aLen + VERSUS_CHARS) * FONT_ADVANCE, y, colorR, maxChars);
 }
 
 function drawTieFixture(fb, s, y, colorA, colorB, grey) {
-  const aLen = s.teamA.length;
-  const bLen = s.teamB.length;
-  const chars = aLen + TIE_VERSUS_CHARS + bLen;
-  const x = idiv(PANEL_W - (chars * FONT_ADVANCE - 1), 2);
-  drawText(fb, s.teamA, x, y, colorA, TIE_LINE_CHARS);
-  drawText(fb, VERSUS, x + (aLen + 1) * FONT_ADVANCE, y, grey, 1);
-  drawText(fb, s.teamB, x + (aLen + TIE_VERSUS_CHARS) * FONT_ADVANCE, y, colorB, TIE_LINE_CHARS);
+  drawVersusRow(fb, s.teamA, s.teamB, y, colorA, colorB, grey, TIE_LINE_CHARS);
 }
 
 function drawTie(fb, s, t, level) {
@@ -675,6 +723,68 @@ function drawTie(fb, s, t, level) {
 
   drawTextCentred(fb, fitTieSide(s.teamA, TIE_LINE_CHARS + 1), top + TIE_ROW_H * 2, colorA, TIE_LINE_CHARS);
   drawTextCentred(fb, fitTieSide(s.teamB, TIE_LINE_CHARS + 1), top + TIE_ROW_H * 3, colorB, TIE_LINE_CHARS);
+}
+
+function drawDrawCard(fb, d, level) {
+  const grey = scaled(MARKER_COLOR, level);
+  const white = scaled(WHITE, level);
+
+  if (d.round.length === 0) {
+    const top = idiv(PANEL_H - 2 * DRAW_ROW_H, 2);
+    drawTextCentred(fb, d.cup, top, white, DRAW_LINE_CHARS);
+    drawTextCentred(fb, DRAW_TITLE, top + DRAW_ROW_H, grey, DRAW_LINE_CHARS);
+    return;
+  }
+
+  const matched = d.named && d.opponents.length > 0;
+  const rows = matched ? 4 : 2;
+  const y0 = idiv(PANEL_H - rows * DRAW_ROW_H, 2);
+  drawTextCentred(fb, d.round, y0, grey, DRAW_LINE_CHARS);
+
+  if (!d.named) {
+    drawTextCentred(fb, DRAW_PULLING, y0 + DRAW_ROW_H, white, DRAW_LINE_CHARS);
+    return;
+  }
+
+  drawTextCentred(
+    fb,
+    fitSideTo(d.name, DRAW_LINE_CHARS + 1, DRAW_LINE_CHARS),
+    y0 + DRAW_ROW_H,
+    white,
+    DRAW_LINE_CHARS,
+  );
+  if (!matched) return;
+
+  const viaPreliminary = d.opponents.length > 1;
+  drawTextCentred(
+    fb,
+    viaPreliminary ? DRAW_PLAYS_WINNER : DRAW_PLAYS,
+    y0 + DRAW_ROW_H * 2,
+    grey,
+    DRAW_LINE_CHARS,
+  );
+
+  if (!viaPreliminary) {
+    drawTextCentred(
+      fb,
+      fitSideTo(d.opponents[0], DRAW_LINE_CHARS + 1, DRAW_LINE_CHARS),
+      y0 + DRAW_ROW_H * 3,
+      white,
+      DRAW_LINE_CHARS,
+    );
+    return;
+  }
+
+  drawVersusRow(
+    fb,
+    fitSideTo(d.opponents[0], DRAW_PAIR_CHARS + 1, DRAW_PAIR_CHARS),
+    fitSideTo(d.opponents[1], DRAW_PAIR_CHARS + 1, DRAW_PAIR_CHARS),
+    y0 + DRAW_ROW_H * 3,
+    white,
+    white,
+    grey,
+    DRAW_PAIR_CHARS,
+  );
 }
 
 export function splashThump(board, elapsed) {
@@ -756,7 +866,14 @@ export function drawSplash(fb, colorA, colorB, connect, elapsed, order) {
 // render.h has the same chain written out rather than calling anything: the
 // firmware draws and never captions, and the pixel check is what holds the two
 // together.
-export function boardScreen({ haveState, layout = 'full', lineup = null, tie = null }) {
+export function boardScreen({
+  haveState,
+  layout = 'full',
+  lineup = null,
+  tie = null,
+  draw = null,
+}) {
+  if (draw && draw.set) return 'draw';
   if (tie && tie.set && haveState) return 'tie';
   if (lineup && lineup.count > 0) return 'form';
   if (!haveState) return 'no-state';
@@ -772,10 +889,16 @@ export function renderBoard(
   layout = 'full',
   lineup = null,
   tie = null,
+  draw = null,
 ) {
   const level = live ? LEVEL_LIVE : LEVEL_STALE;
   const score = layout === 'score';
-  const screen = boardScreen({ haveState, layout, lineup, tie });
+  const screen = boardScreen({ haveState, layout, lineup, tie, draw });
+
+  if (screen === 'draw') {
+    drawDrawCard(fb, draw, level);
+    return fb;
+  }
 
   if (screen === 'tie') {
     drawTie(fb, s, tie, level);

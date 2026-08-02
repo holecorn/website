@@ -193,6 +193,10 @@ int main() {
     }
   }
 
+  // Held past its block so parseDraw can check it is still the largest message the board
+  // receives — which is what says MQTT_BUFFER needs no change for a fourth topic.
+  size_t worstLineupPacket = 0;
+
   printf("parseLineup\n");
   {
     // Exactly what lineupPayload() produces for a doubles roster.
@@ -316,6 +320,7 @@ int main() {
     // change there — but it is the largest message the board receives, so it is
     // this one and not the score that now bounds MQTT_BUFFER.
     CHECK(wideL.size() + overhead < 512);
+    worstLineupPacket = wideL.size() + overhead;
   }
 
   printf("parseTie\n");
@@ -358,6 +363,89 @@ int main() {
     printf("  worst UTF-8 tie: %zu bytes, packet ~%zu\n", wideTie.size(),
            wideTie.size() + tieOverhead);
     CHECK(wideTie.size() + tieOverhead < 512);
+  }
+
+  printf("parseDraw\n");
+  {
+    DrawState d;
+    CHECK(parseDraw("{\"r\":\"Preliminary\",\"n\":\"Tau\",\"o\":[\"Rho\"],\"d\":2,\"e\":11}", 54, d));
+    CHECK(d.set && d.named);
+    CHECK(!strcmp(d.round, "Preliminary") && !strcmp(d.name, "Tau"));
+    CHECK(d.opponents == 1 && !strcmp(d.opponent[0], "Rho"));
+
+    // No "n" is the beat before the name lands, and it has to be told from a name that
+    // happens to be empty: the board draws a drum roll for one and would draw a nameless
+    // reveal for the other. Absent-means-unknown, the contract `winner` already uses.
+    CHECK(parseDraw("{\"r\":\"Preliminary\",\"d\":1,\"e\":11}", 32, d));
+    CHECK(d.set && !d.named && d.opponents == 0);
+
+    // An entrant with nobody to meet yet — a bye whose sibling seat is still in the hat.
+    CHECK(parseDraw("{\"r\":\"Quarter-final\",\"n\":\"Chi\"}", 31, d));
+    CHECK(d.set && d.named && d.opponents == 0);
+
+    // Two, which the card words as "plays winner of". Sent as sides rather than as that
+    // phrase because the words cost nothing on the board and bytes on every message.
+    CHECK(parseDraw("{\"r\":\"Final\",\"n\":\"Kappa\",\"o\":[\"Omega\",\"Iota\"]}", 46, d));
+    CHECK(d.opponents == 2 && !strcmp(d.opponent[1], "Iota"));
+
+    // More than a bracket can produce, so it comes off a shared broker or a hand-edited
+    // publish. Taken as far as the card holds rather than refused, since the two that fit
+    // are still worth drawing.
+    CHECK(parseDraw("{\"r\":\"Final\",\"n\":\"A\",\"o\":[\"B\",\"C\",\"D\"]}", 40, d));
+    CHECK(d.opponents == DRAW_OPPONENTS_MAX);
+
+    // Empty clears the card, and it is the only way off it: nothing about starting a game
+    // takes this topic down the way the first bag clears the lineup and the tie.
+    CHECK(parseDraw("", 0, d));
+    CHECK(!d.set);
+
+    // A cup and no round is the opening card, which stands on the board from the moment
+    // the ceremony is opened until the first press. No name, so nothing here mistakes it
+    // for a pull.
+    CHECK(parseDraw("{\"t\":\"Hole Corn VI\",\"d\":0,\"e\":11}", 33, d));
+    CHECK(d.set && !d.named && d.opponents == 0);
+    CHECK(!strcmp(d.cup, "Hole Corn VI") && d.round[0] == '\0');
+
+    // A card is a round or a cup, so a message with neither leaves whatever is up rather
+    // than blanking it — parseTie's rule.
+    DrawState keep;
+    keep.set = true;
+    copyInto("Semi-final", keep.round, DRAW_ROUND_MAX);
+    CHECK(!parseDraw("{\"n\":\"Tau\"}", 11, keep));
+    CHECK(!parseDraw("{not json", 9, keep));
+    CHECK(keep.set && !strcmp(keep.round, "Semi-final"));
+
+    // Sizing the buffer, which is the measurement the whole shape of this payload rests
+    // on. Worst case is a doubles field: the side just pulled, plus the two doubles sides
+    // of a preliminary they meet the winner of, at the app's 16 UTF-16 units a name and 3
+    // UTF-8 bytes a unit. A cup name on top of this lands within 25 bytes of MQTT_BUFFER,
+    // which is why a card carrying a pull carries no cup and the tie topic keeps it.
+    std::string euro;
+    for (int i = 0; i < 16; i++) euro += "€";
+    const std::string pair = euro + " & " + euro;
+    const std::string wideDraw = "{\"r\":\"Quarter-final\",\"n\":\"" + pair + "\",\"o\":[\"" + pair +
+                                 "\",\"" + pair + "\"],\"d\":9,\"e\":11}";
+    CHECK(parseDraw(wideDraw.c_str(), wideDraw.size(), d));
+    CHECK(strlen(d.name) == 99 && strlen(d.opponent[1]) == 99);
+    const size_t drawOverhead = 9 + 16 + 5 + 2 + 2 + 5;  // holecorn/<code>/draw + headers
+    printf("  worst UTF-8 draw: %zu bytes, packet ~%zu\n", wideDraw.size(),
+           wideDraw.size() + drawOverhead);
+    CHECK(wideDraw.size() + drawOverhead < 512);
+    // Still bounded by the lineup, so MQTT_BUFFER needs no change. That is the property
+    // the structured opponent bought, and it is the one to re-check before adding a field.
+    CHECK(wideDraw.size() + drawOverhead < worstLineupPacket);
+
+    // The opening card is where the cup name went, and this is what says it was free: it
+    // carries no pull, so it cannot be the topic's worst case however long the name. 32
+    // UTF-16 units at 3 bytes each is the app's cap, the same one the tie card measures.
+    std::string cup;
+    for (int i = 0; i < 32; i++) cup += "€";
+    const std::string wideTitle = "{\"t\":\"" + cup + "\",\"d\":0,\"e\":99}";
+    CHECK(parseDraw(wideTitle.c_str(), wideTitle.size(), d));
+    CHECK(strlen(d.cup) == 96 && !d.named);
+    printf("  worst UTF-8 opening card: %zu bytes, packet ~%zu\n", wideTitle.size(),
+           wideTitle.size() + drawOverhead);
+    CHECK(wideTitle.size() < wideDraw.size());
   }
 
   printf("stepBrightness\n");

@@ -136,6 +136,54 @@ export function newTournament({ id, name, mode, target, entrants, createdAt }) {
   };
 }
 
+// The draw as it comes out of the hat: one step per entrant, in pull order, saying where
+// that name landed and who it will meet. What the ceremony reads, and what the board is
+// told — see docs/TOURNAMENT.md.
+//
+// A step is derived from the stored draw and nothing else, so the ceremony is a **view**
+// over a tournament that is already saved whole. That is what makes it reload-safe with
+// no partial-draw state anywhere, and it is why nothing here is stored.
+//
+// `opponents` is what the card says, and it has exactly three lengths:
+//
+//   0 — nobody yet. Either the first name into a preliminary, or a bye whose sibling seat
+//       is still in the hat. **It always resolves on the very next pull**, because
+//       `bracketShape` puts the preliminaries at a prefix of each half, so a bye at an
+//       even seat is always followed by a bye at its sibling.
+//   1 — a person. Either the second name into a preliminary, or a bye meeting a bye.
+//   2 — the two sides of a preliminary already drawn, which the entrant meets the winner
+//       of. The one thing a paper draw says that a finished bracket cannot.
+//
+// The last seat index is odd for every bracket size, so its sibling is always already out
+// — **a draw always ends on a completed pairing** rather than trailing off into byes.
+export function drawSteps(tournament) {
+  const sides = (tournament?.entrants ?? []).map(asSide);
+  if (sides.length < MIN_ENTRANTS) return [];
+  const shape = bracketShape(sides.length);
+  const seats = seatSides(sides, shape);
+  // A seat's own tie sits one level above the seats; a preliminary is played off below it.
+  // The two coincide for a power-of-two field, which is also the field with no
+  // preliminaries, so they never disagree — and `levelName` is what tells the deepest
+  // round of a ragged field from an ordinary one.
+  const seatLevel = Math.log2(shape.size);
+  const steps = [];
+  const step = (side, level, opponents) =>
+    steps.push({ side, level, round: levelName(level, shape), opponents });
+
+  seats.forEach((seat, index) => {
+    if (seat.length === 2) {
+      step(seat[0], shape.rounds, []);
+      step(seat[1], shape.rounds, [seat[0]]);
+      return;
+    }
+    // The sibling is drawn already only when it sits at the lower index, which is what
+    // makes an even seat the one with nobody to name yet.
+    const sibling = index ^ 1;
+    step(seat[0], seatLevel, sibling < index ? seats[sibling] : []);
+  });
+  return steps;
+}
+
 // A tournament whose sheet is gone, held as its result and nothing else — see
 // `storedResult`. There is no way to make one in the app, deliberately: it is a
 // transcription of something that happened before it, so it arrives from a file the way
@@ -170,6 +218,24 @@ function matchBetween(matches, tournamentId, keyA, keyB) {
   return null;
 }
 
+// Which entrants fall into each seat of the bracket proper, in draw order: one for a
+// bye, two for a preliminary played off into that seat.
+//
+// **This walk is the whole reason a name-at-a-time draw needs no new stored state.**
+// The array order *is* the seating, so pulling a name and writing it in the next slot
+// on the sheet produces exactly the array `newTournament` already stores. `build` and
+// `drawSteps` share it rather than each having a copy — two spellings of where an
+// entrant sits would let the ceremony announce a pairing the bracket never draws, with
+// nothing on either screen to say so.
+function seatSides(sides, shape) {
+  const seats = [];
+  let taken = 0;
+  for (const seatSize of shape.seats) {
+    seats.push(seatSize === 2 ? [sides[taken++], sides[taken++]] : [sides[taken++]]);
+  }
+  return seats;
+}
+
 // The bracket as a tree. A node either *seats* an entrant, or is a *tie* whose two
 // children feed it; either way `side` is who comes out of it, and null on a tie means
 // it has not been decided yet.
@@ -177,12 +243,11 @@ function matchBetween(matches, tournamentId, keyA, keyB) {
 // Ids are positional and derived, never stored — the shape is a function of the field
 // size, so they are stable across recomputation without being written down.
 function build(sides, shape) {
-  let taken = 0;
-  let level = shape.seats.map((seatSize) => {
-    if (seatSize === 1) return { kind: 'seat', side: sides[taken++] };
-    const children = [sides[taken++], sides[taken++]].map((side) => ({ kind: 'seat', side }));
-    return { kind: 'tie', children };
-  });
+  let level = seatSides(sides, shape).map((seat) =>
+    seat.length === 1
+      ? { kind: 'seat', side: seat[0] }
+      : { kind: 'tie', children: seat.map((side) => ({ kind: 'seat', side })) },
+  );
   while (level.length > 1) {
     const up = [];
     for (let i = 0; i < level.length; i += 2) {

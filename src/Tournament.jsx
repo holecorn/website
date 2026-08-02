@@ -17,6 +17,7 @@ import {
   MIN_ENTRANTS,
   bracket,
   bracketTree,
+  drawSteps,
   entrantFaults,
   entrantStats,
   lastPlayed,
@@ -623,7 +624,9 @@ function Entrants({ entrants, mode, faults, knownNames, taken, onChange, onRemov
           ))}
         </datalist>
       )}
-      <ol>
+      {/* Nothing at all until somebody is in, rather than an empty list: the form opens
+          with no rows, and an `<ol>` still carries its own bottom margin. */}
+      <ol hidden={entrants.length === 0}>
         {entrants.map((entrant, i) => (
           <li key={i} className={faulted.has(i) ? 'is-faulted' : undefined}>
             <span className="entrant-seed" aria-hidden="true">
@@ -657,8 +660,10 @@ function Entrants({ entrants, mode, faults, knownNames, taken, onChange, onRemov
           </li>
         ))}
       </ol>
+      {/* "new", because the roster above is how somebody the app already knows gets in.
+          A field is for the person it has never heard of. */}
       <button type="button" className="entrant-add" onClick={onAdd}>
-        Add entrant
+        Add new entrant
       </button>
     </div>
   );
@@ -671,11 +676,22 @@ function Entrants({ entrants, mode, faults, knownNames, taken, onChange, onRemov
 // A chip is a toggle rather than an add button, so the roster doubles as the answer to
 // "who have I got in so far" — the lit ones. Alphabetical rather than most-played,
 // because the task is finding one particular person.
-function Roster({ knownNames, taken, onToggle }) {
+function Roster({ knownNames, taken, onToggle, onAll }) {
   if (knownNames.length === 0) return null;
+  const missing = knownNames.filter((name) => !taken.has(nameKey(name)));
   return (
     <div className="roster">
-      <h3>Tap to add</h3>
+      <div className="roster-head">
+        <h3>Tap to add</h3>
+        {/* Everybody usually plays, so the ordinary field is the whole roster and the
+            chips are then eleven taps to say so. Disabled rather than flipped to a
+            clear, which is what `Make the draw` does with an empty form: a name typed
+            into the fields is not a chip, so a clear either destroys it or leaves a
+            subset behind, and neither is guessable from the label. */}
+        <button type="button" className="roster-all" disabled={missing.length === 0} onClick={onAll}>
+          Select all
+        </button>
+      </div>
       <div className="roster-chips">
         {knownNames.map((name) => {
           const on = taken.has(nameKey(name));
@@ -696,11 +712,15 @@ function Roster({ knownNames, taken, onToggle }) {
   );
 }
 
-function Draw({ knownNames, onDrawn }) {
+function Draw({ knownNames, usedNames, onDrawn, onCancel }) {
   const [name, setName] = useState('');
   const [mode, setMode] = useState('singles');
   const [target, setTarget] = useState(DEFAULT_TARGET);
-  const [entrants, setEntrants] = useState([['', ''], ['', '']]);
+  // No rows at all to begin with. The roster above enters everybody the app already
+  // knows, which is nearly always the field, so two empty boxes on arrival are two boxes
+  // most draws never type into — and they sat between the chips and `Add new entrant`,
+  // which is the control that actually wants them.
+  const [entrants, setEntrants] = useState([]);
 
   // Only the slots this mode plays. A doubles pair typed and then switched to singles
   // leaves a value in the second slot, and counting it would hold a name out of the
@@ -717,6 +737,20 @@ function Draw({ knownNames, onDrawn }) {
       .filter(Boolean),
   );
 
+  // The first empty playing slot, or a new entrant if there is none. Shared by the chips
+  // and by `Select all` so the two cannot come to seat people differently — one press of
+  // the button has to land the field the eleven taps would have.
+  const place = (list, name) => {
+    for (let i = 0; i < list.length; i += 1) {
+      for (const s of playing) {
+        if (!String(list[i][s] ?? '').trim()) {
+          return list.map((e, n) => (n === i ? e.map((v, k) => (k === s ? name : v)) : e));
+        }
+      }
+    }
+    return [...list, [name, '']];
+  };
+
   // One rule for both modes: a tap puts the name in the first empty playing slot, or
   // starts a new entrant if there is none; a second tap clears their slot and drops the
   // entrant if that empties it. In singles that removes the row, in doubles it leaves
@@ -725,27 +759,70 @@ function Draw({ knownNames, onDrawn }) {
     const key = nameKey(name);
     setEntrants((list) => {
       if (list.some((e) => playing.some((s) => nameKey(e[s]) === key))) {
-        const kept = list
+        return list
           .map((e) => e.map((v, s) => (playing.includes(s) && nameKey(v) === key ? '' : v)))
           .filter((e) => playing.some((s) => String(e[s] ?? '').trim()));
-        return kept.length > 0 ? kept : [['', '']];
       }
-      for (let i = 0; i < list.length; i += 1) {
-        for (const s of playing) {
-          if (!String(list[i][s] ?? '').trim()) {
-            return list.map((e, n) => (n === i ? e.map((v, k) => (k === s ? name : v)) : e));
-          }
-        }
-      }
-      return [...list, [name, '']];
+      return place(list, name);
     });
   };
+
+  // Roster order, so the field lands where tapping down the chips would have put it. In
+  // doubles that pairs people alphabetically, which is arbitrary — but so is any order,
+  // and the mode that needs twice as many names typed is the one that can least afford
+  // to be left out of this.
+  const selectAll = () =>
+    setEntrants((list) =>
+      knownNames.filter((n) => !taken.has(nameKey(n))).reduce(place, list),
+    );
   const enough = entrants.length >= MIN_ENTRANTS;
+  // **An untouched form is empty, not at fault.** A blank row is the app's rather than
+  // anybody's, so reporting `blank` on it tells you off for not having typed yet — on a
+  // screen you reached by pressing `New`, which is the moment you are least in the wrong.
+  // So the faults are *reported* only once a name is in, while `faults` itself still
+  // holds `Make the draw` off: a disabled button over an empty form explains itself,
+  // where red underlines under boxes nobody has reached do not.
+  //
+  // Derived rather than a `touched` flag, the rule the rest of this module follows. The
+  // known difference is that clearing the last name puts it back to quiet — which is the
+  // right answer anyway, since you are looking at an empty form again.
+  //
+  // The count is gated on there being a field at all rather than on a name, because those
+  // are different mistakes: dropping to one entrant is something you did, so it is said
+  // straight away, but the form now *opens* on nobody and saying so on arrival is the
+  // telling-off this whole rule exists to avoid.
+  const started = entrants.some((e) => playing.some((s) => String(e[s] ?? '').trim()));
+  const reported = started ? faults : [];
+  // The cup's own name is refused rather than defaulted. It used to fall back to the
+  // literal word "Tournament", which is the guest-game bug in miniature: several cups run
+  // at once and both lists are just names, so two of them called "Tournament" is a screen
+  // you cannot read — and the fallback fires exactly when you were not paying attention.
+  // Reported on the same gate as a blank entrant, since an untouched form is empty rather
+  // than at fault, and it is the last field left that `Make the draw` did not care about.
+  const unnamed = name.trim() === '';
+  const unnamedReported = started && unnamed;
+  // And it has to be a name not already in use, for the same reason it has to be a name at
+  // all: the lists are the name and a date, so two cups called the same thing cannot be
+  // told apart on the screen where you pick one. Refused rather than warned about — this
+  // is a cup about to be drawn and costs a keystroke, the setup screen's rule for a
+  // repeated lineup rather than the archive editor's for a record already filed.
+  //
+  // `nameKey` because "Hole Corn VI" and "hole corn vi" are the same cup to a reader. It
+  // is the person-identity rule and this is not a person, but it is the same question —
+  // how a typed name is compared — and a second spelling of it would be looser or stricter
+  // than the one beside it for no reason anybody could see.
+  //
+  // A form rule, not a storage invariant: a file carrying two of a name still imports,
+  // because `mergeTournaments` keys on the id and refusing a whole bracket over its
+  // decoration is the archive's standing rule.
+  const duplicate = !unnamed && usedNames.some((n) => nameKey(n) === nameKey(name));
   const hint = [
-    faults.some((f) => f.fault === 'blank') && 'Everyone entering needs a name.',
-    faults.some((f) => f.fault === 'twice') &&
+    unnamedReported && 'The tournament needs a name.',
+    duplicate && 'There is already a tournament with that name.',
+    reported.some((f) => f.fault === 'blank') && 'Everyone entering needs a name.',
+    reported.some((f) => f.fault === 'twice') &&
       'Somebody is entered twice. One person cannot be on both sides of a bracket.',
-    !enough && `A tournament needs at least ${MIN_ENTRANTS} entrants.`,
+    entrants.length > 0 && !enough && `A tournament needs at least ${MIN_ENTRANTS} entrants.`,
   ].filter(Boolean);
 
   const draw = () => {
@@ -753,7 +830,7 @@ function Draw({ knownNames, onDrawn }) {
     onDrawn(
       newTournament({
         id: newMatchId(),
-        name: name.trim() || 'Tournament',
+        name: name.trim(),
         mode,
         target,
         // Shuffled here rather than inside `newTournament`, so the module stays
@@ -773,7 +850,8 @@ function Draw({ knownNames, onDrawn }) {
           {...NAME_FIELD}
           value={name}
           maxLength={32}
-          placeholder="Hole Corn VI"
+          placeholder="Tournament Name"
+          aria-invalid={unnamedReported || duplicate || undefined}
           onChange={(e) => setName(e.target.value)}
         />
       </label>
@@ -801,11 +879,11 @@ function Draw({ knownNames, onDrawn }) {
           />
         </label>
       </div>
-      <Roster knownNames={knownNames} taken={taken} onToggle={toggle} />
+      <Roster knownNames={knownNames} taken={taken} onToggle={toggle} onAll={selectAll} />
       <Entrants
         entrants={entrants}
         mode={mode}
-        faults={faults}
+        faults={reported}
         knownNames={knownNames}
         taken={taken}
         onChange={(i, slot, value) =>
@@ -824,17 +902,30 @@ function Draw({ knownNames, onDrawn }) {
       {/* The draw is taken once and cannot be re-taken, so it says so before rather
           than asking after — a confirm on a button pressed once a year is a step
           nobody reads. */}
+      {/* The count only once there is a field. "0 entrants, so 0 ties" is true of a form
+          nobody has touched and says nothing about it; the warning is what the sentence
+          is for. Both halves are pluralised, which mattered less when the form opened on
+          two rows — a bracket of one tie is now a state you pass through. */}
       <p className="draw-note">
-        The draw is random and final. {entrants.length} entrants, so{' '}
-        {Math.max(entrants.length - 1, 0)} ties.
+        The draw is random and final.
+        {entrants.length > 0 &&
+          ` ${entrants.length} ${plural(entrants.length, 'entrant', 'entrants')}, so ${
+            entrants.length - 1
+          } ${plural(entrants.length - 1, 'tie', 'ties')}.`}
       </p>
       <button
         className="draw-go"
-        disabled={faults.length > 0 || !enough}
+        disabled={unnamed || duplicate || faults.length > 0 || !enough}
         aria-describedby={hint.length > 0 ? 'draw-fault' : undefined}
         onClick={draw}
       >
-        Take the draw
+        Make the draw
+      </button>
+      {/* Inside the form rather than beside it, which is what lets it line up: everything
+          in this column is capped at `--row-w`, so a button outside it can only be
+          centred in the *screen* — which on a wide one is clear of the form altogether. */}
+      <button className="draw-cancel" onClick={onCancel}>
+        Cancel
       </button>
     </div>
   );
@@ -1094,6 +1185,136 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
   );
 }
 
+// How long the name is withheld after a press. The same reasoning as `TOSS_MS` in
+// App.jsx, and longer than it: a toss is between two names you can already see, where
+// this is a name nobody knows yet and the pause is what the children are there for.
+//
+// It also has to clear `PUBLISH_DEBOUNCE`, which is why the draw topic publishes
+// undebounced — at 400ms of settling the two beats would collapse into one.
+const PULL_MS = 1100;
+
+// How one pull reads in prose, on the phone and to a screen reader. The panel says the
+// same thing in three rows; this is the one place the wording is a sentence.
+function stepLine(step) {
+  const label = (side) => sideLabel(side.names);
+  if (step.opponents.length === 0) return null;
+  if (step.opponents.length === 1) return `plays ${label(step.opponents[0])}`;
+  return `plays the winner of ${step.opponents.map(label).join(' v ')}`;
+}
+
+// The draw played out one name at a time, which is the whole of the ceremony. A **view**
+// over a tournament that is already saved whole — `Draw` shuffles and stores it before
+// this mounts — so there is no partial-draw state anywhere, nothing here can fail
+// halfway, and leaving the screen lands on the finished bracket.
+//
+// There is no toggle for this. `Make the draw` always comes here and `Skip` is one press,
+// which is the same outcome as a setting without anything to remember.
+function Ceremony({ tournament, onReveal, onDone }) {
+  const steps = useMemo(() => drawSteps(tournament), [tournament]);
+  const [at, setAt] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const timer = useRef(null);
+  const done = at >= steps.length;
+
+  // A pending beat must not land after the screen has gone, the same guard the toss
+  // carries: it would reveal a name onto a board that has moved on to a game.
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // What the board is told. Memoised because the publisher compares by value but the
+  // effect below fires on identity, and this screen re-renders on every tick of state.
+  const reveal = useMemo(() => {
+    if (pulling) return { step: steps[at], drawn: at, total: steps.length, pulling: true };
+    // Nothing pulled yet, so the board carries the title card. Without it the screen the
+    // draw is taken in front of is still showing the last game's score, which says the
+    // board has nothing to do with what everyone is standing around watching.
+    if (at === 0) return { cup: tournament.name, drawn: 0, total: steps.length };
+    return { step: steps[at - 1], drawn: at, total: steps.length, pulling: false };
+  }, [steps, at, pulling, tournament.name]);
+
+  useEffect(() => {
+    onReveal(reveal);
+  }, [reveal, onReveal]);
+  // Taken down however the screen is left — skipped, finished, or Back out of the
+  // tournament screen entirely. Nothing about starting a game clears this topic, so a
+  // card left retained would sit on the board until the next draw.
+  useEffect(() => () => onReveal(null), [onReveal]);
+
+  const pull = () => {
+    if (done || pulling) return;
+    clearTimeout(timer.current);
+    setPulling(true);
+    timer.current = setTimeout(() => {
+      setPulling(false);
+      setAt((n) => n + 1);
+    }, PULL_MS);
+  };
+
+  const shown = !pulling && at > 0 ? steps[at - 1] : null;
+  return (
+    <div className="ceremony">
+      <h2>{tournament.name}</h2>
+      <p className="ceremony-count">
+        {at} of {steps.length} drawn
+      </p>
+
+      {/* Always in the DOM, so a reveal is announced rather than inserted along with its
+          region — the toss result's rule. */}
+      <div className={`ceremony-card${pulling ? ' is-pulling' : ''}`} aria-live="polite">
+        {pulling && <p className="ceremony-round">{steps[at].round}</p>}
+        {pulling && <p className="ceremony-name">Pulling…</p>}
+        {shown && <p className="ceremony-round">{shown.round}</p>}
+        {shown && <p className="ceremony-name">{sideLabel(shown.side.names)}</p>}
+        {shown && stepLine(shown) && <p className="ceremony-versus">{stepLine(shown)}</p>}
+        {!pulling && at === 0 && (
+          <p className="ceremony-versus">Press to pull the first name out of the hat.</p>
+        )}
+      </div>
+
+      <div className="ceremony-actions">
+        <button type="button" className="ceremony-pull" onClick={done ? onDone : pull} disabled={pulling}>
+          {done ? 'See the bracket' : 'Pull a name'}
+        </button>
+        {!done && (
+          <button type="button" className="ceremony-skip" onClick={onDone}>
+            Skip
+          </button>
+        )}
+      </div>
+
+      {/* The sheet filling in, which is what a paper draw leaves you looking at. Newest
+          first, so the pairing just made sits under the card rather than at the bottom of
+          a list you have to scroll to.
+
+          **Pairings, not pulls.** Listing every pull put a row on screen for an entrant
+          with nobody to meet yet, and left it reading "—" after the very next press had
+          named their opponent — a sheet describing the draw as it was rather than as it
+          is. A pull with no opponent is on the card at the time and in a tie a moment
+          later, so it is never invisible.
+
+          The tie whose two sides are both preliminary winners is announced by no pull at
+          all, and so appears here in no form. That is honest rather than missing: nobody
+          coming out of the hat decides it, and the bracket below draws it. */}
+      {steps.slice(0, at).some((step) => step.opponents.length > 0) && (
+        <ol className="ceremony-sheet">
+          {steps
+            .slice(0, at)
+            .map((step, i) => [step, i])
+            .filter(([step]) => step.opponents.length > 0)
+            .map(([step, i]) => (
+              <li key={i}>
+                <span className="ceremony-sheet-round">{step.round}</span>
+                <span className="ceremony-sheet-tie">
+                  <b>{sideLabel(step.side.names)}</b> {stepLine(step)}
+                </span>
+              </li>
+            ))
+            .reverse()}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export default function Tournament({
   tournaments,
   matches,
@@ -1102,8 +1323,13 @@ export default function Tournament({
   onCreate,
   onDrop,
   onPlayTie,
+  onReveal,
 }) {
   const [drawing, setDrawing] = useState(false);
+  // The tournament whose draw is being played out, or null. Held here rather than inside
+  // `Ceremony` so the screen can show one thing at a time: the draw form, the ceremony,
+  // or the lists.
+  const [ceremony, setCeremony] = useState(null);
   // One tournament open at a time, the `openId` idiom the stats screen's match list uses.
   // Nothing is open on arrival: a bracket is up to 63 ties, and the row already says how far
   // it has got, so the list is what you want to land on. Drawing a new one opens it, because
@@ -1151,7 +1377,7 @@ export default function Tournament({
         {/* Up here rather than under the lists: drawing a new one is the reason for coming to
             this screen, and at the foot it sat behind every bracket and champion. Hidden
             while the draw form is open, where Cancel is the way out. */}
-        {!drawing && (
+        {!drawing && !ceremony && (
           <button
             className="tournament-new"
             onClick={() => setDrawing(true)}
@@ -1167,26 +1393,34 @@ export default function Tournament({
         )}
       </header>
 
-      {drawing ? (
-        <>
-          <Draw
-            knownNames={knownNames}
-            onDrawn={(t) => {
-              onCreate(t);
-              // Open the one just drawn: it is the reason for being on this screen.
-              setOpenId(t.id);
-              setDrawing(false);
-            }}
-          />
-          <button className="draw-cancel" onClick={() => setDrawing(false)}>
-            Cancel
-          </button>
-        </>
+      {ceremony ? (
+        <Ceremony
+          tournament={ceremony}
+          onReveal={onReveal}
+          onDone={() => {
+            // Open the one just drawn: it is the reason for being on this screen.
+            setOpenId(ceremony.id);
+            setCeremony(null);
+          }}
+        />
+      ) : drawing ? (
+        <Draw
+          knownNames={knownNames}
+          usedNames={tournaments.map((t) => t.name)}
+          onCancel={() => setDrawing(false)}
+          onDrawn={(t) => {
+            // Saved whole before a single name is revealed, which is what makes the
+            // ceremony a view over stored data rather than a second way to build one.
+            onCreate(t);
+            setCeremony(t);
+            setDrawing(false);
+          }}
+        />
       ) : (
         <>
           {views.length === 0 && (
             <p className="tournament-empty">
-              No tournaments yet. Enter everyone playing and the app will take the draw.
+              No tournaments yet. Enter everyone playing and the app will make the draw.
             </p>
           )}
           {list('In progress', open)}

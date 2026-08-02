@@ -174,7 +174,8 @@ export default function Display() {
   });
 
   useWakeLock();
-  const { payload, status, error, senderOnline, lineup, tie } = useScoreboardDisplay(config);
+  const { payload, status, error, senderOnline, lineup, tie, draw } =
+    useScoreboardDisplay(config);
   const hollow = useWinnerFlash(payload?.winner ?? null);
 
   if (!configComplete(config)) {
@@ -212,6 +213,27 @@ export default function Display() {
   // Unlike the panel — 128x32 and four rows of 5x7, so the fixture takes the lot —
   // a tablet has room for the rates underneath, so it keeps them. That divergence is
   // deliberate, the same as the winner flash and the dim grace.
+  // Above both, the precedence `boardScreen` answers for the panel. A draw is played out
+  // before any tie is picked and before any game exists, so whatever is retained beneath
+  // it is last week's — and unlike the fixture card this one needs no score message at
+  // all, because every word on it is in its own payload.
+  //
+  // Where the panel gives the card the whole screen, the tablet has the room for the one
+  // thing a single card cannot say: how much longer this is going to take. Same
+  // divergence the fixture card already makes by keeping the form table.
+  if (draw) {
+    return (
+      <div
+        className={`display display-draw${stale ? ' is-stale' : ''}`}
+        onClick={toggleFullscreen}
+        title="Tap for fullscreen"
+      >
+        <DrawCard card={draw} />
+        <p className="display-status">{statusText}</p>
+      </div>
+    );
+  }
+
   if (lineup || tie) {
     return (
       <div
@@ -290,6 +312,50 @@ export default function Display() {
 // The pre-game roster. Rows arrive in lane order — team A's slots then team B's —
 // so which half a row is in is the team it belongs to; usableLineup refuses a
 // count that cannot be halved, which is what makes that safe here too.
+// One pull of the draw, in the three shapes the panel draws — the cup before anything has
+// been pulled, a name with nobody yet, and a name with an opponent — plus the progress
+// line the panel has no row for.
+//
+// No team colours, matching the panel: at the moment a name comes out of the hat nobody
+// has been given one, and picking a colour would imply an assignment that has not
+// happened. `n` absent is the beat before the name lands, so it is told from an empty
+// name the way `winner` is told from a live game.
+function DrawCard({ card }) {
+  const opponents = Array.isArray(card.o) ? card.o.filter((s) => typeof s === 'string') : [];
+  const meets =
+    opponents.length === 0
+      ? null
+      : opponents.length === 1
+        ? `plays ${opponents[0]}`
+        : `plays the winner of ${opponents.join(' v ')}`;
+  // A cup with no round is the opening card, and the cup takes the row a name takes on
+  // every other card — it is what the screen is about until somebody is. The count keeps
+  // its one wording rather than gaining a second for "0 of 11": it is the line that ticks
+  // up as the draw goes on, and a format that changes with the card reads as two lines.
+  const title = !card.r;
+  return (
+    <div className="draw-card">
+      {title ? (
+        <>
+          <p className="draw-card-name">{card.t}</p>
+          <p className="draw-card-title">Draw</p>
+        </>
+      ) : (
+        <>
+          <p className="draw-card-round">{card.r}</p>
+          <p className="draw-card-name">{card.n ? card.n : 'Pulling…'}</p>
+          {card.n && meets && <p className="draw-card-meets">{meets}</p>}
+        </>
+      )}
+      {Number.isFinite(card.e) && card.e > 0 && (
+        <p className="draw-card-count">
+          {Number.isFinite(card.d) ? card.d : 0} of {card.e} drawn
+        </p>
+      )}
+    </div>
+  );
+}
+
 function FormTable({ lineup, tie, sides, colorA, colorB }) {
   const rows = lineup?.rows ?? [];
   const half = rows.length / 2;

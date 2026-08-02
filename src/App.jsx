@@ -316,8 +316,29 @@ export default function App() {
         : null,
     [liveTournament, playingTie, liveView],
   );
+  // A tie of a tournament that is no longer there is not a tie. Abandoning a cup with one
+  // of its ties set up otherwise leaves the setup screen banner naming nothing, with the
+  // names, mode and target still locked by a draw that no longer exists, and the banner's own
+  // button the only way out of a state nobody chose. Written as a repair on the derivation rather
+  // than as a line in the drop handler so it also rescues a game *already* saved in that
+  // state, which the delete that stranded it cannot come back to fix.
+  useEffect(() => {
+    if (game.tournament && !liveTournament) dispatch({ type: 'clearTie' });
+  }, [game.tournament, liveTournament]);
 
-  const scoreboard = useScoreboardPublisher(game, sbConfig, matches, publishedTie);
+  // The pull of the tournament draw currently on the board, or null. Held here rather
+  // than inside the tournament screen because the publisher lives above it — the same
+  // reason the archive does. `setDrawReveal` is handed down directly, so the effect that
+  // publishes it is not re-armed on every render of the screen holding it.
+  const [drawReveal, setDrawReveal] = useState(null);
+
+  const scoreboard = useScoreboardPublisher(
+    game,
+    sbConfig,
+    matches,
+    publishedTie,
+    drawReveal,
+  );
 
   // Flash a cornhole callout when a round is committed: WASH on a tie, GAME on
   // the winning throw, SKUNK when the loser is left on zero.
@@ -465,6 +486,7 @@ export default function App() {
         onBack={() => setScreen('setup')}
         onCreate={(t) => setTournaments(saveTournament(t))}
         onDrop={(t) => setTournaments(dropTournament(t.id))}
+        onReveal={setDrawReveal}
         onPlayTie={(t, tie) => {
           dispatch({ type: 'playTie', setup: tieSetup(t, tie) });
           setScreen('setup');
@@ -584,13 +606,16 @@ export default function App() {
             sets who plays.{' '}
             {/* The only way out of a tie picked by mistake. Without it the screen has
                 one exit, `Start`, so backing out means playing the tie or abandoning a
-                started game. */}
+                started game. Worded about this game rather than about the cup, because
+                nothing here touches the cup: the tie goes straight back on the bracket,
+                playable, and every other running tournament is unaffected. A label naming
+                the tournament reads as withdrawing from it. */}
             <button
               type="button"
               className="tie-leave"
               onClick={() => dispatch({ type: 'clearTie' })}
             >
-              Leave tie
+              Play something else
             </button>
           </p>
         )}

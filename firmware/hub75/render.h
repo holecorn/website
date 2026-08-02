@@ -138,14 +138,52 @@ static const int TIE_LINE_CHARS = PANEL_W / FONT_ADVANCE;
 // One character short of the line, not the whole line. 21 fit, but they run to
 // within a pixel of both edges and read as crowding the frame; 20 leaves 4px.
 static const int TIE_INLINE_CHARS = TIE_LINE_CHARS - 1;
-// The space, the mark and the space between the two sides.
-static const int TIE_VERSUS_CHARS = 3;
+// The space, the mark and the space between two sides written on one row. Shared with
+// the draw card, which puts a preliminary's two entrants either side of the same mark.
+static const int VERSUS_CHARS = 3;
 
 // Spread rows sit as one block with the spare height around it, rather than
 // spaced evenly: the cup and the round are one thing to read and the fixture is
 // another, so the gap goes between them and not inside the heading.
 static const int TIE_SPREAD_TOP = 2;
 static const int TIE_SPREAD_GAP = 6;
+
+// ------------------------------------------------ draw card layout geometry --
+//
+// One pull of the tournament draw, drawn while a card is retained on the draw topic.
+// Full-width rows like the tie card, for the same reason: a side gets 21 characters,
+// which is what lets a doubles pair keep the ampersand it was typed with.
+//
+// **Two shapes to a pull and not four.** Walking bracketShape's seats, every pull is
+// either an entrant with nobody to meet yet — the first name into a preliminary, or a bye
+// whose sibling seat is still in the hat — or an entrant with an opponent, which is a
+// person or the two halves of a preliminary they meet the winner of. So the card is two
+// rows or four, and the block is centred in the panel rather than pinned to the top: a
+// two-row card hanging under the round line reads as a screen with its bottom half
+// missing.
+//
+// The opening card is a third shape and is not a pull: a cup with no round, drawn on the
+// same two rows in the same place, so pressing the first time replaces the words rather
+// than moving the card.
+//
+// **No team colours.** Every other screen has two sides to tint and this one does not:
+// at the moment a name comes out of the hat nobody has been given a colour, and picking
+// one would imply an assignment that has not happened. White for who was drawn, grey for
+// the words around them.
+//
+// **No progress count**, though the app publishes one. The completing card needs all
+// four rows, so a count could only appear on the two-row shape — and a line that comes
+// and goes with the card's shape reads as the panel losing information rather than never
+// having offered it. The display has the room and carries it there.
+static const int DRAW_ROW_H = FONT_H + 1;
+static const int DRAW_LINE_CHARS = PANEL_W / FONT_ADVANCE;
+// Two potential opponents share the row with the mark between them, so each gets what
+// the score screen's names get. That is the one place the card shortens a side.
+static const int DRAW_PAIR_CHARS = (DRAW_LINE_CHARS - VERSUS_CHARS) / 2;
+static const char DRAW_PULLING[] = "PULLING...";
+static const char DRAW_PLAYS[] = "PLAYS";
+static const char DRAW_PLAYS_WINNER[] = "PLAYS WINNER OF";
+static const char DRAW_TITLE[] = "DRAW";
 
 // ---------------------------------------------------- splash layout geometry --
 //
@@ -675,38 +713,49 @@ void drawTextCentred(Canvas& c, const char* s, int y, Rgb color, int maxChars) {
   drawText(c, s, (PANEL_W - textWidth(s, maxChars)) / 2, y, color, maxChars);
 }
 
-// A side as the fixture card writes it: whole, with the ampersand it was typed
-// with, when the line has room — which is the one thing a full-width row buys
-// over the score screen's name row — and the same slash shortening as a
-// fallback when it does not.
-inline void fitTieSide(const char* label, char* out, int cap) {
-  if (cStrLen(label) <= TIE_LINE_CHARS) {
+// A side written whole, with the ampersand it was typed with, when the row has room —
+// which is the one thing a full-width row buys over the score screen's name row — and
+// the same slash shortening as a fallback when it does not. Shared by the fixture card
+// and the draw card, which need it at two different widths.
+inline void fitSideTo(const char* label, char* out, int cap, int maxChars) {
+  if (cStrLen(label) <= maxChars) {
     copyInto(label, out, size_t(cap));
     return;
   }
-  fitLabelTo(label, out, cap, TIE_LINE_CHARS);
+  fitLabelTo(label, out, cap, maxChars);
+}
+
+inline void fitTieSide(const char* label, char* out, int cap) {
+  fitSideTo(label, out, cap, TIE_LINE_CHARS);
 }
 
 // Whether both sides fit on one row with the mark between them. Measured on the
 // labels as published, not on the shortened forms: shortening to earn the spread
 // would trade a name for a gap.
 inline bool tieSpreads(const BoardState& s) {
-  return cStrLen(s.teamA) + TIE_VERSUS_CHARS + cStrLen(s.teamB) <= TIE_INLINE_CHARS;
+  return cStrLen(s.teamA) + VERSUS_CHARS + cStrLen(s.teamB) <= TIE_INLINE_CHARS;
 }
 
-// The two sides on one row, centred as a single run. Only reached when
-// tieSpreads says they fit, so neither side is cut here.
+// Two sides on one row, centred as a single run. Callers pass labels that already fit —
+// the fixture card because tieSpreads said so, the draw card because it shortened them —
+// so nothing is cut here.
 template <typename Canvas>
-void drawTieFixture(Canvas& c, const BoardState& s, int y, Rgb colorA, Rgb colorB, Rgb grey) {
-  const int aLen = cStrLen(s.teamA);
-  const int bLen = cStrLen(s.teamB);
-  const int chars = aLen + TIE_VERSUS_CHARS + bLen;
+void drawVersusRow(Canvas& c, const char* left, const char* right, int y, Rgb colorL,
+                   Rgb colorR, Rgb grey, int maxChars) {
+  const int aLen = cStrLen(left);
+  const int bLen = cStrLen(right);
+  const int chars = aLen + VERSUS_CHARS + bLen;
   const int x = (PANEL_W - (chars * FONT_ADVANCE - 1)) / 2;
-  drawText(c, s.teamA, x, y, colorA, TIE_LINE_CHARS);
-  // Belongs to neither team, so it takes the neutral colour — the same rule the
+  drawText(c, left, x, y, colorL, maxChars);
+  // Belongs to neither side, so it takes the neutral colour — the same rule the
   // full layout's mark follows.
   drawText(c, "V", x + (aLen + 1) * FONT_ADVANCE, y, grey, 1);
-  drawText(c, s.teamB, x + (aLen + TIE_VERSUS_CHARS) * FONT_ADVANCE, y, colorB, TIE_LINE_CHARS);
+  drawText(c, right, x + (aLen + VERSUS_CHARS) * FONT_ADVANCE, y, colorR, maxChars);
+}
+
+template <typename Canvas>
+void drawTieFixture(Canvas& c, const BoardState& s, int y, Rgb colorA, Rgb colorB, Rgb grey) {
+  drawVersusRow(c, s.teamA, s.teamB, y, colorA, colorB, grey, TIE_LINE_CHARS);
 }
 
 // Who is playing and what it is, in the two teams' own colours. No versus mark
@@ -744,6 +793,69 @@ void drawTie(Canvas& c, const BoardState& s, const TieState& t, uint8_t level) {
   fitTieSide(s.teamB, sideB, TIE_LINE_CHARS + 1);
   drawTextCentred(c, sideA, top + TIE_ROW_H * 2, colorA, TIE_LINE_CHARS);
   drawTextCentred(c, sideB, top + TIE_ROW_H * 3, colorB, TIE_LINE_CHARS);
+}
+
+// Where one name landed, and who it will meet. The whole card comes out of the payload —
+// see DrawState for why nothing here reads the score message.
+//
+// A pull's heading is the round rather than the cup's name, which is the opposite of the
+// fixture card and is the byte budget rather than a preference: a 32-unit cup name on a
+// card that also carries a pull puts the packet within 25 bytes of MQTT_BUFFER. The round
+// is the thing that changes pull to pull anyway, and the tie topic names the cup again a
+// few minutes later.
+//
+// **The opening card is the exception, and it costs nothing**: it carries the cup instead
+// of a round rather than as well, so the topic's worst case is unmoved. It says what is
+// about to happen where every other card says what just did, which is why the cup takes
+// the white row and the fixed word takes the grey one — the reverse of the tie card,
+// where the round is what varies.
+template <typename Canvas>
+void drawDrawCard(Canvas& c, const DrawState& d, uint8_t level) {
+  const Rgb grey = scaled(MARKER_COLOR, level);
+  const Rgb white = scaled(Rgb{0xff, 0xff, 0xff}, level);
+
+  if (d.round[0] == '\0') {
+    const int top = (PANEL_H - 2 * DRAW_ROW_H) / 2;
+    drawTextCentred(c, d.cup, top, white, DRAW_LINE_CHARS);
+    drawTextCentred(c, DRAW_TITLE, top + DRAW_ROW_H, grey, DRAW_LINE_CHARS);
+    return;
+  }
+
+  const bool matched = d.named && d.opponents > 0;
+  const int rows = matched ? 4 : 2;
+  const int y0 = (PANEL_H - rows * DRAW_ROW_H) / 2;
+  drawTextCentred(c, d.round, y0, grey, DRAW_LINE_CHARS);
+
+  // Nothing to name yet, so the card says the hat is being reached into. Withheld rather
+  // than blank: a press that changes nothing on the board reads as a dead button, which
+  // is the same reason `Toss for first` holds its result back in the app.
+  if (!d.named) {
+    drawTextCentred(c, DRAW_PULLING, y0 + DRAW_ROW_H, white, DRAW_LINE_CHARS);
+    return;
+  }
+
+  char name[DRAW_LINE_CHARS + 1];
+  fitSideTo(d.name, name, DRAW_LINE_CHARS + 1, DRAW_LINE_CHARS);
+  drawTextCentred(c, name, y0 + DRAW_ROW_H, white, DRAW_LINE_CHARS);
+  if (!matched) return;
+
+  const bool viaPreliminary = d.opponents > 1;
+  drawTextCentred(c, viaPreliminary ? DRAW_PLAYS_WINNER : DRAW_PLAYS, y0 + DRAW_ROW_H * 2,
+                  grey, DRAW_LINE_CHARS);
+
+  if (!viaPreliminary) {
+    char opponent[DRAW_LINE_CHARS + 1];
+    fitSideTo(d.opponent[0], opponent, DRAW_LINE_CHARS + 1, DRAW_LINE_CHARS);
+    drawTextCentred(c, opponent, y0 + DRAW_ROW_H * 3, white, DRAW_LINE_CHARS);
+    return;
+  }
+
+  // Both halves of the preliminary on the last row. Stacking them would need a fifth row
+  // the panel does not have, so this is the one place the card gives up characters.
+  char left[DRAW_PAIR_CHARS + 1], right[DRAW_PAIR_CHARS + 1];
+  fitSideTo(d.opponent[0], left, DRAW_PAIR_CHARS + 1, DRAW_PAIR_CHARS);
+  fitSideTo(d.opponent[1], right, DRAW_PAIR_CHARS + 1, DRAW_PAIR_CHARS);
+  drawVersusRow(c, left, right, y0 + DRAW_ROW_H * 3, white, white, grey, DRAW_PAIR_CHARS);
 }
 
 // Two pixels to a byte, low nibble first, so a row reads left to right.
@@ -840,12 +952,22 @@ void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed
 // without one there is nobody to name. Both are cleared at the first bag, so the
 // order between them only decides what a tournament shows before it — form, which
 // in a knockout is every side unbeaten, or which tie this is.
+//
+// A retained draw card wins over all of them and needs `haveState` least of all: it is
+// published while the names are still being pulled out of a hat, before any tie has been
+// picked and before any game exists, so whatever score is retained underneath is last
+// week's. Nothing below it can be about the draw, so the order is not a judgement.
 template <typename Canvas>
 void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn,
                  PanelLayout layout = PANEL_FULL, const LineupState* lineup = nullptr,
-                 const TieState* tie = nullptr) {
+                 const TieState* tie = nullptr, const DrawState* draw = nullptr) {
   const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;
   const bool score = layout == PANEL_SCORE;
+
+  if (draw && draw->set) {
+    drawDrawCard(c, *draw, level);
+    return;
+  }
 
   if (tie && tie->set && haveState) {
     drawTie(c, s, *tie, level);

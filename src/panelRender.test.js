@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   boardScreen,
+  drawState,
   LINEUP_FORM_MAX,
   LIVE_GRACE_MS,
   TEAM_LABEL_MAX,
@@ -260,9 +261,93 @@ describe('boardLiveness', () => {
   });
 });
 
+describe('drawState', () => {
+  it('reads the round, the name and the opponents', () => {
+    const d = drawState({ r: 'Preliminary', n: 'Tau', o: ['Rho'], d: 2, e: 11 });
+    expect(d.set).toBe(true);
+    expect(d.named).toBe(true);
+    expect(text(d.round)).toBe('Preliminary');
+    expect(text(d.name)).toBe('Tau');
+    expect(d.opponents.map(text)).toEqual(['Rho']);
+  });
+
+  // A cup with no round is the opening card, and it is the only card that carries one —
+  // which is what keeps the cup name out of the packet the buffer is sized against.
+  it('reads a cup with no round as the opening card', () => {
+    const d = drawState({ t: 'Hole Corn VI', d: 0, e: 11 });
+    expect(text(d.cup)).toBe('Hole Corn VI');
+    expect(d.round.length).toBe(0);
+    expect(d.named).toBe(false);
+  });
+
+  // A round or a cup is what makes a card a card, mirroring parseDraw: with neither the
+  // board leaves whatever is up rather than blanking it.
+  it('is null without a round or a cup', () => {
+    expect(drawState({ n: 'Tau' })).toBeNull();
+    expect(drawState({ r: '' })).toBeNull();
+    expect(drawState({ t: '' })).toBeNull();
+    expect(drawState(null)).toBeNull();
+    expect(drawState(undefined)).toBeNull();
+  });
+
+  // Absent, not empty. The board draws a drum roll for one and would draw a nameless
+  // reveal for the other, so the two cannot collapse.
+  it('tells a withheld name from an empty one only by `named`', () => {
+    expect(drawState({ r: 'Final' }).named).toBe(false);
+    expect(drawState({ r: 'Final', n: '' }).named).toBe(false);
+    expect(drawState({ r: 'Final', n: 'Tau' }).named).toBe(true);
+  });
+
+  it('takes only as many opponents as the card holds', () => {
+    expect(drawState({ r: 'Final', n: 'A', o: ['B', 'C', 'D'] }).opponents).toHaveLength(2);
+    expect(drawState({ r: 'Final', n: 'A', o: 'B' }).opponents).toEqual([]);
+    expect(drawState({ r: 'Final', n: 'A', o: [3, '', 'C'] }).opponents.map(text)).toEqual(['C']);
+  });
+
+  // The panel draws no progress line — the completing card needs all four rows — so the
+  // emulator does not hold the count either. It shows what the panel shows.
+  it('ignores the count the app publishes for the display', () => {
+    expect(drawState({ r: 'Final', n: 'Tau', d: 5, e: 11 })).not.toHaveProperty('drawn');
+    expect(drawState({ r: 'Final', n: 'Tau', d: 5, e: 11 })).not.toHaveProperty('total');
+  });
+
+  // Bytes, not strings, the same reason a lineup row's name is: UTF-8 is what reaches
+  // the board, and a cut lands mid-character where the buffer ends.
+  it('keeps a whole doubles side, which is what the shortening needs', () => {
+    const pair = `${'€'.repeat(16)} & ${'€'.repeat(16)}`;
+    expect(drawState({ r: 'Final', n: pair }).name).toHaveLength(99);
+  });
+});
+
 describe('boardScreen', () => {
   const lineup = { count: 2, rows: [] };
   const tie = { set: true, cup: new Uint8Array(), round: new Uint8Array() };
+  const draw = {
+    set: true,
+    named: true,
+    round: new Uint8Array(),
+    name: new Uint8Array(),
+    opponents: [],
+  };
+
+  // A draw is taken before any tie is picked and before any game exists, so nothing
+  // underneath can be about it.
+  it('puts a draw card above everything', () => {
+    expect(boardScreen({ haveState: true, lineup, tie, draw })).toBe('draw');
+    expect(boardScreen({ haveState: true, layout: 'score', draw })).toBe('draw');
+  });
+
+  // The one screen that stands with no score message at all — which is the ordinary case
+  // for it, since the retained score during a draw is last week's.
+  it('needs no board state for a draw, where a tie does', () => {
+    expect(boardScreen({ haveState: false, draw })).toBe('draw');
+    expect(boardScreen({ haveState: false, tie })).toBe('no-state');
+  });
+
+  it('ignores a cleared draw card', () => {
+    expect(boardScreen({ haveState: true, draw: { set: false } })).toBe('full');
+    expect(boardScreen({ haveState: true, tie, draw: { set: false } })).toBe('tie');
+  });
 
   // The precedence renderBoard draws by, asked as a question so the emulator's
   // caption can use the same answer instead of re-deriving it.

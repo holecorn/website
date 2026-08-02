@@ -146,6 +146,48 @@ struct TieState {
   char round[TIE_ROUND_MAX] = {0};
 };
 
+// ------------------------------------------------------------ tournament draw --
+//
+// One pull of the draw, arriving on holecorn/<code>/draw, retained and cleared exactly
+// as the lineup and the tie are. A press publishes two of these a beat apart: the first
+// withholds the name, so the board shows a drum roll, and the second reveals it. The
+// board animates nothing and knows nothing of the beat — it draws whichever card it was
+// last told about, which is what keeps phase off the wire.
+//
+// **The one screen that needs no score message behind it.** A draw is taken before there
+// is a game at all, often on a board that has never been sent one, so everything the card
+// says is in this struct: no names off teamA/teamB, and no team colours, because at the
+// moment a name comes out of the hat nobody has been given one.
+//
+// **No card carries both a cup name and a pull**, and that is the byte budget rather
+// than a preference: measured in test_board_logic.cpp, a round plus a doubles side plus a
+// doubles "winner of" pair with a 32-unit cup name on top lands 25 bytes under
+// MQTT_BUFFER — tighter than the lineup, the largest message the board otherwise
+// receives. The name rides on the opening card alone, where there is no pull to carry,
+// so the topic's worst case is unmoved by it.
+static const size_t DRAW_ROUND_MAX = 33;
+// The same 32 UTF-16 code units the tie card's cup name is capped at.
+static const size_t DRAW_CUP_MAX = 97;
+// A whole doubles side: two 16-unit names at up to 3 bytes each, joined with " & ".
+// Sized to the label rather than to the 21 characters a panel row draws, for the reason
+// TEAM_LABEL_MAX is — shortening cuts *both* names of a pair, which needs the whole
+// thing, and truncating here would eat the second name first.
+static const size_t DRAW_SIDE_MAX = 100;
+// Nobody yet, a person, or the two halves of a preliminary whose winner they meet.
+static const int DRAW_OPPONENTS_MAX = 2;
+
+struct DrawState {
+  bool set = false;
+  bool named = false;  // false is the drum roll: the name is withheld, not empty
+  // The opening card and nothing else: a cup with no round is "<CUP> DRAW", which is what
+  // stands on the board between opening the ceremony and the first press.
+  char cup[DRAW_CUP_MAX] = {0};
+  char round[DRAW_ROUND_MAX] = {0};
+  char name[DRAW_SIDE_MAX] = {0};
+  int opponents = 0;
+  char opponent[DRAW_OPPONENTS_MAX][DRAW_SIDE_MAX] = {};
+};
+
 struct BoardState {
   int a = 0;
   int b = 0;
@@ -262,6 +304,58 @@ inline bool parseTie(const char* json, size_t length, TieState& out) {
   next.set = true;
   copyInto(round, next.round, TIE_ROUND_MAX);
   copyInto(doc["t"].as<const char*>(), next.cup, TIE_CUP_MAX);
+  out = next;
+  return true;
+}
+
+// An empty payload clears the card, exactly as it clears the tie — and the clear matters
+// more here than anywhere else, because nothing about starting a game takes this topic
+// down. A draw is not part of a game, so a card left retained would sit on the board
+// through every match until the next draw a year later.
+//
+// A card is a round or a cup, so a message with neither is refused and leaves `out`
+// alone. Everything else is optional and means something by its absence: no "n" is the
+// beat before the name lands, and no "o" is an entrant with nobody to meet yet.
+//
+// A cup with no round is the opening card, which is the one shape that says what is about
+// to happen rather than what just did.
+//
+// The count the app sends as "d" and "e" is deliberately not read. The panel draws no
+// progress line — the completing card needs all four of its rows — so parsing it would
+// put two fields in this struct that nothing on the board can show. The display reads
+// them off the payload instead.
+inline bool parseDraw(const char* json, size_t length, DrawState& out) {
+  if (!json) return false;
+  if (length == 0) {
+    out.set = false;
+    return true;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, json, length)) return false;
+  const char* round = doc["r"].as<const char*>();
+  const char* cup = doc["t"].as<const char*>();
+  const bool haveRound = round && round[0] != '\0';
+  const bool haveCup = cup && cup[0] != '\0';
+  if (!haveRound && !haveCup) return false;
+
+  DrawState next;
+  next.set = true;
+  if (haveRound) copyInto(round, next.round, DRAW_ROUND_MAX);
+  if (haveCup) copyInto(cup, next.cup, DRAW_CUP_MAX);
+
+  const char* name = doc["n"].as<const char*>();
+  next.named = name && name[0] != '\0';
+  if (next.named) copyInto(name, next.name, DRAW_SIDE_MAX);
+
+  JsonArrayConst opponents = doc["o"];
+  if (!opponents.isNull()) {
+    for (JsonVariantConst side : opponents) {
+      if (next.opponents >= DRAW_OPPONENTS_MAX) break;
+      const char* label = side.as<const char*>();
+      if (!label || label[0] == '\0') continue;
+      copyInto(label, next.opponent[next.opponents++], DRAW_SIDE_MAX);
+    }
+  }
   out = next;
   return true;
 }

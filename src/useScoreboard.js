@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   acceptsUpdate,
   configComplete,
+  drawPayload,
   lineupPayload,
   normalizeLayout,
   scoreboardPayload,
   tiePayload,
+  usableDraw,
   usableLineup,
   usableTie,
 } from './scoreboard.js';
@@ -45,6 +47,9 @@ function useLink({ config, role, active, onMessage }) {
   const pendingLineupRef = useRef(null);
   // Same again for the tie: a null clears the fixture card.
   const pendingTieRef = useRef(null);
+  // And for the draw card, which is published before there is a game at all — so this
+  // is the one that most often has something waiting when the link finally opens.
+  const pendingDrawRef = useRef(null);
   const messageRef = useRef(onMessage);
   messageRef.current = onMessage;
 
@@ -90,6 +95,7 @@ function useLink({ config, role, active, onMessage }) {
         if (pendingLayoutRef.current) handle.sendLayout(pendingLayoutRef.current);
         if (pendingLineupRef.current) handle.sendLineup(pendingLineupRef.current.value);
         if (pendingTieRef.current) handle.sendTie(pendingTieRef.current.value);
+        if (pendingDrawRef.current) handle.sendDraw(pendingDrawRef.current.value);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -104,12 +110,21 @@ function useLink({ config, role, active, onMessage }) {
     };
   }, [active, role, broker, username, password, code]);
 
-  return { status, error, linkRef, pendingRef, pendingLayoutRef, pendingLineupRef, pendingTieRef };
+  return {
+    status,
+    error,
+    linkRef,
+    pendingRef,
+    pendingLayoutRef,
+    pendingLineupRef,
+    pendingTieRef,
+    pendingDrawRef,
+  };
 }
 
 // Publishes the logged score whenever it changes. Fire and forget: nothing here
 // blocks the UI, and a broker that is unreachable just leaves a status pill.
-export function useScoreboardPublisher(game, config, matches, tie) {
+export function useScoreboardPublisher(game, config, matches, tie, reveal) {
   const active = Boolean(config.enabled);
   const {
     status,
@@ -119,6 +134,7 @@ export function useScoreboardPublisher(game, config, matches, tie) {
     pendingLayoutRef,
     pendingLineupRef,
     pendingTieRef,
+    pendingDrawRef,
   } = useLink({
     config,
     role: 'publisher',
@@ -179,6 +195,24 @@ export function useScoreboardPublisher(game, config, matches, tie) {
     return () => clearTimeout(id);
   }, [tiePayloadValue, linkRef, pendingTieRef]);
 
+  // **Not debounced**, unlike the lineup and the tie and for the layout's reason: this
+  // changes on a button press rather than per keystroke. It is also the one place where
+  // the debounce would be a bug rather than a saving — a press publishes two beats a
+  // moment apart, and 400ms of settling would swallow the first and take the pause with
+  // it, which is the whole of the theatre.
+  //
+  // Still compared as JSON, because `reveal` is rebuilt on every render of the screen
+  // holding it and republishing identical bytes would retain the same card over and over.
+  const draw = useMemo(() => drawPayload(reveal), [reveal]);
+  const sentDrawRef = useRef(undefined);
+  useEffect(() => {
+    pendingDrawRef.current = { value: draw };
+    const json = JSON.stringify(draw ?? null);
+    if (json === sentDrawRef.current) return;
+    sentDrawRef.current = json;
+    linkRef.current?.sendDraw(draw);
+  }, [draw, linkRef, pendingDrawRef]);
+
   return { status, error };
 }
 
@@ -188,6 +222,7 @@ export function useScoreboardDisplay(config) {
   const [layout, setLayout] = useState(PANEL_LAYOUTS[0]);
   const [lineup, setLineup] = useState(null);
   const [tie, setTie] = useState(null);
+  const [draw, setDraw] = useState(null);
   const versionRef = useRef(-1);
 
   const { status, error } = useLink({
@@ -204,6 +239,13 @@ export function useScoreboardDisplay(config) {
         // in board_logic.h: an app newer than this build must not blank the board
         // or drop it to a layout nobody chose.
         if (PANEL_LAYOUTS.includes(msg.layout)) setLayout(msg.layout);
+        return;
+      }
+      if ('draw' in msg) {
+        // Null is the cleared topic; anything else unusable leaves the card that is up,
+        // mirroring parseDraw.
+        if (msg.draw === null) setDraw(null);
+        else if (usableDraw(msg.draw)) setDraw(msg.draw);
         return;
       }
       if ('tie' in msg) {
@@ -227,5 +269,5 @@ export function useScoreboardDisplay(config) {
     },
   });
 
-  return { payload, status, error, senderOnline, layout, lineup, tie };
+  return { payload, status, error, senderOnline, layout, lineup, tie, draw };
 }

@@ -55,6 +55,7 @@ const ONLINE = 'holecorn/abc12/online';
 const LAYOUT = 'holecorn/abc12/layout';
 const LINEUP = 'holecorn/abc12/lineup';
 const TIE = 'holecorn/abc12/tie';
+const DRAW = 'holecorn/abc12/draw';
 const PAYLOAD = { a: 3, b: 1 };
 const ROSTER = { rows: [{ n: 'Neil', w: 6, l: 4, p: 72, f: 'LWLWW' }, { n: 'Sigma', w: 4, l: 6, p: 60, f: 'WLWLL' }] };
 
@@ -283,7 +284,7 @@ describe('panel layout', () => {
   it('subscribes a display to the layout and lineup alongside state and presence', async () => {
     await open('display');
     broker.goOnline();
-    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT, LINEUP, TIE]);
+    expect(broker.client.subscribed).toEqual([STATE, ONLINE, LAYOUT, LINEUP, TIE, DRAW]);
   });
 
   it('routes a layout message to its own handler, not the state parser', async () => {
@@ -448,6 +449,80 @@ describe('the tournament tie', () => {
     await open('display', { onMessage: (m) => seen.push(m) });
     broker.goOnline();
     broker.fire('message', TIE, Buffer.from('{not json'));
+    expect(seen).toEqual([]);
+  });
+});
+
+describe('the draw card', () => {
+  const PULLING = { r: 'Preliminary', d: 4, e: 11 };
+  const REVEAL = { r: 'Preliminary', n: 'Tau', o: ['Rho'], d: 5, e: 11 };
+
+  it('publishes each beat retained on its own topic', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendDraw(PULLING);
+    link.sendDraw(REVEAL);
+
+    expect(broker.of(DRAW).map((m) => JSON.parse(m.payload))).toEqual([PULLING, REVEAL]);
+    expect(broker.of(DRAW)[0].opts).toMatchObject({ retain: true, qos: 1 });
+    // Nothing else carries it. A draw happens before there is a game at all, so the
+    // score topic in particular must stay silent.
+    expect(broker.of(STATE)).toHaveLength(0);
+    expect(broker.of(TIE)).toHaveLength(0);
+  });
+
+  // The stalest topic there is: a draw is taken about once a year, and nothing about
+  // starting a game clears this one the way the first bag clears the lineup and the tie.
+  it('re-asserts a cleared card on reconnect, not just a set one', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.sendDraw(null);
+    expect(broker.of(DRAW).map((m) => m.payload)).toEqual(['']);
+
+    broker.client.connected = false;
+    broker.fire('close');
+    broker.goOnline();
+    expect(broker.of(DRAW).map((m) => m.payload)).toEqual(['', '']);
+  });
+
+  it('says nothing on connect before the publisher has computed one', async () => {
+    await open('publisher');
+    broker.goOnline();
+    expect(broker.of(DRAW)).toHaveLength(0);
+  });
+
+  // The likeliest of the four to matter: the link is usually still opening when the
+  // tournament screen mounts, because a draw is the first thing done in a session.
+  it('holds a card sent before the link opened', async () => {
+    const link = await open('publisher');
+    link.sendDraw(REVEAL);
+    expect(broker.of(DRAW)).toHaveLength(0);
+    broker.goOnline();
+    expect(broker.of(DRAW)).toHaveLength(1);
+  });
+
+  it('ignores a card sent after close', async () => {
+    const link = await open('publisher');
+    broker.goOnline();
+    link.close();
+    link.sendDraw(REVEAL);
+    expect(broker.of(DRAW)).toHaveLength(0);
+  });
+
+  it('reports a cleared topic as null so the display goes back to the score', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', DRAW, Buffer.from(JSON.stringify(REVEAL)));
+    broker.fire('message', DRAW, Buffer.from(''));
+    expect(seen).toEqual([{ draw: REVEAL }, { draw: null }]);
+  });
+
+  it('drops an unparseable card instead of reporting it as cleared', async () => {
+    const seen = [];
+    await open('display', { onMessage: (m) => seen.push(m) });
+    broker.goOnline();
+    broker.fire('message', DRAW, Buffer.from('{not json'));
     expect(seen).toEqual([]);
   });
 });

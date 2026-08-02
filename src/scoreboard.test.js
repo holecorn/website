@@ -7,6 +7,8 @@ import {
   configComplete,
   configFromSearch,
   displayUrl,
+  drawPayload,
+  drawTopic,
   layoutTopic,
   lineupPayload,
   lineupTopic,
@@ -19,6 +21,7 @@ import {
   stateTopic,
   tiePayload,
   tieTopic,
+  usableDraw,
   usableLineup,
   usableTie,
 } from './scoreboard.js';
@@ -479,6 +482,112 @@ describe('the tournament tie', () => {
     it('refuses anything that is not a tie', () => {
       for (const bad of [null, undefined, 'Final', 3, {}, { r: 3 }, { r: 'Final', t: 3 }]) {
         expect(usableTie(bad)).toBe(false);
+      }
+    });
+  });
+});
+
+describe('the draw card', () => {
+  const side = (...names) => ({ names, key: names.join('|').toLowerCase() });
+  const reveal = (over) => ({
+    step: { side: side('Tau'), level: 4, round: 'Preliminary', opponents: [side('Rho')] },
+    drawn: 2,
+    total: 11,
+    pulling: false,
+    ...over,
+  });
+
+  it('has its own retained topic', () => {
+    expect(drawTopic('K3PQM')).toBe('holecorn/k3pqm/draw');
+    expect(drawTopic(' k3 pqm ')).toBe(drawTopic('k3pqm'));
+  });
+
+  // toEqual rather than toMatchObject, the rule the score payload and the tie already
+  // follow: this packet's worst case is the thing being watched, so a field nothing
+  // draws has to fail here rather than quietly ship.
+  it('carries the round, the name, the opponent and the count — and no cup name', () => {
+    expect(drawPayload(reveal())).toEqual({
+      r: 'Preliminary',
+      n: 'Tau',
+      o: ['Rho'],
+      d: 2,
+      e: 11,
+    });
+  });
+
+  // Absent, not empty, the way `winner` is absent while a game is live. It is also what
+  // the board keys the drum-roll card off, so an empty string here would draw a nameless
+  // reveal instead of a pause.
+  it('withholds the name for the first beat', () => {
+    const beat = drawPayload(reveal({ pulling: true }));
+    expect(beat).toEqual({ r: 'Preliminary', d: 2, e: 11 });
+    expect(beat).not.toHaveProperty('n');
+    expect(beat).not.toHaveProperty('o');
+  });
+
+  it('omits the opponent for an entrant still waiting for one', () => {
+    const step = { side: side('Chi'), level: 3, round: 'Quarter-final', opponents: [] };
+    expect(drawPayload(reveal({ step, drawn: 5 }))).toEqual({
+      r: 'Quarter-final',
+      n: 'Chi',
+      d: 5,
+      e: 11,
+    });
+  });
+
+  // The two halves of a preliminary, which the board words as "plays winner of". Sent as
+  // sides rather than as that phrase because the words are free on the board and cost
+  // bytes on every message.
+  it('sends both potential opponents when the entrant meets a preliminary winner', () => {
+    const step = {
+      side: side('Kappa'),
+      level: 3,
+      round: 'Quarter-final',
+      opponents: [side('Omega'), side('Iota')],
+    };
+    expect(drawPayload(reveal({ step, drawn: 9 })).o).toEqual(['Omega', 'Iota']);
+  });
+
+  it('joins a doubles pair the way every other label does', () => {
+    const step = {
+      side: side('Rho', 'Tau'),
+      level: 1,
+      round: 'Final',
+      opponents: [side('Sigma', 'Phi')],
+    };
+    expect(drawPayload(reveal({ step })).n).toBe('Rho & Tau');
+    expect(drawPayload(reveal({ step })).o).toEqual(['Sigma & Phi']);
+  });
+
+  // Null clears the retained card, the lineup's rule — and the one that matters most
+  // here, because nothing about starting a game clears this topic.
+  it('is null when no draw is being played out', () => {
+    expect(drawPayload(null)).toBeNull();
+  });
+
+  // The opening card, which is the only one that names the cup — and it does so *instead
+  // of* a round rather than as well, which is what keeps it out of the worst case the
+  // packet is sized against. `toEqual` again for that reason.
+  it('names the cup before anything has been pulled, and carries no round', () => {
+    const card = drawPayload({ cup: 'Hole Corn VI', drawn: 0, total: 11 });
+    expect(card).toEqual({ t: 'Hole Corn VI', d: 0, e: 11 });
+    expect(card).not.toHaveProperty('r');
+    expect(card).not.toHaveProperty('n');
+  });
+
+  describe('usableDraw', () => {
+    it('needs a round or a cup and nothing else', () => {
+      expect(usableDraw({ r: 'Final', n: 'Tau', o: ['Rho'], d: 1, e: 2 })).toBe(true);
+      expect(usableDraw({ r: 'Final' })).toBe(true);
+      expect(usableDraw({ t: 'Hole Corn VI', d: 0, e: 11 })).toBe(true);
+      expect(usableDraw({ n: 'Tau' })).toBe(false);
+      expect(usableDraw({ r: '' })).toBe(false);
+      expect(usableDraw({ t: '' })).toBe(false);
+    });
+
+    it('refuses anything that is not a card', () => {
+      for (const bad of [null, undefined, 'Final', 3, [], { r: 3 }]) {
+        expect(usableDraw(bad)).toBe(false);
       }
     });
   });

@@ -9,7 +9,14 @@
 // WSS with a certificate the phone trusts, which a broker on the LAN can be.
 // See docs/OFFLINE-SCOREBOARD.md before concluding this needs the internet.
 
-import { layoutTopic, lineupTopic, onlineTopic, stateTopic, tieTopic } from './scoreboard.js';
+import {
+  drawTopic,
+  layoutTopic,
+  lineupTopic,
+  onlineTopic,
+  stateTopic,
+  tieTopic,
+} from './scoreboard.js';
 
 const RECONNECT_PERIOD = 4000;
 const CONNECT_TIMEOUT = 8000;
@@ -49,6 +56,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   const layout = layoutTopic(config.code);
   const lineup = lineupTopic(config.code);
   const tie = tieTopic(config.code);
+  const draw = drawTopic(config.code);
   const publisher = role === 'publisher';
 
   onStatus('connecting');
@@ -68,11 +76,13 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
   let latestLayout = null;
   let latestLineup = null;
   let latestTie = null;
+  let latestDraw = null;
   // Tracked separately from the value, because a computed null — "the game has
   // begun, clear the form screen" — has to be re-asserted on connect and is
   // otherwise indistinguishable from never having been told.
   let lineupSet = false;
   let tieSet = false;
+  let drawSet = false;
   let closed = false;
   let presence = null;
 
@@ -122,6 +132,20 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
     });
   };
 
+  // Retained and cleared exactly like the tie. The clear matters more here than
+  // anywhere else: a draw is taken once a year, so a retained card left behind would
+  // sit on the board through every game until the next one — and unlike the lineup and
+  // the tie, nothing about starting a game clears it, because a draw is not part of one.
+  const sendDraw = (payload) => {
+    latestDraw = payload;
+    drawSet = true;
+    if (closed || !client.connected) return;
+    client.publish(draw, payload ? JSON.stringify(payload) : '', {
+      qos: 1,
+      retain: true,
+    });
+  };
+
   client.on('connect', () => {
     if (closed) return;
     onStatus('connected');
@@ -143,8 +167,9 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
       // a form screen for the whole game.
       if (lineupSet) sendLineup(latestLineup);
       if (tieSet) sendTie(latestTie);
+      if (drawSet) sendDraw(latestDraw);
     } else {
-      client.subscribe([state, online, layout, lineup, tie], { qos: 1 }, (err, granted) => {
+      client.subscribe([state, online, layout, lineup, tie, draw], { qos: 1 }, (err, granted) => {
         // A broker with per-topic permissions refuses the subscription rather
         // than the connection, which would otherwise leave the board sitting on
         // "connected" having never received anything. Granted QoS 128 is a
@@ -178,6 +203,19 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
     }
     if (topic === layout) {
       onMessage({ layout: text });
+      return;
+    }
+    if (topic === draw) {
+      // Empty is the cleared topic, reported as null the way the tie's is.
+      if (text === '') {
+        onMessage({ draw: null });
+        return;
+      }
+      try {
+        onMessage({ draw: JSON.parse(text) });
+      } catch {
+        // Leaves whatever is on screen, as parseDraw does.
+      }
       return;
     }
     if (topic === tie) {
@@ -220,6 +258,7 @@ export async function openScoreboardLink({ config, role, onStatus, onMessage, co
     sendLayout,
     sendLineup,
     sendTie,
+    sendDraw,
     close() {
       if (closed) return;
       closed = true;

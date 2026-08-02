@@ -9,7 +9,8 @@ file keeps the decisions and the options that were rejected; the rules a future 
 respect are in `CLAUDE.md` under **Tournaments**.
 
 Seven things came out differently from the plan, each noted under **How it came out
-differently**: several tournaments may run at once; a tie can be put back with `Leave tie`;
+differently**: several tournaments may run at once; a tie can be put back with `Play something
+else`;
 the bracket is drawn as columns rather than listed by round; `entrantFaults` refuses a doubles
 pair with one half missing; the Play control lives in the bracket box rather than a list above
 it; the target is fixed by the draw alongside the mode; and the tournament-scoped stats are a
@@ -251,10 +252,18 @@ Decision above specified:
   tournament: it briefly named one and counted the rest, which read badly once a name could be
   32 characters, and it named the **oldest** unfinished one, so a tournament drawn today sat
   behind one from last year that nobody finished.
-- **`Leave tie` puts a tie back.** Decision 7 locks a tie's names, and with nothing else on
-  the screen that left `Start` as the only exit — so a mis-tapped tie had to be played, or
-  started and abandoned. Gated on `gameStarted` for the reason `setCasual` is: untagging a game
-  with committed rounds would take the tie out of its bracket and leave the record behind.
+- **`Play something else` puts a tie back.** Decision 7 locks a tie's names, and with nothing
+  else on the screen that left `Start` as the only exit — so a mis-tapped tie had to be played,
+  or started and abandoned. Gated on `gameStarted` for the reason `setCasual` is: untagging a
+  game with committed rounds would take the tie out of its bracket and leave the record behind.
+  - It said `Leave tie` first, which read as withdrawing from the cup — as would
+    `Pause tournament`, the other candidate. Neither is what happens: the tie goes straight
+    back on the bracket, still playable, and every other tournament is untouched. So the
+    label is about the game in front of you and mentions the tournament not at all.
+  - **Abandoning a tournament does the same thing to a tie of it that is set up.** There is
+    no bracket left to hold the tie, so the game stops being one; without that the setup
+    screen kept a banner naming nothing over a lineup locked by a draw that no longer
+    existed.
 - **The bracket is drawn as columns, not listed by round.** The BBC's knockout layout: one
   column per round, deepest on the left, `‹ ›` paging on a phone. What makes it possible in
   plain CSS is **The perfect tree** below.
@@ -262,6 +271,48 @@ Decision above specified:
   so `['', 'Tau']` looked like a good one-person side: the draw succeeded and the tie it
   produced could never be started, because `lineupFaults` refuses a blank slot and `Start`
   stays off. A side must now have as many people as it has slots.
+- **The field is entered by tapping the archive's names, and `Select all` enters the lot.**
+  Typing eleven names the app already holds is the real cost of setting a cup up. The chips
+  are toggles rather than add buttons so the lit ones double as "who have I got so far", and
+  the ordinary field is everybody — so the button that enters everybody is one press and
+  tapping off the two who aren't here is two more.
+  - **The form opens with no name boxes at all**, and `Add entrant` became `Add new
+    entrant`. The two rows it used to open on were rows most draws never type into, and
+    they sat between the chips and the button that actually wants them. A box is now for
+    somebody the app has never heard of, which is what the label says.
+  - **The cup's own name is refused rather than defaulted.** It fell back to the literal
+    word "Tournament", which is the guest-game bug in miniature: several cups run at once
+    by decision, both lists are just names sorted by date, and the fallback fires exactly
+    when you were not paying attention — so two rows reading "Tournament" is a screen you
+    cannot read, and the only fix afterwards is to abandon one. It is reported on the same
+    gate as a blank entrant, and marks its own field the same way.
+  - **A name already in use is refused for the same reason**, compared with `nameKey` so the
+    casing it was typed in cannot smuggle a second one past. Refused rather than warned
+    about, the setup screen's rule for a repeated lineup: this is a cup about to be drawn
+    and costs a keystroke, where a record already filed is history. It is a *form* rule and
+    not a storage invariant — a file carrying two of a name still imports, because
+    `mergeTournaments` keys on the id and refusing a whole bracket over its decoration is
+    the archive's standing rule.
+    - **The cost is that an annual cup cannot reuse its name.** "Summer Cup" every year
+      becomes "Summer Cup 26", which is what this group does anyway (Hole Corn V, VI). The
+      alternative — refusing only against unfinished cups — makes the rule depend on
+      something the form cannot show you, and the completed list is where two of a name
+      would sit for ever.
+  - **So the "needs at least 2 entrants" line had to be gated too.** Every other fault
+    waits for a name to be typed, on the reasoning that an untouched form is empty rather
+    than at fault; the count was deliberately *not* gated with them, because dropping to
+    one entrant is something you did. Opening on nobody makes that arrival state, so the
+    count now waits for there to be a field — one row, however blank — and the disabled
+    button carries the empty form on its own, which is the same rule as before.
+  - **It adds who is missing rather than starting again**, so a newcomer typed into the
+    fields survives it and nobody already in is entered twice.
+  - **It goes quiet when there is nobody left, rather than flipping to a clear.** A name
+    typed into the fields is not a chip, so a clear would either destroy it or leave a
+    subset behind, and neither is guessable from the label. Disabled is what `Make the draw`
+    already does over an empty form.
+  - **One placement rule, shared with the chips**, so one press seats the field exactly as
+    tapping down the roster would. Two spellings of where a name lands is the drift with no
+    symptom — in doubles it decides who is paired with whom.
 - **The Play control is the bracket box itself.** It was briefly a "Ready to play" list above
   the drawing, duplicating boxes the bracket already drew — a screenful of them on a
   64-entrant field, each without the context that makes it worth looking at. The box is the
@@ -494,6 +545,121 @@ Two things fall out that are worth recording:
   a reboot would land mid-cycle. The whole-state retained model is what lets a board join
   late with no resync, and it is worth more than a second screen. If one ever earns its
   place it should be a layout id — retained, and chosen.
+
+## Playing the draw out
+
+The draw used to be a result that appeared. It is now an event: `Make the draw` lands on a
+ceremony where each press pulls one name out of the hat and the board announces where it
+landed. The children who used to pull the names out of a real hat press the button.
+
+**The draw is made and stored whole before a single name is revealed.** The ceremony is a
+view over `entrants`, not a second way to build one, and that one decision removes almost
+all of the cost:
+
+- No partial-draw state exists anywhere. `newTournament`, `bracket`, `bracketShape`,
+  `validTournament` and the storage shape are untouched.
+- A reload mid-ceremony lands on the finished bracket, so there is nothing to resume.
+- **Always ceremonial, always skippable**, with no toggle and nothing persisted. A setting
+  would have bought exactly what `Skip` buys in one press.
+- Pre-drawing is indistinguishable from drawing per press — the same distribution, and
+  nobody in the garden can tell — so the honesty cost is nil.
+
+`drawSteps` derives the reveal from the stored draw, sharing `seatSides` with `build` so the
+ceremony and the bracket cannot come to disagree about where a name landed. Three properties
+fall out of `bracketShape`'s seat order that were not obvious and are worth recording:
+
+- **Every pull is one of two shapes, not four.** Either an entrant with nobody to meet yet —
+  the first name into a preliminary, or a bye whose sibling seat is still in the hat — or an
+  entrant with an opponent, which is a person or the two halves of a preliminary they meet
+  the winner of. That last one is the only thing a paper draw says that a finished bracket
+  cannot.
+- **A waiting entrant always resolves on the very next press.** Preliminaries occupy a
+  prefix of each half, so a bye at an even seat is always followed by a bye at its sibling.
+- **The draw always ends on a completed pairing.** The last seat index is odd for every
+  bracket size, so its sibling is already out. An earlier fear that eleven entrants would
+  trail off into three consecutive byes was simply wrong.
+
+One tie is announced by no press at all: the one between two preliminary winners, where
+neither side is known while names are still coming out. That is honest rather than missing —
+nobody coming out of the hat decides it — and the bracket draws it.
+
+### Two beats, timed by the phone
+
+A press publishes twice: a card with the name withheld, and a beat later the reveal.
+`PULL_MS` is 1100. The board animates nothing and knows nothing of the beat; it draws
+whichever card it was last told about.
+
+That shape was chosen over animating in `render.h`, and the reasons are worth keeping:
+
+- **The pause is the theatre**, and it is the reasoning `Toss for first` already carries: a
+  press that changes nothing visible reads as a dead button.
+- **No phase on the wire.** A board joining mid-beat sees "pulling", which is true. Firmware
+  animation would have needed an easing curve dumped and compared the way the splash's is —
+  the splash proved scenes cannot pin a curve — plus a busiest-frame duty measurement against
+  a ceiling `form-worst` already spends 28.5% of.
+- **It is deferred rather than designed out.** The card shapes and the topic are identical,
+  so animating later is purely "does `render.h` animate between them", with no protocol
+  change. Revisit once the panels are on a bench and there is something to judge it against.
+
+### The fourth retained topic
+
+`holecorn/<code>/draw` carries the round, the side just pulled, the opponent as **0, 1 or 2
+structured sides**, and the count. Retained and cleared like the lineup and the tie, and
+**re-asserted on connect including the clear** — the clear matters more here than anywhere
+else, because nothing about starting a game takes this topic down the way the first bag
+clears the other two. A card left behind would sit on the board until the next draw a year
+later.
+
+- **Undebounced**, like `/layout` and unlike `/lineup` and `/tie`. Those settle for 400 ms
+  because renames fire per keystroke; this changes on a button press, and at 400 ms the two
+  beats would collapse into one and take the pause with them.
+- **No cup name on a card that carries a pull.** Measured in `test_board_logic.cpp`: the worst
+  case is 389 bytes of the board's 512, against the lineup's 423 — so `MQTT_BUFFER` is
+  untouched. Adding a 32-unit cup name on top lands within 25 bytes of the buffer. `/tie`
+  carries the name and has a packet to itself. The opponent travels as sides rather than as
+  the words "plays winner of" for the same budget: the board writes them, which is free.
+- **The one screen that needs no score message.** A draw happens before any tie is picked and
+  before any game exists, so the card is drawn from its own payload alone — no names off
+  `teamA`/`teamB`, and **no team colours**, because at the moment a name comes out of the hat
+  nobody has been given one. The fixture card structurally cannot do this; it falls through
+  to the dashes without a score behind it.
+- **Precedence is `draw` > `tie` > `lineup` > score**, extending the chain `boardScreen`
+  already answers. Nothing underneath a draw can be about it.
+- **The panel draws no progress line and the display does.** The completing card needs all
+  four of the panel's rows, and a count that appeared only on the two-row shape would read as
+  the panel losing information rather than never having offered it. The count is published
+  either way, and `parseDraw` deliberately does not read it — two fields in `DrawState` that
+  nothing on the board can show would be worse than the asymmetry.
+
+Like the form screen, the fixture card and the splash, the draw card has no layout id, so
+`test-firmware.mjs` carries a fourth standalone assertion that some scene has one.
+
+### The opening card
+
+Between opening the ceremony and the first press the board used to show the last game's
+score, which says the board has nothing to do with what everyone is standing around
+watching. It now carries the cup's name and the word `DRAW`, and that is the card it holds
+longest.
+
+- **It is the cup name *instead of* a round, never as well.** That is what makes it free
+  against the budget above: it is the one card with no pull on it, so it cannot be the
+  topic's worst case however long the name — measured at 156 bytes against the pull's 389.
+  `parseDraw` therefore takes a round **or** a cup where it used to require a round, and
+  `render.h` gives the round precedence, so a card carrying both draws as the pull alone.
+  `test_render.cpp` asserts that direction rather than leaving the split as a convention of
+  the app's.
+- **The cup takes the white row and `DRAW` the grey one**, which is the reverse of the tie
+  card. Both were rendered and compared: the cup on top reads as a title, and `DRAW` on top
+  reads as a label miscategorising the name under it. On this card the fixed word is the
+  one that never varies, so it is the one that dims.
+- **Two rows in the same place as the drum roll**, so the card does not jump up the panel on
+  the first press — it is the same screen with the words replaced.
+- **The display keeps one wording for the count**, so the opening card reads `0 of 11 drawn`
+  rather than gaining a second phrasing for zero. A format that changes with the card reads
+  as two different lines.
+- **Nothing extra on it.** A row of `11 ENTRANTS` was available and is the progress-line
+  objection again: information that appears only on the short shape reads as the panel
+  losing it once the draw starts.
 
 ## Where the rules live
 

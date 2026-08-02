@@ -6,7 +6,7 @@
 // message carries the whole state rather than a delta, which is what lets a
 // display that reboots or reconnects mid-game recover with no resync logic.
 
-import { gameStarted, totals, teamLabel } from './scoring.js';
+import { gameStarted, sideLabel, totals, teamLabel } from './scoring.js';
 import { PANEL_LAYOUTS } from './panelRender.js';
 import { lineupStats } from './stats.js';
 
@@ -139,6 +139,61 @@ export function tiePayload(game, tie) {
   return { t: tie.name, r: tie.round };
 }
 
+// One pull of the tournament draw, as the board is told it: the round the name landed
+// in, who came out of the hat, and who they will meet. Null when no draw is being
+// played out, which clears the card the way a null lineup does.
+//
+// **Two beats per press, both published from here.** The first withholds the name —
+// `pulling` — and the second reveals it. Half the theatre of a draw is the pause, and
+// the same reasoning already sits behind `Toss for first`: a press that changes nothing
+// visible reads as a dead button. The board animates nothing; it draws whichever card it
+// was last told about, so there is no phase on the wire and a board joining mid-beat sees
+// "pulling", which is true.
+//
+// **A pull deliberately carries no cup name**, unlike the tie card. Measured on the same
+// basis as `test_board_logic.cpp`: the round, a doubles side and a doubles "winner of"
+// pair reach ~376 bytes of the board's 512 buffer, and a 32-unit cup name on top puts the
+// worst case at ~487 with 25 bytes spare — tighter than the lineup, which is otherwise
+// the largest message the board receives. `/tie` already carries the name and has a
+// packet to itself.
+//
+// The opening card is the exception, and it is free: it is the cup's name *instead of* a
+// round, on the one card that has no pull to carry, so the topic's worst case is unmoved.
+//
+// The opponent travels as **structured sides** rather than a worded phrase for the same
+// budget: the board writes "PLAYS WINNER OF" itself, which is free, where sending the
+// words costs bytes on every message.
+export function drawPayload(reveal) {
+  if (!reveal) return null;
+  const { step, cup, drawn, total, pulling } = reveal;
+  // Nothing pulled yet, so the board says what is about to happen. This is the only card
+  // that names the cup and the only one that is not about somebody.
+  if (!step) return { t: cup, d: drawn, e: total };
+  return {
+    r: step.round,
+    // Absent while the beat is held, the way `winner` is absent while a game is live:
+    // there is no name yet, and absent-means-unknown is the contract both consumers
+    // already read. It is also what the board keys the drum-roll card off.
+    ...(pulling ? {} : { n: sideLabel(step.side.names) }),
+    // Absent rather than an empty array when nobody is named yet — one fewer key on the
+    // packet whose worst case is the thing being watched. 0, 1 or 2 sides: nobody yet,
+    // a person, or the two halves of a preliminary whose winner they meet.
+    ...(pulling || step.opponents.length === 0
+      ? {}
+      : { o: step.opponents.map((s) => sideLabel(s.names)) }),
+    d: drawn,
+    e: total,
+  };
+}
+
+// Mirrors parseDraw in board_logic.h: a card is a round or a cup, and everything else is
+// optional — a message without a name is the drum roll, one without opponents is an
+// entrant still waiting for theirs, and a cup with no round is the opening card.
+export function usableDraw(next) {
+  const field = (key) => typeof next[key] === 'string' && next[key] !== '';
+  return typeof next === 'object' && next !== null && (field('r') || field('t'));
+}
+
 // Mirrors parseTie in board_logic.h.
 export function usableTie(next) {
   return (
@@ -222,6 +277,18 @@ export function lineupTopic(code) {
 // the board receives and has no room for a 32-character name.
 export function tieTopic(code) {
   return `holecorn/${normalizeCode(code)}/tie`;
+}
+
+// Retained and cleared like the lineup and the tie, and a fourth topic for the same
+// reason there is a third: a pull of the draw is a different fact with a different
+// lifetime again — it changes on a button press, and it exists before any game at all.
+//
+// **It is the one pre-game topic that does not need a score message behind it.** A draw
+// can be taken on a board that has never been sent a game, so the card is drawn from
+// this payload alone: no names off `teamA`/`teamB`, and no team colours, because at the
+// moment a name comes out of the hat nobody has been given one.
+export function drawTopic(code) {
+  return `holecorn/${normalizeCode(code)}/draw`;
 }
 
 export function normalizeCode(raw) {

@@ -42,8 +42,8 @@ project dependency. It starts and stops its own preview server.
   localStorage wrapper the way `archive.js` splits it. **Stores the draw and derives
   the rest** — see **Tournaments**. Tested in `src/tournament.test.js`.
 - `src/Tournament.jsx` / `src/Tournament.css` — the tournament screen: takes the
-  draw, draws the bracket, shows a tournament's own stats, and hands a tie to the
-  scoring screen. Draws only.
+  draw, plays it out a name at a time, draws the bracket, shows a tournament's own
+  stats, and hands a tie to the scoring screen. Draws only.
 - `src/Chip.jsx` / `src/Chip.css` — a summary figure with its label, and the grid a
   row of them sits in. Shared by the career screen's totals and a tournament's, the
   way `FormPips` is shared; it was private to `Stats.jsx` until the second caller.
@@ -1049,17 +1049,117 @@ the alternatives that were rejected; this section holds what breaks when you cha
     a 360px phone has and 232px on the deploy runner's own font, so it sits on the tabs' own
     38px line. Drawn only where the stored draw has a target, the way the date line is —
     that needs a hand-edited file, and reserving the space on every other row is worse.
-  - **`Leave tie` is the only exit**, and it has to exist: with the names locked and nothing
-    else on the screen, `Start` was the sole way off it. Gated on `gameStarted` for the reason
-    `setCasual` is.
+  - **`Play something else` is the only exit**, and it has to exist: with the names locked and
+    nothing else on the screen, `Start` was the sole way off it. Gated on `gameStarted` for the
+    reason `setCasual` is.
+    - **It is worded about the game, not about the cup, and that is the whole point of the
+      label.** It said `Leave tie` first, which reads as withdrawing; `Pause tournament` was
+      the other candidate and is worse, since it implies a paused state to resume and there
+      are none — several cups can run at once and this touches none of them. Nothing about
+      the tournament changes: the tie goes straight back on the bracket, playable. The class
+      stays `.tie-leave`, tracking `clearTie` rather than the label.
+  - **A tie whose tournament is gone is not a tie, and that is repaired on the derivation
+    rather than in the delete handler.** Abandoning a cup with one of its ties set up left
+    the setup screen with a banner naming *nothing* — `liveTournament` is null, so the
+    `?? 'Tournament'` fallback showed — over names, mode and target still locked by a draw
+    that no longer existed, with `Play something else` the only way out of a state nobody chose. The
+    fix is `App.jsx` dispatching `clearTie` whenever `game.tournament` resolves to no
+    tournament.
+    - **A line in `onDrop` was the obvious place and covers less.** The effect also rescues
+      a game *already* saved in that state, which the delete that stranded it cannot come
+      back to fix — and deletion is the only route in today, so a handler would be right
+      until it wasn't.
+    - **It cannot loop**: `clearTie` returns the same object when it declines, and
+      `useReducer` bails out on an unchanged state. When it does fire, `game.tournament`
+      goes null and the condition is false.
+    - **The archived ties keep their tag**, deliberately, which is not an inconsistency:
+      a played tie happened as part of that cup and the dialog promises it stays counting.
+      A game that has not been played yet did not.
+    - **The delete dialog says nothing about it.** The consequence is on the very next
+      screen — the banner gone, the mode unlocked — so it has a symptom, which is the bar
+      for that dialog saying anything.
+    - **Only `verify-tournament.mjs` can see it**: `clearTie` and `dropTournament` are each
+      correct on their own and nothing but `App.jsx` joins them up. Verified by mutation —
+      dropping the effect fails exactly that block's six assertions and nothing else.
   - **`game.tournament` is deliberately not sticky across `New game`**, unlike `mode` and
     `casual`. A tournament runs over weeks, so a tie-ness left on would file the next friendly
     as a tie — silently, into somebody else's bracket. Picking a tie off the bracket is the
     only thing that sets it.
+- **The roster's chips and `Select all` share one placement rule, `place` in `Draw`.** The
+  array order *is* the seating (see `seatSides`), so two spellings of "where does this name
+  land" would let one press seat a field the eleven taps would not have — and in doubles
+  that decides who is paired with whom, which nothing on the screen says is a decision.
+  Verified by mutation: appending instead of sharing it leaves the form's two opening rows
+  blank and `Make the draw` off.
+  - **It adds who is missing and goes disabled when nobody is left**, rather than flipping
+    to a clear. A name typed into the fields is not a chip, so a clear either destroys it or
+    leaves a subset behind; disabled is the same answer `Make the draw` gives an empty form.
+    Both halves are mutation-checked in `verify-tournament.mjs`, which is the only thing
+    that can see any of this — both callers live inside `Draw`.
+  - **It is offered in doubles too**, where it pairs people in chip order. That is arbitrary,
+    but so is any order, and the mode needing twice as many names typed is the one that can
+    least afford to be left out. A wrong pair is two chips off and two on.
+  - **The form opens on no rows at all, which moved the count hint's gate.** Every other
+    fault waits for a name to be typed; the count deliberately did not, because dropping to
+    one entrant is something you did. With nobody there on arrival that stopped being true,
+    so it waits for a *row* — `entrants.length > 0` — rather than for a name. Untangling
+    those two is the whole change: the blank fault still keys off `started`.
+  - **`toggle` no longer restores a blank row when it empties the list**, and `Add entrant`
+    is `Add new entrant`, because the roster is how somebody known gets in and a box is for
+    somebody the app has never heard of.
+  - **The cup's own name is a fault too, where it used to default to the word
+    "Tournament".** Several cups run at once and both lists are just names, so the fallback
+    produced rows nobody can tell apart — and it fired precisely when you were not looking.
+    `Make the draw` is gated on it, the field is marked, and it is *reported* on `started`
+    like a blank entrant. That fallback is now unreachable and gone from `draw()`; the
+    `?? 'Tournament'` in `App.jsx`'s banner is a **different** one — no tournament at all,
+    not an unnamed one — so don't fold them together.
+    - **A name already in use is refused too**, keyed by `nameKey` — the person-identity
+      rule, reused because it is the same question (how a typed name is compared) and a
+      second spelling of it would be looser or stricter than the one beside it for no
+      visible reason. Across *both* lists, not just the running ones: the completed list is
+      where two of a name would sit for ever. The cost is that an annual cup has to number
+      itself, which this group already does.
+    - **`Draw` needs `usedNames` for that**, which is the one thing the form takes from
+      outside itself. It is a form rule, so nothing in `tournament.js` or `validTournament`
+      knows about it and an imported file may still hold two of a name.
+    - **The browser check enters the field *before* trying the name**, and that ordering is
+      the whole assertion. Checked on an empty form, "the draw is held off" passes on the
+      entrant count whatever the name rule does — verified by mutation, which passed the
+      entire run until the order was swapped. The file's own recorded failure mode.
+    - **It is the one field on that screen the autofill check could not see.** Its filter
+      keyed off `aria-label` or a `list`, and this input has neither, so the field whose
+      visible label is the bare word Safari's contact heuristic reads was the untested one.
+      The filter reads `placeholder` now, which the new `Tournament Name` matches.
+  - **The arrival block is first in `verify-tournament.mjs`, and that ordering is
+    load-bearing** — the same rule `verify-stats.mjs`'s absence assertions follow. Almost
+    every block below builds a bracket through `open()`, which fills a fixed number of rows,
+    so putting the blank rows back leaves that field short and buries the real fault under
+    every later block. `open()` also reports rather than throwing on `Make the draw` now,
+    for the same reason: it used to end the run on the first block with a stack trace.
 - **`entrantFaults` has to agree with `lineupFaults`**, or the draw succeeds and produces a
   tie nobody can start. It did once: `sideKeyOf` filters blanks, so a doubles pair with one
   half empty read as a good one-person side, the draw took it, and `Start` then stayed off
   for ever. A side needs as many people as it has slots, and every slot named.
+  - **The faults are *reported* only once a name is in, though they are computed from the
+    start.** The form opens on two empty rows that are the app's rather than anybody's, so
+    on arrival the old version underlined both and said `Everyone entering needs a name.` —
+    telling you off for not having typed, on a screen you reached by pressing `New`. The
+    setup screen has no equivalent because its slots default to `Player 1`, so it opens with
+    nothing at fault.
+    - **`Make the draw` is still held off by `faults`, not by what is reported**, which is
+      what makes the quiet safe: a disabled button over an empty form explains itself where
+      two red boxes nobody has reached do not. Gating the *button* on `reported` would let
+      an empty field be drawn into a tie.
+    - **Derived from whether any playing slot has a name, not a `touched` flag**, the rule
+      the rest of the module follows. The known difference is that clearing the last name
+      goes quiet again — which is right, since you are looking at an empty form.
+    - **The entrant count is deliberately not gated with it.** Dropping to one entrant is
+      something you did, so it is said straight away.
+    - **`verify-tournament.mjs` is the only thing that can see any of this** — `entrantFaults`
+      is pure and still returns both blanks. Verified by mutation, and it needs *both*
+      directions: a gate stuck open fails the three quiet assertions, one stuck shut fails
+      the two that check a real blank is still reported.
 - **The record carries only the tournament's id, and only when there is one.** Absent rather
   than null on an ordinary game, the way `winner` is absent while a game is live, so a
   record outside a tournament keeps exactly the shape it had before tournaments existed.
@@ -1199,6 +1299,44 @@ the alternatives that were rejected; this section holds what breaks when you cha
     a local cap rather than a change to `Chip.css`.
   - **Selection resets when a row shuts**, so a row always opens on the bracket with nothing
     lit: a route is a scope you set while looking, the way the stats screen's `selected` is.
+- **The draw is played out a name at a time, and the ceremony is a *view* over a
+  tournament that is already saved whole.** `Draw` shuffles and stores before a single name
+  is revealed, so `drawSteps` derives the reveal from `entrants` and there is no
+  partial-draw state anywhere — nothing in `newTournament`, `bracket`, `bracketShape`,
+  `validTournament` or the storage shape changed for this. A reload mid-ceremony lands on
+  the finished bracket. `docs/TOURNAMENT.md` holds the decisions; this holds what breaks.
+  - **`seatSides` is shared by `build` and `drawSteps` on purpose.** The array order *is*
+    the seating, and two spellings of where an entrant sits would let the ceremony announce
+    a pairing the bracket never draws — with nothing on either screen to say so, because
+    the card is gone by the time the bracket is up. `tournament.test.js` holds the two
+    together and `verify-tournament.mjs` holds the *screen* to the tournament actually
+    stored, which is the half a re-shuffle in `Draw` would break.
+  - **The board is published from before the first press**, so `reveal` is the opening card
+    at `at === 0` rather than null. That is the only reveal the screen sends without being
+    pressed, and it is what the board holds longest — see **The draw card is a fifth
+    screen** under External scoreboard for what it may and may not carry.
+  - **Two shapes to a pull, not four** — the opening card above is a third and is not a
+    pull — and three properties of `bracketShape`'s seat order that were guessed wrong
+    first: an entrant with nobody yet always resolves on the **very next**
+    press (preliminaries occupy a prefix of each half); the draw **always ends on a completed
+    pairing** (the last seat index is odd, so its sibling is already out); and "gets a bye"
+    is only true when the field is not a power of two — `levelName` already draws that
+    distinction, so don't add a second rule for it.
+  - **Always ceremonial and always skippable, with no toggle.** A setting buys exactly what
+    `Skip` buys in one press, and has to be remembered. `Make the draw` always comes here.
+  - **The sheet lists pairings, not pulls.** Listing every pull put a row on screen for an
+    entrant with nobody to meet, and left it reading `—` after the very next press had named
+    their opponent — a sheet describing the draw as it *was*. A pull with no opponent is on
+    the card at the time and in a tie a moment later, so it is never invisible.
+  - **Two beats per press, timed by the phone**, `PULL_MS` 1100. The board animates nothing.
+    Same reasoning as `Toss for first`: a press that changes nothing visible reads as a dead
+    button. **Firmware animation is deferred, not designed out** — the card shapes and the
+    topic are identical, so it is purely "does `render.h` animate between them", and it
+    would cost a curve dump plus a busiest-frame duty measurement.
+  - **The pending beat is cleared on unmount, and so is the card.** Two separate effects:
+    one publishes each beat, one publishes `null` on the way out. Without the second the
+    board sits on a finished draw until the next one — nothing about starting a game clears
+    this topic. Verified by mutation; only `verify-form-screen.mjs` sees it.
 - **Both lists are sorted `newestFirst`, and unsorted they were showing import history.**
   The screen used to render the array as stored, which is insertion order: locally drawn
   ones oldest first, and `mergeTournaments` appending imported ones after every local one
@@ -1930,6 +2068,73 @@ offered when a lineup or a tournament field is filled in.
   - **The card has no layout id either**, so `test-firmware.mjs` carries a third
     standalone assertion that some scene has a tie — the form screen's rule, for the same
     reason.
+- **The draw card is a fifth screen on a fourth retained topic**, `holecorn/<code>/draw`,
+  and it is what the board shows while the names are coming out of the hat. Retained and
+  cleared exactly as the lineup and the tie are — see **The draw is played out a name at a
+  time** under Tournaments for the app side.
+  - **It is the one screen that needs no score message**, where the fixture card falls
+    through to the dashes without one. A draw happens before any tie is picked and before
+    any game exists, so every word is in its own payload: no names off `teamA`/`teamB`, and
+    **no team colours**, because at the moment a name comes out of the hat nobody has been
+    given one and inventing one implies an assignment that has not happened. White for who
+    was drawn, grey for the words around them. `test_render.cpp` asserts the frame is
+    byte-identical with a full board state behind it and with none at all, which is the only
+    thing that would notice a colour or a name leaking in from the score.
+  - **Precedence is `draw` > `tie` > `lineup` > score.** Nothing underneath a draw can be
+    about it, so the order is not a judgement. `Panel.jsx` captions off `boardScreen` rather
+    than re-deriving, the rule the tie card already carries.
+  - **No cup name on a card that carries a pull, and the opponent travels as structured
+    sides.** Measured: 389 bytes worst case of the board's 512, against the lineup's 423 — so
+    `MQTT_BUFFER` is untouched, and `test_board_logic.cpp` asserts that ordering rather than
+    only the limit. With a 32-unit cup name on top it lands within 25 bytes of the buffer,
+    which is tighter than anything else the board receives. Sending the words "plays winner
+    of" instead of two sides costs bytes on every message where the board writes them for
+    nothing.
+  - **The opening card is where the cup name went, and it is free because it carries no
+    pull.** A cup *instead of* a round, never as well: measured at 156 bytes worst case, so
+    it cannot be the topic's worst case however long the name, and the budget above is
+    unmoved. Three things hold that split rather than leaving it a convention of the app's:
+    `parseDraw` takes a round **or** a cup where it required a round, `render.h` gives the
+    round precedence, and `test_render.cpp` asserts a card carrying both draws as the pull
+    alone. **It is the card the board holds longest** — from opening the ceremony to the
+    first press — and without it the board sits on last week's score while everyone stands
+    around watching the hat.
+    - **The cup takes the white row and `DRAW` the grey one, the reverse of the tie card.**
+      Both were rendered and compared: the cup on top reads as a title, `DRAW` on top reads
+      as a label miscategorising the name under it. Here the fixed word is what never
+      varies, so it is what dims — on the tie card that is the cup.
+    - **Two rows in the same place as the drum roll**, asserted, so the card does not jump up
+      the panel on the first press. It is one screen with the words replaced.
+    - **The display keeps the count's one wording**, so this card reads `0 of 11 drawn`
+      rather than growing a second phrasing for zero. A row of `11 ENTRANTS` on the panel was
+      available and is the progress-line objection again: it would appear only on the short
+      shape.
+    - **`verify-form-screen.mjs` is the only thing that can see it reach the board**, in the
+      block that opens the ceremony before pressing anything — every other assertion drives
+      `sendDraw` directly. Verified by mutation: restoring the `at === 0` null fails exactly
+      those two assertions and nothing else.
+  - **Absent `n` is the beat, not an empty name**, the contract `winner` and the lineup's `p`
+    already use — the board draws a drum roll for one and would draw a nameless reveal for
+    the other. `parseDraw` keeps `named` for exactly that.
+  - **`d` and `e` are published and deliberately not parsed by the firmware.** The panel
+    draws no progress line: a completing card needs all four rows, and a count appearing only
+    on the two-row shape reads as the panel losing information rather than never having
+    offered it. Two fields in `DrawState` that nothing can draw would be worse. The display
+    has the room and carries it.
+  - **`VERSUS_CHARS` is shared with the fixture card** and `drawVersusRow`/`fitSideTo` are
+    the generalised forms of what the tie card had. The draw card is the only caller that
+    needs them at a second width — `DRAW_PAIR_CHARS`, 9, the same as the score screen's
+    names — because two potential opponents share the last row and stacking them would need
+    a fifth row the panel has not got.
+  - **No layout id**, like the form screen, the fixture card and the splash, so
+    `test-firmware.mjs` carries a fourth standalone assertion that some scene has one.
+  - **Measured cost: +1.56 kB gzipped** of the main chunk (100.68 → 102.24) and +0.45 kB
+    of CSS, for the whole feature — the ceremony screen, the display card and the
+    emulator's half of the panel card. The opening card added **0.14 kB** on top
+    (102.24 → 102.38) and nothing measurable in CSS, since it shares the round's rule.
+    Duty is **15.5%** across every draw scene and **5.5%** for the opening card, against
+    the tie card's 22.7% and `DUTY_CEILING`'s 30%, so this is not a screen the ceiling
+    needed re-checking for. Re-measure rather than assuming before adding to it.
 - **The splash is a fourth screen and the second with no layout id**, so it has its own
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at
@@ -2449,12 +2654,33 @@ block.
     the top of the file, which by then was a *different* roster, so it differed however
     the precedence went. Both now measure the thing the property is about.
 
+**The draw card is covered there too, and it shares that last block.** The same gap and
+the same shape: everything else drives `sendDraw` directly, so the phone's own `Pull` is
+pressed inside the bracket block and the board is asked to name the entrant the phone just
+pulled — read off the phone rather than written down, because the draw is random and the
+check cannot know it. Two mutations were run and each failed only its own assertions:
+handing `Tournament` an `onReveal` that does nothing kills the two crossing assertions,
+and dropping the clear-on-unmount leaves the card up through the tie that follows. Its
+other blocks cover what only a live board can show — the card beating a retained score,
+lineup and tie all at once, and standing on a board that has **never** been sent a score,
+which the fixture card structurally cannot do.
+
 `tools/verify-tournament.mjs` covers the tournament, and the block it exists for is
 **reversibility**: win a tie, undo the winning round, and the bracket goes back to
 nothing played with every opening tie live again. `tournament.js` is pure and unit
 tested, so everything here is about the wiring — that a tie loads locked and tagged,
 that `New game` clears the tie-ness, that an imported bracket appears without a
 reload. Each was verified by mutation.
+
+The draw ceremony's block is there for one crossing: `drawSteps` is pure and unit
+tested against the pairings `bracket()` draws, so what is left is whether the screen
+is playing out **the tournament that was actually saved**. A re-shuffle anywhere
+between `Draw` and `Ceremony` would announce pairings the bracket never draws, and by
+the time the bracket is up the card is gone — so it asserts the order pulled equals
+the order stored. Every draw in that file now goes through `skipCeremony`, which
+reports rather than throwing: the first version waited bare on `.bracket-scroll` and a
+missed site ended the run at the block that drew first, which is the file's own
+recorded lesson happening again.
 
 The Stats tab's block is there for the same kind of gap. The derivations behind it are
 pure and unit tested, so it asserts only what crosses a boundary: that selecting an
