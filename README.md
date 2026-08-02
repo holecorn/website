@@ -388,6 +388,21 @@ names the tournament and the round.
 Finished tournaments move to **Completed** with their winner and the runner-up
 beneath, and the row still opens to the whole bracket — which is the thing the
 paper sheets were kept for.
+
+### The Stats tab
+
+An open tournament has a **Stats** tab beside its bracket, covering that cup only:
+how many ties are in, how long the games ran, and a table of everyone who entered
+with how far they got. In doubles a pair is one row, because a pair is one entrant.
+
+Tapping an entrant in that table shows their way through the draw — who they beat
+and who knocked them out — and lights that route on the **Bracket** tab, with
+everything else faded. **Clear** puts the bracket back. Selecting the winner is
+how you read the champion's route.
+
+A cup transcribed from an old written-down score has results and no bag-by-bag
+detail behind them, so those tabs show the record, how far everyone got and the
+widest and closest ties, and say plainly that there are no rates to show.
 Several tournaments can run at once; a singles cup and a doubles cup in the same
 summer is an ordinary thing to want. Both lists show the most recent draw first,
 and every row carries its dates — when it was drawn and how recently a tie was

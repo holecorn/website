@@ -5,8 +5,14 @@ import {
   bracketShape,
   bracketTree,
   entrantFaults,
+  entrantStats,
   lastPlayed,
   levelName,
+  reachedBy,
+  routeFor,
+  tieExtremes,
+  tieHistory,
+  tieMatches,
   mergeTournaments,
   newTournament,
   newestFirst,
@@ -50,7 +56,7 @@ function tournamentOf(entrants, mode = 'singles') {
 // bracket only ever reads the sides and the winner. Deliberately the shape an
 // imported legacy record has, so the same fixture covers both.
 let stamp = 0;
-function tie(tournamentId, mode, a, b, winner) {
+function tie(tournamentId, mode, a, b, winner, final) {
   stamp += 1;
   return {
     id: `m${stamp}`,
@@ -61,7 +67,7 @@ function tie(tournamentId, mode, a, b, winner) {
       b: mode === 'doubles' ? b : [b[0], ''],
     },
     winner,
-    final: winner === 'a' ? { a: 21, b: 11 } : { a: 11, b: 21 },
+    final: final ?? (winner === 'a' ? { a: 21, b: 11 } : { a: 11, b: 21 }),
     rounds: [],
     endedAt: 1000 + stamp,
   };
@@ -696,5 +702,228 @@ describe('tieLabels', () => {
     expect(labels.get(played[0].id).name).toBe('Hole Corn V');
     expect(labels.get(played[1].id).name).toBe('Other Cup');
     expect(labels.get(played[1].id).round).toBe('Final');
+  });
+});
+
+// Everything below is the stats lens rather than the bracket itself: how far each
+// entrant got, what their route was, and what the ties say about how it went.
+
+// Play a whole tournament out, always taking the first playable tie and always
+// letting the side drawn first win. Deterministic, because `tournamentOf` keeps the
+// entrants in the order given and nothing here shuffles.
+function playOut(t, score) {
+  let matches = [];
+  for (;;) {
+    const next = bracket(t, matches).playable[0];
+    if (!next) return matches;
+    matches = [...matches, tie(t.id, t.mode, next.a.names, next.b.names, 'a', score)];
+  }
+}
+
+describe('routeFor', () => {
+  const t = tournamentOf(ELEVEN);
+
+  it('is every tie an entrant appeared in, deepest first', () => {
+    const matches = playOut(t);
+    const view = bracket(t, matches);
+    const route = routeFor(view, view.champion.key);
+    const levels = route.map((x) => x.level);
+    expect(levels).toEqual([...levels].sort((x, y) => y - x));
+    expect(levels[levels.length - 1]).toBe(1);
+    expect(route.every((x) => x.winner.key === view.champion.key)).toBe(true);
+  });
+
+  it('ends at the tie that knocked them out', () => {
+    const matches = playOut(t);
+    const view = bracket(t, matches);
+    const route = routeFor(view, view.runnerUp.key);
+    const last = route[route.length - 1];
+    expect(last.level).toBe(1);
+    expect(last.winner.key).not.toBe(view.runnerUp.key);
+  });
+
+  it('is the one tie ahead of them before anything has been played', () => {
+    const view = bracket(t, []);
+    expect(routeFor(view, view.entrants[0].key).length).toBe(1);
+  });
+
+  it('is empty for somebody who is not in it', () => {
+    expect(routeFor(bracket(t, []), 'nobody')).toEqual([]);
+    expect(routeFor(null, 'x')).toEqual([]);
+  });
+});
+
+describe('reachedBy', () => {
+  const t = tournamentOf(ELEVEN);
+
+  it('names the champion rather than levelling them, which the runner-up shares', () => {
+    const matches = playOut(t);
+    const view = bracket(t, matches);
+    expect(reachedBy(view, view.champion.key)).toEqual({ status: 'won', level: 1 });
+    expect(reachedBy(view, view.runnerUp.key)).toEqual({ status: 'out', level: 1 });
+  });
+
+  it('tells being out at a round from waiting to play it', () => {
+    const view = bracket(t, []);
+    // The three preliminaries are all that can be played at the start, so playing one
+    // leaves its loser out at the deepest level while everyone else is still in it.
+    const first = view.playable.find((x) => x.level === view.shape.rounds);
+    const matches = [tie(t.id, t.mode, first.a.names, first.b.names, 'a')];
+    const after = bracket(t, matches);
+    expect(reachedBy(after, first.b.key)).toEqual({ status: 'out', level: view.shape.rounds });
+    // The winner has moved up a level and is waiting there, at the same round the
+    // entrant they beat is now out at — which is the pair a level alone cannot tell apart.
+    expect(reachedBy(after, first.a.key)).toEqual({ status: 'in', level: view.shape.rounds - 1 });
+  });
+
+  it('puts a bye entrant in at a shallower round than one in a preliminary', () => {
+    const view = bracket(t, []);
+    const levels = view.entrants.map((e) => reachedBy(view, e.key));
+    expect(levels.every((r) => r.status === 'in')).toBe(true);
+    expect(levels.filter((r) => r.level === 4).length).toBe(6);
+    expect(levels.filter((r) => r.level === 3).length).toBe(5);
+  });
+});
+
+describe('entrantStats', () => {
+  const t = tournamentOf(ELEVEN);
+
+  it('holds a place for every entrant before anything is played', () => {
+    const rows = entrantStats(bracket(t, []), []);
+    expect(rows.length).toBe(ELEVEN.length);
+    expect(rows.every((r) => !r.played)).toBe(true);
+    expect(rows.every((r) => r.matches === 0 && r.rounds === 0)).toBe(true);
+  });
+
+  it('puts the champion first and the runner-up second', () => {
+    const matches = playOut(t);
+    const view = bracket(t, matches);
+    const rows = entrantStats(view, matches);
+    expect(rows[0].names).toEqual(view.champion.names);
+    expect(rows[1].names).toEqual(view.runnerUp.names);
+  });
+
+  it('orders everyone else by how far they got', () => {
+    const matches = playOut(t);
+    const view = bracket(t, matches);
+    const levels = entrantStats(view, matches)
+      .slice(1)
+      .map((r) => r.reached.level);
+    expect(levels).toEqual([...levels].sort((x, y) => x - y));
+  });
+
+  // **The side drawn *second* has to win here**, and that is not arbitrary. With the
+  // first winning, the entrant knocked out is Tau, who is alphabetically last among the
+  // five left at that level — so the final `localeCompare` tie-break puts them at the
+  // bottom anyway and the assertion passes with the alive-before-out rule removed.
+  // Verified by mutation, which is how it was caught after it was written.
+  it('ranks somebody still in above somebody out at the same round', () => {
+    const first = bracket(t, []).playable.find((x) => x.level === 4);
+    const matches = [tie(t.id, t.mode, first.a.names, first.b.names, 'b')];
+    const rows = entrantStats(bracket(t, matches), matches);
+    const at4 = rows.filter((r) => r.reached.level === 4);
+    expect(at4[at4.length - 1].names).toEqual(first.a.names);
+    expect(at4[at4.length - 1].reached.status).toBe('out');
+    expect(at4.slice(0, -1).every((r) => r.reached.status === 'in')).toBe(true);
+  });
+
+  it('counts a doubles pair once, as the entrant the bracket competes by', () => {
+    const pairs = tournamentOf(
+      [
+        ['Rho', 'Tau'],
+        ['Sigma', 'Phi'],
+      ],
+      'doubles',
+    );
+    const matches = playOut(pairs);
+    const rows = entrantStats(bracket(pairs, matches), matches);
+    expect(rows.length).toBe(2);
+    expect(rows[0].names).toEqual(['Rho', 'Tau']);
+    expect(rows[0].wins).toBe(1);
+  });
+
+  it('reads the entrant a record filed the other way round', () => {
+    const pairs = tournamentOf(
+      [
+        ['Rho', 'Tau'],
+        ['Sigma', 'Phi'],
+      ],
+      'doubles',
+    );
+    // Slots reversed and the sides swapped, which is what a tie started from the other
+    // team letter looks like. `sideKeyOf` has to see through both.
+    const matches = [tie(pairs.id, 'doubles', ['Phi', 'Sigma'], ['Tau', 'Rho'], 'b')];
+    const rows = entrantStats(bracket(pairs, matches), matches);
+    expect(rows.length).toBe(2);
+    // Named from the draw, not from the record, so the order is the one that was drawn.
+    expect(rows[0].names).toEqual(['Rho', 'Tau']);
+    expect(rows[0].wins).toBe(1);
+    expect(rows[0].played).toBe(true);
+  });
+});
+
+describe('tieMatches', () => {
+  const t = tournamentOf([['Rho'], ['Tau']]);
+
+  it('is the records the bracket resolved to ties, not everything carrying the id', () => {
+    const real = tie(t.id, 'singles', ['Rho'], ['Tau'], 'a');
+    // Tagged with the tournament but between two people who are not in it, which is what
+    // a hand-edited file or a renamed record can produce.
+    const stray = tie(t.id, 'singles', ['Sigma'], ['Phi'], 'a');
+    expect(tieMatches(bracket(t, [real, stray]), [real, stray]).map((m) => m.id)).toEqual([
+      real.id,
+    ]);
+  });
+});
+
+describe('tieExtremes', () => {
+  const four = tournamentOf([['Rho'], ['Tau'], ['Sigma'], ['Phi']]);
+  // Rho beats Tau by 17, Sigma beats Phi by 3, Rho beats Sigma by 9. Written out rather
+  // than played out, because the margins are the whole point.
+  const matches = [
+    tie(four.id, 'singles', ['Rho'], ['Tau'], 'a', { a: 21, b: 4 }),
+    tie(four.id, 'singles', ['Sigma'], ['Phi'], 'a', { a: 21, b: 18 }),
+    tie(four.id, 'singles', ['Rho'], ['Sigma'], 'a', { a: 21, b: 12 }),
+  ];
+
+  it('finds both ends of the spread from a score with no rounds behind it', () => {
+    const found = tieExtremes(bracket(four, matches));
+    expect(found.widest.margin).toBe(17);
+    expect(found.widest.tie.a.names).toEqual(['Rho']);
+    expect(found.closest.margin).toBe(3);
+    expect(found.closest.tie.a.names).toEqual(['Sigma']);
+  });
+
+  it('names no closest tie where it would be the same one as the widest', () => {
+    const one = [matches[0]];
+    const found = tieExtremes(bracket(four, one));
+    expect(found.widest.margin).toBe(17);
+    expect(found.closest).toBe(null);
+  });
+
+  it('is nothing at all until a tie has been played', () => {
+    expect(tieExtremes(bracket(four, []))).toBe(null);
+    expect(tieExtremes(null)).toBe(null);
+  });
+});
+
+describe('tieHistory', () => {
+  const t = tournamentOf(ELEVEN);
+
+  it('is the ties played, newest first, whatever round they belong to', () => {
+    const matches = playOut(t);
+    const view = bracket(t, matches);
+    const log = tieHistory(view, matches);
+    expect(log.length).toBe(view.played);
+    const stamps = log.map((x) => x.endedAt);
+    expect(stamps).toEqual([...stamps].sort((x, y) => y - x));
+    expect(log[0].round).toBe('Final');
+    expect(log[log.length - 1].round).toBe('Preliminary');
+  });
+
+  it('leaves out the ties nobody has played', () => {
+    const first = bracket(t, []).playable[0];
+    const matches = [tie(t.id, t.mode, first.a.names, first.b.names, 'a')];
+    expect(tieHistory(bracket(t, matches), matches).length).toBe(1);
   });
 });

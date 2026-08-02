@@ -8,11 +8,12 @@ Status: **built.** Everything below describes shipped behaviour, except where ma
 file keeps the decisions and the options that were rejected; the rules a future change has to
 respect are in `CLAUDE.md` under **Tournaments**.
 
-Six things came out differently from the plan, each noted under **How it came out
+Seven things came out differently from the plan, each noted under **How it came out
 differently**: several tournaments may run at once; a tie can be put back with `Leave tie`;
 the bracket is drawn as columns rather than listed by round; `entrantFaults` refuses a doubles
 pair with one half missing; the Play control lives in the bracket box rather than a list above
-it; and the target is fixed by the draw alongside the mode.
+it; the target is fixed by the draw alongside the mode; and the tournament-scoped stats are a
+tab inside the open row rather than a scope on the stats screen.
 
 ## Goal
 
@@ -224,7 +225,8 @@ played yet. That, and only that, is what the stored draw buys.
 8. **Bracket progress is derived, never stored.**
 9. **Stats gains tournament-scoped figures** alongside the career ones. Ties count in
    ordinary stats exactly as now; the tournament view is a second lens over the same
-   records.
+   records. Built as a **tab inside the open tournament** rather than a scope on the
+   stats screen — see **How it came out differently**.
 10. **Export carries tournaments as well as matches**, or a re-import loses every
     bracket while appearing to succeed.
 11. **Past tournaments are reached by tagging records that are already there**, not by
@@ -269,6 +271,9 @@ Decision above specified:
   that the bracket only reads sides and winner — which is an argument about the mechanism, not
   about whether it is right, and is exactly why a tie played to 12 among ties played to 21
   would leave no trace anywhere.
+- **The tournament-scoped stats of decision 9 are a tab inside the open row**, with the
+  bracket first, rather than a scope selector on the stats screen. See **Where the stats
+  went** below for the option that lost and why.
 
 ## The perfect tree
 
@@ -284,6 +289,38 @@ That only holds while the two children are the same *height*, which is why `.tie
 reserves two rows' worth whether or not it holds two. It did not, once: a two-name box came out
 68px and a one-name bye 66px, putting every parent a couple of pixels off the point where its
 children's connectors meet — invisible in a screenshot and wrong all the same.
+
+## Where the stats went
+
+Decision 9 said the stats screen would gain tournament-scoped figures, which reads as a
+scope selector there: `Stats` already derives everything from a `matches` array, so
+filtering it once would scope the summary chips, the career table, the rivals list and the
+recent matches for almost nothing. That is the cheapest option and it lost.
+
+**Most of that screen is structurally empty when scoped to one cup.** A knockout lets two
+sides meet at most once, so every head-to-head row within a tournament is 1–0, and
+`RIVAL_MIN_MEETINGS` is 3 — nemesis and dominates can never fire. The recent matches list
+becomes the ties, which the bracket already shows. What is left is the chips and a career
+table with none of the questions a cup actually raises.
+
+**And the question a cup raises has no career equivalent: how far did each entrant get.**
+That is derivable only from the bracket, so it has to be built either way — at which point
+the bracket is the natural place to put it, and putting it on a different screen from the
+drawing it describes is what made the tab win.
+
+Two things follow that are worth stating, because they are what a change here would argue
+with:
+
+- **The competitor is the *entrant*, not the player.** `sideStats` folds by `sideKeyOf`, so
+  a doubles pair is one row — the thing the bracket competes by. Folded by name, a fixed
+  pair becomes two rows with the same record and half the rounds each, which is noise. The
+  career screen keeps folding by name, because there a career is a person.
+- **Selecting an entrant lights their route on the bracket, and the selection is not in the
+  bracket.** A playable tie's box *is* its Play button, so a tap there is spoken for, and
+  making names tappable only in the non-playable boxes puts the control exactly where it is
+  least wanted — you cannot then trace either side of the tie you are about to play. The
+  table selects; the bracket lights. That also generalises the champion's route to anyone's
+  without a special case for the winner.
 
 ### Explicitly not doing
 

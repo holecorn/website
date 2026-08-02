@@ -13,6 +13,8 @@ import {
   gameStats,
   rosterFor,
   playerStats,
+  sideStats,
+  blankStats,
   headToHead,
   lineupStats,
   sideRecord,
@@ -213,6 +215,90 @@ describe('playerStats — doubles attribution', () => {
     expect(rho.wins).toBe(1);
     // Still threw both rounds, since each round has exactly one thrower.
     expect(rho.rounds).toBe(2);
+  });
+});
+
+describe('sideStats', () => {
+  const side = (stats, names) => stats.find((s) => s.names.join(' & ') === names);
+
+  it('folds a doubles pair into one row where playerStats gives two', () => {
+    const m = match({
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+      rounds: [
+        [[H, H, H, H], [F, F, F, F]],
+        [[H, H, H, H], [F, F, F, F]],
+      ],
+    });
+    expect(playerStats([m]).length).toBe(4);
+    const sides = sideStats([m]);
+    expect(sides.length).toBe(2);
+    const pair = side(sides, 'Rho & Tau');
+    expect(pair.matches).toBe(1);
+    expect(pair.wins).toBe(1);
+    // Both partners' rounds, where each of them individually threw only one.
+    expect(pair.rounds).toBe(2);
+    expect(pair.hole).toBe(8);
+    expect(pair.fourBaggers).toBe(2);
+  });
+
+  it('is the same side whichever team letter and slot order they held', () => {
+    const one = match({
+      id: 'm1',
+      mode: 'doubles',
+      players: { a: ['Rho', 'Tau'], b: ['Phi', 'Chi'] },
+      rounds: [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]],
+    });
+    const two = match({
+      id: 'm2',
+      mode: 'doubles',
+      players: { a: ['Chi', 'Phi'], b: ['Tau', 'Rho'] },
+      rounds: [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]],
+      endedAt: 2000,
+    });
+    const sides = sideStats([one, two]);
+    expect(sides.length).toBe(2);
+    const pair = sides.find((s) => s.key === side(sideStats([one]), 'Rho & Tau').key);
+    expect(pair.matches).toBe(2);
+    expect(pair.wins).toBe(1);
+    expect(pair.losses).toBe(1);
+  });
+
+  it('gives a singles player the same numbers playerStats does', () => {
+    const m = singles('Rho', 'Phi', [
+      [[H, H, B, F], [F, F, F, F]],
+      [[H, B, B, F], [B, F, F, F]],
+    ]);
+    const byName = find(playerStats([m]), 'Rho');
+    const bySide = side(sideStats([m]), 'Rho');
+    for (const k of ['rounds', 'bags', 'hole', 'board', 'ppr', 'bestRound', 'wins']) {
+      expect(bySide[k]).toBe(byName[k]);
+    }
+  });
+
+  it('counts a result with no rounds as a match and nothing else', () => {
+    const sides = sideStats([oldSingles('Rho', 'Phi', { a: 21, b: 12 })]);
+    const rho = side(sides, 'Rho');
+    expect(rho.matches).toBe(1);
+    expect(rho.wins).toBe(1);
+    expect(rho.rounds).toBe(0);
+    expect(rho.ppr).toBe(0);
+  });
+
+  it('drops a side with nobody named rather than collecting them under one', () => {
+    const m = result({ players: { a: ['', ''], b: ['Phi', ''] }, final: { a: 12, b: 21 } });
+    expect(sideStats([m]).length).toBe(1);
+  });
+});
+
+describe('blankStats', () => {
+  it('is a row of zeroes to hold a place with', () => {
+    const row = blankStats('Rho');
+    expect(row.name).toBe('Rho');
+    expect(row.matches).toBe(0);
+    expect(row.rounds).toBe(0);
+    expect(row.ppr).toBe(0);
+    expect(row.form).toEqual([]);
   });
 });
 

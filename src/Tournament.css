@@ -198,6 +198,42 @@
   text-transform: uppercase;
 }
 
+/* The two views of an open tournament. Styled like `.mode-toggle`, the app's segmented
+   control, rather than as a new kind of thing — but with its own class, because that one
+   lives in App.css and redeclaring a name across files is the trap `.app.stats-screen`
+   already carries a note about.
+
+   `flex: 0 0 auto` and left-aligned: two tabs stretched across an open row a metre wide
+   read as two enormous buttons rather than as a switch. */
+.tournament-tabs {
+  align-self: flex-start;
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tournament-tabs button {
+  padding: 8px 14px;
+  border: none;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tournament-tabs button.is-on {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* `min-width: 0` so the entrant table's own scroller can shrink below its content. A
+   flex item defaults to `min-width: auto`, which is the table's min-content width, and
+   the row would then grow sideways instead of the table scrolling inside it. */
+.tournament-panel {
+  min-width: 0;
+}
+
 /* The bracket is drawn as a tree, columns running deepest-first to the final on the
    right — the BBC's knockout layout rather than the paper sheet's mirrored one, which
    is both simpler and half the width.
@@ -229,6 +265,44 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+
+/* Whose route is lit. Above the paging row rather than inside it, because that row is
+   hidden on a wide screen and this must not be — the dimming applies at every width.
+   The name is what makes a dimmed bracket legible: the same reason the rivals list names
+   its nemesis row rather than shading it. */
+.bracket-route {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bracket-route-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bracket-route button {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Faded rather than hidden, so the route is read against the bracket it went through
+   rather than floating on its own. The connectors are left alone: they are already the
+   faintest thing on the screen, and dimming them too leaves the lit boxes unconnected. */
+.bracket.has-route .tie:not(.is-route) {
+  opacity: 0.3;
 }
 
 /* One heading per column, at the column's own pitch, so the row lines up with the
@@ -701,6 +775,175 @@ button.tie {
 .tie-points {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
+}
+
+/* How a tournament has gone, rather than who is through. The career screen's `.stats-table`,
+   `.stats-scroll` and `.player-select` are reused rather than redrawn, the way `.stats-head`
+   and `.modal` already are — a second definition of what a stats table looks like is the
+   drift with no symptom, and Stats.css is loaded on this route regardless because App.jsx
+   imports that screen statically. */
+.tournament-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tournament-section {
+  min-width: 0;
+}
+
+.tournament-section h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The round they reached, beside their name in the heading rather than on a line of its
+   own — undoing the heading's own casing and tracking, which suit a caption and not a
+   fact about a person. */
+.route-sub {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tournament-note,
+.tournament-none {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tournament-none {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Right-aligned with the numbers rather than left with the name, which was tried: the
+   name column absorbs the table's slack, so a left-aligned Reached floats in the middle
+   of an open row on a tablet — measured, 300px from the name it belongs to. */
+.stats-table td.entrant-reached {
+  color: var(--muted);
+}
+
+/* Capped, unlike the career screen's row of the same chips, and only because this row can
+   be **two chips long**: a tournament with no round detail has only its tie count and its
+   skunks to show, and two `1fr` tracks made each of them 483px on a tablet — a chip the
+   size of a card. Seven chips are unaffected, because they cannot reach 160px there. */
+.tournament-stats .stat-chips {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 160px));
+  justify-content: start;
+}
+
+/* Packed left rather than spread: on an open row a metre wide, `space-between` puts each
+   result a foot from the round it belongs to. */
+.route {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.route li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.route li.is-waiting {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* A fixed track, so the results line up down the page however the round names differ in
+   length. Wide enough for `Quarter-final`, which is the longest of them. */
+.route-round {
+  flex: 0 0 104px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.route-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tie-extremes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tie-extremes li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.extreme-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.extreme-round {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Two lines, the result over its date and round — the same shape a tournament row uses,
+   and for the same reason: inline, the date reads as a second status beside the score and
+   a long pair of names clips on a phone. */
+.tie-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tie-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tie-log-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.tie-log-when {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 /* One column fills the screen and the `‹ ›` buttons step between rounds, because four

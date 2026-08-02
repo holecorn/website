@@ -11,6 +11,7 @@
 import {
   BAGS_PER_SIDE,
   NO_SIDE,
+  TEAM_JOIN,
   nameKey,
   playerLabel,
   rawPoints,
@@ -157,6 +158,13 @@ function derive({ results, ...p }) {
   };
 }
 
+// A row of zeroes, for a table that has to hold a place for somebody with no matches
+// at all. `played` beside it is what tells that from a genuine zero — this is the
+// shape, not the claim that the numbers mean anything.
+export function blankStats(name) {
+  return derive(blank(name));
+}
+
 function chronological(matches) {
   return [...matches].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0));
 }
@@ -227,6 +235,53 @@ export function playerStats(matches) {
     .sort((x, y) => y.wins - x.wins || y.ppr - x.ppr || x.name.localeCompare(y.name));
 }
 
+// The same accumulation folded by *side* rather than by name: an entrant, which is one
+// person in singles and a fixed pair in doubles. `sideKeyOf` is the identity, so a pair
+// is one row whichever team letter and slot order they held.
+//
+// **Not a second accumulation.** `foldRound` and `derive` are the ones `playerStats`
+// uses, so a side's PPR and a player's PPR cannot come to mean different things — the
+// same rule that has `gameStats` share the fold rather than count its own.
+//
+// Both keyings are needed and neither subsumes the other. A career is a person; an
+// entrant is whoever entered together, which is what a knockout competes by. Folded by
+// name, a doubles pair becomes two rows with the same record and half the rounds each.
+export function sideStats(matches) {
+  const acc = new Map();
+  for (const match of chronological(matches)) {
+    // Which sides this match has already credited. Two teams cannot normally hold the
+    // same side, but an imported record can, and one match must not be a win and a
+    // loss for one entrant — the guard `playerStats` applies per person.
+    const credited = new Set();
+    for (const team of TEAMS) {
+      const names = rosterFor(match, team)
+        .map((n) => String(n ?? '').trim())
+        .filter(Boolean);
+      const key = sideKeyOf(names);
+      if (key === NO_SIDE) continue;
+      let p = acc.get(key);
+      if (!p) {
+        p = { ...blank(names.join(TEAM_JOIN)), key, names };
+        acc.set(key, p);
+      }
+      // Settle on the most recent spelling and order, the way `playerStats` does.
+      p.names = names;
+      p.name = names.join(TEAM_JOIN);
+      if (!credited.has(key)) {
+        credited.add(key);
+        p.matches += 1;
+        const won = match.winner === team;
+        p[won ? 'wins' : 'losses'] += 1;
+        p.results.push(won);
+      }
+      // Every round the team threw belongs to the side, both partners together —
+      // there is no slot to filter by, because the side is the whole team.
+      match.rounds.forEach((round) => foldRound(p, round, team));
+    }
+  }
+  return [...acc.values()].map(derive);
+}
+
 // Per-player stats for the game in progress, in lane order.
 //
 // Keyed by team and slot, not by name the way `playerStats` is: within one game
@@ -274,7 +329,7 @@ export function lineupStats(matches, game) {
       rows.push({
         team,
         slot,
-        ...(found ?? derive(blank(trimmed))),
+        ...(found ?? blankStats(trimmed)),
         name: trimmed,
         played: Boolean(found),
       });

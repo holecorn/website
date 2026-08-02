@@ -9,8 +9,8 @@
 // recomputes with nothing to un-advance, and a bracket can never disagree with the
 // results behind it. See docs/TOURNAMENT.md for the alternatives this rules out.
 
-import { NO_SIDE, nameKey, sideKeyOf } from './scoring.js';
-import { finalScore, rosterFor } from './stats.js';
+import { NO_SIDE, TEAM_JOIN, nameKey, sideKeyOf } from './scoring.js';
+import { blankStats, finalScore, rosterFor, sideStats } from './stats.js';
 
 // Stamped on every tournament so a later change of shape can be told from this one
 // without guessing, the way RECORD_FORMAT does for a match.
@@ -309,6 +309,120 @@ export function bracketTree(view) {
   });
   const final = view.ties.find((t) => t.level === 1);
   return final ? node(final) : null;
+}
+
+// The second lens on a bracket: not who is through, but how it has gone. Everything
+// below reads the view `bracket()` already built rather than the archive directly, so
+// the numbers and the drawing can only ever be describing the same ties.
+
+// Which archived records are this bracket's ties. Read off the bracket's own ties rather
+// than by filtering on the tournament id, for the reason `lastPlayed` does: these numbers
+// sit beside `X of Y ties`, and a record carrying the id that the bracket could not place
+// would make the two disagree with nothing on screen to say so.
+export function tieMatches(view, matches) {
+  const ids = new Set((view?.ties ?? []).map((t) => t.match).filter(Boolean));
+  return matches.filter((m) => ids.has(m.id));
+}
+
+// Every tie a side appears in, deepest first — which is also the order they were played
+// in, because a side must win its deeper tie before it can play its shallower one. That
+// is the same property the backward walk in docs/TOURNAMENT.md rests on.
+export function routeFor(view, key) {
+  if (!view || !key) return [];
+  return view.ties
+    .filter((t) => t.a?.key === key || t.b?.key === key)
+    .sort((x, y) => y.level - x.level);
+}
+
+// How far an entrant got, as a state and a level rather than a round name. Three states
+// and not two, because **out at the semi-final and still in the semi-final are the same
+// round and opposite answers** — a level alone cannot tell them apart, and the screen
+// needs to say "Semi-final" for one and "In the semi-final" for the other.
+export function reachedBy(view, key) {
+  if (view?.champion?.key === key) return { status: 'won', level: 1 };
+  const route = routeFor(view, key);
+  const lost = route.find((t) => t.winner && t.winner.key !== key);
+  if (lost) return { status: 'out', level: lost.level };
+  // Still in it, so their next tie is the one place in the bracket they hold that has
+  // not been played. There can only be one: they are seated in exactly one tie per
+  // level, and everything below the unplayed one they have already won.
+  const waiting = route.find((t) => !t.match) ?? null;
+  return { status: 'in', level: waiting ? waiting.level : null };
+}
+
+// How far each got, then — at the same round — the champion, then whoever is still alive
+// there, then whoever went out. The status is what separates the champion from the runner
+// up, who are both at level 1: giving `won` a depth of its own was tried and is dead code,
+// because `reachedBy` only ever returns level 1 with it. Verified by mutation.
+const ROUTE_END = { won: 0, in: 1, out: 2 };
+const depthOf = (reached) => reached.level ?? Infinity;
+
+// One row per entrant: how far they got, and what the ties they played say about them.
+//
+// The rows are the **draw's** sides, not the sides the archive happens to hold, so an
+// entrant who has not played yet still has a place in the table and the names read in
+// the order they were drawn. `played` distinguishes that from a genuine zero, the same
+// flag `lineupStats` uses for a first-timer.
+export function entrantStats(view, matches) {
+  if (!view) return [];
+  const rows = new Map(sideStats(tieMatches(view, matches)).map((s) => [s.key, s]));
+  return view.entrants
+    .map((side) => {
+      const found = rows.get(side.key);
+      return {
+        ...(found ?? blankStats(side.names.join(TEAM_JOIN))),
+        key: side.key,
+        names: side.names,
+        played: Boolean(found),
+        reached: reachedBy(view, side.key),
+      };
+    })
+    .sort(
+      (x, y) =>
+        depthOf(x.reached) - depthOf(y.reached) ||
+        ROUTE_END[x.reached.status] - ROUTE_END[y.reached.status] ||
+        y.wins - x.wins ||
+        x.names.join(TEAM_JOIN).localeCompare(y.names.join(TEAM_JOIN)),
+    );
+}
+
+// The widest and the narrowest margin among the ties played.
+//
+// Both read `tie.score`, which `bracket` takes from `finalScore` — so **a result imported
+// without round detail still counts**, and that is the point of having them: a tagged
+// legacy tournament has no rounds anywhere in it, so every rate on the screen is a dash
+// and these two are the only thing the table can say about how the games went.
+//
+// `closest` is null where it would name the same tie as `widest` — one tie played, or
+// every tie won by the same margin. Two headings over one result says the opposite of
+// what either of them means.
+export function tieExtremes(view) {
+  const played = (view?.ties ?? []).filter((t) => t.winner && t.score);
+  if (played.length === 0) return null;
+  const margin = (t) => Math.abs(t.score.a - t.score.b);
+  const widest = played.reduce((best, t) => (margin(t) > margin(best) ? t : best));
+  const closest = played.reduce((best, t) => (margin(t) < margin(best) ? t : best));
+  return {
+    widest: { tie: widest, margin: margin(widest) },
+    closest: closest === widest ? null : { tie: closest, margin: margin(closest) },
+  };
+}
+
+// The ties that have been played, newest first — which is the one thing the drawn
+// bracket structurally cannot show. It is grouped by round, and a knockout is played
+// opportunistically: whoever is present, so a later round routinely goes before an
+// earlier one elsewhere in the draw.
+export function tieHistory(view, matches) {
+  if (!view) return [];
+  const when = new Map(matches.map((m) => [m.id, m.endedAt]));
+  return view.ties
+    .filter((t) => t.match)
+    .map((t) => ({
+      tie: t,
+      round: levelName(t.level, view.shape),
+      endedAt: when.get(t.match) ?? null,
+    }))
+    .sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0));
 }
 
 // Which tournament tie each archived match was, keyed by the match's id.

@@ -11,24 +11,41 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { newMatchId } from './archive.js';
-import { DEFAULT_TARGET, MAX_TARGET, clampTarget, nameKey } from './scoring.js';
+import { DEFAULT_TARGET, MAX_TARGET, TEAM_JOIN, clampTarget, nameKey } from './scoring.js';
+import { hasRounds, summary } from './stats.js';
 import {
   MIN_ENTRANTS,
   bracket,
   bracketTree,
   entrantFaults,
+  entrantStats,
   lastPlayed,
+  levelName,
   newTournament,
   newestFirst,
+  routeFor,
   shuffled,
+  tieExtremes,
+  tieHistory,
+  tieMatches,
 } from './tournament.js';
 import { NAME_FIELD } from './nameField.js';
 import { dateSpan, dropRepeatedYear, sameDay, shortDate } from './dates.js';
+import { minutes, one, pct, plural } from './format.js';
+import Chip, { Chips } from './Chip.jsx';
 import Modal from './Modal.jsx';
 import './Tournament.css';
 
 // The same separator the stats screen's headings use, so a join reads alike throughout.
 const DOT = ' · ';
+
+// The two halves of an open tournament. The bracket is first and is what a row opens on:
+// during a cup that is what you came for, and the numbers matter afterwards — which is
+// exactly when the bracket has stopped changing.
+const TABS = [
+  ['bracket', 'Bracket'],
+  ['stats', 'Stats'],
+];
 
 // Rounds are drawn deepest-first, so the screen reads the way the paper sheet does:
 // the preliminaries at the top, the final at the bottom.
@@ -54,7 +71,7 @@ function sideLabel(side, from, ties, rounds) {
 // tree's connectors stop lining up (see `bracketTree`), and the column is 176px, so a
 // button beside the names would take a third of them. The green border already says which
 // boxes are live; the corner marker and the accessible name say what a tap does.
-function Tie({ tie, ties, rounds, onPlay }) {
+function Tie({ tie, ties, rounds, onRoute, onPlay }) {
   const sides = [
     { side: tie.a, from: tie.fromA, points: tie.score?.a },
     { side: tie.b, from: tie.fromB, points: tie.score?.b },
@@ -64,7 +81,9 @@ function Tie({ tie, ties, rounds, onPlay }) {
   const Box = live ? 'button' : 'div';
   return (
     <Box
-      className={`tie${tie.playable ? ' is-playable' : ''}${played ? ' is-played' : ''}`}
+      className={`tie${tie.playable ? ' is-playable' : ''}${played ? ' is-played' : ''}${
+        onRoute ? ' is-route' : ''
+      }`}
       data-level={tie.level}
       {...(live
         ? {
@@ -109,9 +128,9 @@ function Tie({ tie, ties, rounds, onPlay }) {
 
 // A single entrant who took a bye, drawn as a box of its own in the deepest column —
 // which is what the paper sheet does with a lone name.
-function Seat({ side }) {
+function Seat({ side, onRoute }) {
   return (
-    <div className="tie is-seat">
+    <div className={`tie is-seat${onRoute ? ' is-route' : ''}`}>
       <div className="tie-sides">
         <span className="tie-side">
           <span className="tie-who">{sideNames(side)}</span>
@@ -127,8 +146,10 @@ function Seat({ side }) {
 // exactly between its two children with nothing measured. The connectors are drawn
 // from each child's own centre to the boundary between the pair, which is the point
 // the parent's stub arrives at.
-function Node({ node, ties, rounds, onPlay }) {
-  if (node.seat) return <Seat side={node.seat} />;
+function Node({ node, ties, rounds, route, onPlay }) {
+  // A bye's seat is on the route too — it is where that entrant came into the bracket,
+  // and a lit path that skips it starts in mid-air.
+  if (node.seat) return <Seat side={node.seat} onRoute={node.seat?.key === route?.key} />;
   const kids = node.kids.length > 0;
   return (
     <div className={`node${kids ? ' has-kids' : ''}`}>
@@ -136,17 +157,23 @@ function Node({ node, ties, rounds, onPlay }) {
         <div className="node-kids">
           {node.kids.map((kid, i) => (
             <div className="node-kid" key={kid.tie?.id ?? `seat${i}`}>
-              <Node node={kid} ties={ties} rounds={rounds} onPlay={onPlay} />
+              <Node node={kid} ties={ties} rounds={rounds} route={route} onPlay={onPlay} />
             </div>
           ))}
         </div>
       )}
-      <Tie tie={node.tie} ties={ties} rounds={rounds} onPlay={onPlay} />
+      <Tie
+        tie={node.tie}
+        ties={ties}
+        rounds={rounds}
+        onRoute={Boolean(route?.ids.has(node.tie.id))}
+        onPlay={onPlay}
+      />
     </div>
   );
 }
 
-function Bracket({ view, onPlay }) {
+function Bracket({ view, route, onClearRoute, onPlay }) {
   const tree = useMemo(() => bracketTree(view), [view]);
   const scroller = useRef(null);
   const ticking = useRef(0);
@@ -249,7 +276,22 @@ function Bracket({ view, onPlay }) {
   };
 
   return (
-    <div className="bracket">
+    <div className={`bracket${route ? ' has-route' : ''}`}>
+      {/* A dimmed bracket says *something* is special without saying what — the lesson
+          the shaded nemesis row taught — so whose route is lit is named, and the way to
+          put it back is beside the claim rather than on the tab that set it. */}
+      {route && (
+        <div className="bracket-route">
+          <span className="bracket-route-who">
+            <span className="result-cap">Route</span>
+            {DOT}
+            {route.names}
+          </span>
+          <button type="button" onClick={onClearRoute}>
+            Clear
+          </button>
+        </div>
+      )}
       {/* Only drawn where a column fills the screen. On a wide one every round is
           already visible, so stepping between them is a control with nothing to do. */}
       <div className="bracket-paging">
@@ -287,9 +329,273 @@ function Bracket({ view, onPlay }) {
             </span>
           ))}
         </div>
-        <Node node={tree} ties={view.ties} rounds={view.rounds} onPlay={onPlay} />
+        <Node node={tree} ties={view.ties} rounds={view.rounds} route={route} onPlay={onPlay} />
       </div>
     </div>
+  );
+}
+
+// How far an entrant got, as the table says it. Three states rather than a round name,
+// because a level alone cannot tell "lost the semi-final" from "about to play it" — see
+// `reachedBy`. The champion is named rather than levelled: "Final" for the winner and
+// "Final" for the runner-up would be true of both and useful about neither.
+function reachedLabel(reached, shape) {
+  if (reached.status === 'won') return 'Winner';
+  if (!reached.level) return '—';
+  const round = levelName(reached.level, shape);
+  return reached.status === 'in' ? `In the ${round.toLowerCase()}` : round;
+}
+
+// A played tie read out winner first, which is how a result is spoken. The bracket's own
+// boxes are the other way round — they hold the draw's order, because that is what makes
+// a column of them line up with the tree.
+function tieResult(tie) {
+  const aWon = tie.winner && tie.a && tie.winner.key === tie.a.key;
+  return {
+    winner: sideNames(aWon ? tie.a : tie.b),
+    loser: sideNames(aWon ? tie.b : tie.a),
+    // Null for a result imported without a score, the way `finalScore` is.
+    score: tie.score && (aWon ? tie.score : { a: tie.score.b, b: tie.score.a }),
+  };
+}
+
+// One entrant's way through the bracket, from their own point of view. This is the
+// "champion's route" generalised: the champion is simply whoever is selected when the
+// answer runs to the end, so there is no special case for them.
+function Route({ view, subject, route }) {
+  return (
+    <ol className="route">
+      {route.map((tie) => {
+        const mine = tie.a?.key === subject.key ? 'a' : 'b';
+        const other = mine === 'a' ? 'b' : 'a';
+        const opponent = sideLabel(
+          tie[other],
+          mine === 'a' ? tie.fromB : tie.fromA,
+          view.ties,
+          view.rounds,
+        );
+        const score = tie.score && `${tie.score[mine]}–${tie.score[other]}`;
+        const won = tie.winner && tie.winner.key === subject.key;
+        return (
+          <li key={tie.id} className={tie.match ? undefined : 'is-waiting'}>
+            <span className="route-round">{levelName(tie.level, view.shape)}</span>
+            <span className="route-what">
+              {!tie.match && `to play ${opponent}`}
+              {tie.match && `${won ? 'beat' : 'lost to'} ${opponent}`}
+              {score && ` ${score}`}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// The other half of an open tournament: how it has gone, rather than who is through.
+//
+// Everything here is derived in `tournament.js` from the view the bracket tab is drawing,
+// so the two tabs cannot come to describe different ties — the same reason `lastPlayed`
+// counts the bracket's ties rather than every record carrying the id.
+function TournamentStats({ view, matches, selected, route, onSelect }) {
+  const played = useMemo(() => tieMatches(view, matches), [view, matches]);
+  const totalsFor = useMemo(() => summary(played), [played]);
+  const rows = useMemo(() => entrantStats(view, matches), [view, matches]);
+  const extremes = useMemo(() => tieExtremes(view), [view]);
+  const history = useMemo(() => tieHistory(view, matches), [view, matches]);
+  const subject = rows.find((r) => r.key === selected) ?? null;
+
+  // **Whether any tie has round detail, not whether any has been played.** A tournament
+  // reached by tagging records that were already in the archive is made entirely of
+  // imported results, which carry a score and nothing behind it — so every rate would be
+  // a dash, and a table of dashes reads as a fault rather than as a limitation. The same
+  // trap the career table's `p.rounds > 0` guard exists for, one level up.
+  const detail = played.some(hasRounds);
+
+  if (view.played === 0) {
+    return (
+      <p className="tournament-none">
+        Nothing has been played yet. Play a tie from the bracket and the numbers start here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="tournament-stats">
+      <Chips>
+        <Chip
+          value={view.played}
+          label={`of ${view.total} ${plural(view.total, 'tie', 'ties')}`}
+        />
+        {detail && (
+          <>
+            <Chip label={plural(totalsFor.rounds, 'round', 'rounds')} value={totalsFor.rounds} />
+            <Chip label="avg rounds" value={one(totalsFor.avgRounds)} />
+            <Chip label="avg length" value={minutes(totalsFor.avgDurationMs)} />
+            <Chip label={plural(totalsFor.washes, 'wash', 'washes')} value={totalsFor.washes} />
+            <Chip
+              label={plural(totalsFor.fourBaggers, 'four bagger', 'four baggers')}
+              value={totalsFor.fourBaggers}
+            />
+          </>
+        )}
+        {/* Kept whether or not there is round detail: a skunk is read off the final score,
+            so it is one of the few things an imported result can still say. */}
+        <Chip label={plural(totalsFor.skunks, 'skunk', 'skunks')} value={totalsFor.skunks} />
+      </Chips>
+
+      <section className="tournament-section">
+        <h3>Entrants</h3>
+        <div className="stats-scroll">
+          <table className="stats-table">
+            <thead>
+              <tr>
+                <th scope="col">Entrant</th>
+                <th scope="col">Reached</th>
+                <th scope="col" title="Ties played">
+                  P
+                </th>
+                <th scope="col" title="Won–lost">
+                  W–L
+                </th>
+                {detail && (
+                  <>
+                    <th scope="col" title="Rounds thrown">
+                      Rds
+                    </th>
+                    <th scope="col" title="Raw bag points per round">
+                      PPR
+                    </th>
+                    <th scope="col" title="Bags in the hole">
+                      Hole
+                    </th>
+                    <th scope="col" title="Four baggers">
+                      4B
+                    </th>
+                    <th scope="col" title="Best round">
+                      Best
+                    </th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.key} className={r.key === selected ? 'is-selected' : undefined}>
+                  <th scope="row">
+                    {/* The name is the select target for the reason it is on the career
+                        table: it is the only cell always on screen, because the table
+                        scrolls sideways and this column is sticky. */}
+                    <button
+                      className="player-select"
+                      aria-pressed={r.key === selected}
+                      onClick={() => onSelect(r.key === selected ? null : r.key)}
+                    >
+                      {r.names.join(TEAM_JOIN)}
+                    </button>
+                  </th>
+                  <td className="entrant-reached">{reachedLabel(r.reached, view.shape)}</td>
+                  <td>{r.matches}</td>
+                  <td>
+                    {r.wins}–{r.losses}
+                  </td>
+                  {detail && (
+                    <>
+                      <td>{r.rounds}</td>
+                      {/* A rate over no rounds is undefined rather than zero, which is
+                          reachable here even where the tournament has detail: an entrant
+                          knocked out in a tie that was imported has played and thrown
+                          nothing the archive can see. */}
+                      <td>{r.rounds > 0 ? one(r.ppr) : '—'}</td>
+                      <td>{r.rounds > 0 ? pct(r.holePct) : '—'}</td>
+                      <td>{r.fourBaggers}</td>
+                      <td>{r.bestRound}</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!detail && (
+          <p className="tournament-note">
+            No round-by-round detail was recorded for these ties, so there are no rates to
+            show — only the results.
+          </p>
+        )}
+      </section>
+
+      {subject && (
+        <section className="tournament-section">
+          <h3>
+            {subject.names.join(TEAM_JOIN)}
+            <span className="route-sub">
+              {DOT}
+              {reachedLabel(subject.reached, view.shape).toLowerCase()}
+            </span>
+          </h3>
+          <Route view={view} subject={subject} route={route} />
+          <p className="tournament-note">Their route is lit on the bracket.</p>
+        </section>
+      )}
+
+      {extremes && (
+        <section className="tournament-section">
+          <h3>Ties worth remembering</h3>
+          <ul className="tie-extremes">
+            <Extreme label="Biggest win" view={view} found={extremes.widest} />
+            {/* Absent rather than repeated where it would name the same tie — with one
+                tie played, or with every tie won by the same margin, two headings over
+                one result says the opposite of what either of them means. */}
+            {extremes.closest && (
+              <Extreme label="Closest" view={view} found={extremes.closest} />
+            )}
+          </ul>
+        </section>
+      )}
+
+      <section className="tournament-section">
+        {/* The order they were played in, which the drawn bracket structurally cannot
+            show: it is grouped by round, and ties are played according to who is present,
+            so a later round routinely goes before an earlier one elsewhere in the draw. */}
+        <h3>As it was played</h3>
+        <ul className="tie-log">
+          {history.map(({ tie, round, endedAt }) => {
+            const result = tieResult(tie);
+            return (
+              <li key={tie.id}>
+                <span className="tie-log-who">
+                  {result.winner}
+                  {result.score && <b> {result.score.a}–{result.score.b} </b>}
+                  {!result.score && ' beat '}
+                  {result.loser}
+                </span>
+                <span className="tie-log-when">
+                  {endedAt ? shortDate(endedAt) : 'undated'}
+                  {DOT}
+                  {round}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+function Extreme({ label, view, found }) {
+  const result = tieResult(found.tie);
+  return (
+    <li>
+      <span className="result-cap">{label}</span>
+      <span className="extreme-what">
+        {result.winner} {result.score.a}–{result.score.b} {result.loser}
+        <span className="extreme-round">
+          {DOT}
+          {levelName(found.tie.level, view.shape)}
+        </span>
+      </span>
+    </li>
   );
 }
 
@@ -564,6 +870,30 @@ function whenLine(tournament, view, matches) {
 // unrolled on arrival next to five others.
 function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie, onDrop }) {
   const [confirming, setConfirming] = useState(false);
+  const [tab, setTab] = useState(TABS[0][0]);
+  // Which entrant's route is being traced, as a side key — the `selected` idiom the stats
+  // screen uses for a player, and transient in the same way: a scope you set while
+  // looking, not a setting. It lives here rather than in either tab because both read it
+  // — the table selects and the bracket lights.
+  const [selected, setSelected] = useState(null);
+  // Back to the bracket on the way out, so a row always opens on the same thing. Opening
+  // a different row closes this one, so this covers that too.
+  useEffect(() => {
+    if (!isOpen) {
+      setTab(TABS[0][0]);
+      setSelected(null);
+    }
+  }, [isOpen]);
+  const routeTies = useMemo(() => routeFor(view, selected), [view, selected]);
+  const route = useMemo(
+    () =>
+      selected && {
+        key: selected,
+        ids: new Set(routeTies.map((t) => t.id)),
+        names: view.entrants.find((e) => e.key === selected)?.names.join(TEAM_JOIN) ?? '',
+      },
+    [selected, routeTies, view],
+  );
   const done = view.done;
   const verb = done ? 'Delete' : 'Abandon';
   const when = whenLine(tournament, view, matches);
@@ -620,12 +950,67 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
       </button>
       {isOpen && (
         <>
-          {/* A finished bracket gets no `onPlay`: every tie is played, so there is nothing
-              to offer, and `Tie` draws a plain box without a handler. There used to be a
-              "Ready to play" list above this, duplicating boxes the bracket already draws —
-              it cost a screenful on a big field and showed a tie with none of the context
-              that makes it worth looking at. */}
-          <Bracket view={view} onPlay={done ? undefined : (x) => onPlayTie(tournament, x)} />
+          {/* Real tabs rather than two buttons: the panels are alternative views of one
+              thing, so a roving tabindex and the arrow keys are what a keyboard expects.
+              The lit styling is `.mode-toggle`'s, which is the app's segmented control. */}
+          <div className="tournament-tabs" role="tablist" aria-label={`${tournament.name} view`}>
+            {TABS.map(([id, label], i) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`${tournament.id}-tab-${id}`}
+                aria-selected={tab === id}
+                aria-controls={`${tournament.id}-panel-${id}`}
+                tabIndex={tab === id ? 0 : -1}
+                className={tab === id ? 'is-on' : undefined}
+                onClick={() => setTab(id)}
+                onKeyDown={(e) => {
+                  const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                  if (!step) return;
+                  e.preventDefault();
+                  const to = (i + step + TABS.length) % TABS.length;
+                  setTab(TABS[to][0]);
+                  e.currentTarget.parentElement.children[to]?.focus();
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Only the chosen panel is drawn, rather than both with one hidden. Hiding
+              would keep the bracket's scroll position, but a `display: none` scroller
+              does not reliably keep it anyway — and coming back to the round with a live
+              tie in it is where the bracket opens in the first place. */}
+          <div
+            role="tabpanel"
+            id={`${tournament.id}-panel-${tab}`}
+            aria-labelledby={`${tournament.id}-tab-${tab}`}
+            className="tournament-panel"
+          >
+            {tab === 'bracket' ? (
+              /* A finished bracket gets no `onPlay`: every tie is played, so there is
+                 nothing to offer, and `Tie` draws a plain box without a handler. There
+                 used to be a "Ready to play" list above this, duplicating boxes the
+                 bracket already draws — it cost a screenful on a big field and showed a
+                 tie with none of the context that makes it worth looking at. */
+              <Bracket
+                view={view}
+                route={route}
+                onClearRoute={() => setSelected(null)}
+                onPlay={done ? undefined : (x) => onPlayTie(tournament, x)}
+              />
+            ) : (
+              <TournamentStats
+                view={view}
+                matches={matches}
+                selected={selected}
+                route={routeTies}
+                onSelect={setSelected}
+              />
+            )}
+          </div>
           <button
             className="tournament-drop"
             onClick={() => setConfirming(true)}

@@ -42,7 +42,13 @@ project dependency. It starts and stops its own preview server.
   localStorage wrapper the way `archive.js` splits it. **Stores the draw and derives
   the rest** — see **Tournaments**. Tested in `src/tournament.test.js`.
 - `src/Tournament.jsx` / `src/Tournament.css` — the tournament screen: takes the
-  draw, draws the bracket, hands a tie to the scoring screen. Draws only.
+  draw, draws the bracket, shows a tournament's own stats, and hands a tie to the
+  scoring screen. Draws only.
+- `src/Chip.jsx` / `src/Chip.css` — a summary figure with its label, and the grid a
+  row of them sits in. Shared by the career screen's totals and a tournament's, the
+  way `FormPips` is shared; it was private to `Stats.jsx` until the second caller.
+- `src/format.js` — how a number is written on screen (`pct`, `one`, `plural`,
+  `minutes`), shared by the two stats screens. Pure, the `dates.js` precedent.
 - `src/Modal.jsx` — a dialog that opens by being mounted, shared by the stats and
   tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
 - `src/nameField.js` — `NAME_FIELD`, the props every person-name field needs to stop
@@ -1049,6 +1055,45 @@ the alternatives that were rejected; this section holds what breaks when you cha
 - **`.tournament-screen` must be excluded from the wide tier's grid in `App.css`**, the same
   trap `.stats-screen` already carries. Without it the screen took the play screen's grid: a
   bracket drawing in 408px with 340px reserved for a rail that never renders.
+- **A tournament's own stats are the second tab of an open row, and everything on it is
+  derived from the view the bracket tab is drawing.** `tieMatches`, `entrantStats`,
+  `routeFor`, `reachedBy`, `tieExtremes` and `tieHistory` all take that view rather than the
+  archive, so the two tabs cannot come to describe different ties — the rule `lastPlayed`
+  already follows for the date beside `X of Y ties`.
+  - **`sideStats` in `stats.js` is the fold, and it is a second *keying* rather than a second
+    accumulation.** `foldRound` and `derive` are `playerStats`'s, so an entrant's PPR and a
+    player's PPR cannot drift. Both keyings are needed: a career is a person, an entrant is
+    whoever entered together, and folded by name a doubles pair becomes two rows with the
+    same record and half the rounds each.
+  - **`reachedBy` returns a status *and* a level, and three states rather than two.** Out at
+    the semi-final and still in it are the same round and opposite answers, so a level alone
+    cannot label the column — which is why the screen says `Semi-final` for one and `In the
+    semi-final` for the other. The champion is named rather than levelled, because `Final`
+    would be true of them and of the runner-up.
+    - The sort's `ROUTE_END` is what separates those two, not `depthOf` — giving `won` a depth
+      of its own was tried and is dead code, since `reachedBy` only returns level 1 with it.
+      **Verified by mutation**, which is the only way that would have shown.
+  - **The rate columns are dropped when *no* tie in the tournament has round detail**, not
+    dashed per row. Decision 11 in `docs/TOURNAMENT.md` reaches past tournaments by tagging
+    records that were already in the archive, and those are imported results — so the whole
+    table would be dashes, which reads as a fault rather than as a limitation. `tieExtremes`
+    exists for the same case: margins come off `finalScore`, so they are the only thing such
+    a cup can say about how the games went. Both directions are checked, because a gate stuck
+    either way passes half of it.
+  - **The route selection lives on the row, not on either tab**, because the table sets it and
+    the bracket reads it. That crossing is the one thing here no unit test can see — holding
+    it inside `TournamentStats` lights nothing and passes all 412 of them. `verify-tournament.mjs`
+    asserts the lit boxes equal the table's own count of that entrant's ties, so the dimming
+    cannot describe a different route from the numbers.
+  - **A dimmed bracket is captioned with whose route it is**, the lesson the shaded nemesis row
+    taught. The caption sits above `.bracket-paging` rather than in it, because that row is
+    hidden on a wide screen and the dimming is not.
+  - **The Stats tab's chip row is capped where the career screen's is not.** It can be *two*
+    chips long — a cup with no round detail has only its tie count and its skunks — and two
+    `1fr` tracks made each of them 483px on a tablet. Seven chips are unaffected, so this is
+    a local cap rather than a change to `Chip.css`.
+  - **Selection resets when a row shuts**, so a row always opens on the bracket with nothing
+    lit: a route is a scope you set while looking, the way the stats screen's `selected` is.
 - **Both lists are sorted `newestFirst`, and unsorted they were showing import history.**
   The screen used to render the array as stored, which is insertion order: locally drawn
   ones oldest first, and `mergeTournaments` appending imported ones after every local one
@@ -2100,6 +2145,14 @@ nothing played with every opening tie live again. `tournament.js` is pure and un
 tested, so everything here is about the wiring — that a tie loads locked and tagged,
 that `New game` clears the tie-ness, that an imported bracket appears without a
 reload. Each was verified by mutation.
+
+The Stats tab's block is there for the same kind of gap. The derivations behind it are
+pure and unit tested, so it asserts only what crosses a boundary: that selecting an
+entrant on one tab lights their route on the other, that the lit boxes agree with the
+table's own count of that entrant's ties, and that a cup with no round detail loses its
+rate columns while one played through the app keeps them. Verified by mutation — cutting
+the route off from the bracket, dropping the reset when a row shuts, and pinning the
+detail gate on each fail only their own assertions.
 
 **That file taught the same two lessons repeatedly, and they are worth knowing before
 adding to it:**

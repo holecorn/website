@@ -1645,6 +1645,192 @@ console.log('\nan ordinary game played alongside a tournament is not a tie');
   await page.close();
 }
 
+console.log('\nthe stats are a tab beside the bracket, and a route crosses between them');
+{
+  // `entrantStats`, `routeFor` and the rest are pure and unit tested, so nothing here
+  // repeats them. What only a browser can see is the **selection crossing the two tabs**:
+  // it is held by the row, set by the table and read by the bracket, and each of those
+  // three is individually correct however they are wired together. Holding it inside the
+  // stats tab instead passes every unit test and lights nothing.
+  //
+  // Four entrants rather than eleven, so playing the cup out is three ties: a power of two,
+  // so there are no bye seats and every lit box is a tie.
+  const page = await open(['Rho', 'Tau', 'Sigma', 'Phi']);
+  const tab = (name) => page.getByRole('tab', { name });
+  const lit = () => page.locator('.tie.is-route').count();
+
+  check('a row opens on the bracket', await settles(() => page.waitForSelector('.bracket-scroll')));
+  check(
+    'with the Bracket tab selected',
+    (await tab('Bracket').getAttribute('aria-selected')) === 'true',
+  );
+  await tab('Stats').click();
+  check(
+    'and nothing to count until a tie has been played',
+    await settles(() => page.waitForSelector('.tournament-none', { timeout: 3000 })),
+  );
+
+  await tab('Bracket').click();
+  for (let i = 0; i < 3; i += 1) {
+    await playFirst(page);
+    await winIt(page);
+    await page.getByRole('button', { name: 'New game' }).click();
+    await backToBracket(page);
+  }
+
+  await tab('Stats').click();
+  check('the stats tab draws once there is something in it', await settles(() => page.waitForSelector('.tournament-stats')));
+  // The two tabs must be describing the same ties. The row's own header names the champion
+  // from `bracket()`; the table's first row names them from `entrantStats`.
+  const champion = (await page.locator('.champion-who').textContent()).replace(/^Winner\s*·\s*/, '');
+  const top = await page.locator('.stats-table tbody tr').first().evaluate((tr) => ({
+    name: tr.querySelector('th button').textContent.trim(),
+    reached: tr.querySelector('.entrant-reached').textContent.trim(),
+    played: Number(tr.querySelectorAll('td')[1].textContent.trim()),
+  }));
+  check(
+    'and its top row is the champion the row header names',
+    top.name === champion.trim() && top.reached === 'Winner',
+    `${top.name} / ${top.reached} against ${champion.trim()}`,
+  );
+  // A cup played through the app has round detail, so the rates are there. The other way
+  // round is the block below — both, because either one alone passes with the gate stuck.
+  check(
+    'a cup played here shows its rates',
+    (await page.locator('.stats-table thead th', { hasText: 'PPR' }).count()) === 1,
+  );
+
+  await page.locator('.stats-table tbody tr').first().locator('th button').click();
+  await tab('Bracket').click();
+  check(
+    'selecting an entrant lights their route on the other tab',
+    await settles(() => page.waitForSelector('.bracket-route', { timeout: 3000 })),
+  );
+  const caption = (await page.locator('.bracket-route-who').textContent()) ?? '';
+  check('the caption names whose route it is', caption.includes(champion.trim()), caption);
+  // The lit boxes and the table's own count of their ties have to agree, or the dimming is
+  // describing a different route from the one the numbers do.
+  check(
+    'and lights exactly the ties the table credits them with',
+    (await lit()) === top.played && top.played > 0,
+    `${await lit()} lit against ${top.played} played`,
+  );
+  const dimmed = await page.evaluate(() =>
+    [...document.querySelectorAll('.tie')]
+      .filter((e) => !e.classList.contains('is-route'))
+      .map((e) => Number(getComputedStyle(e).opacity)),
+  );
+  check(
+    'everything off the route is faded, and there is something off it',
+    dimmed.length > 0 && dimmed.every((o) => o < 1),
+    `${dimmed.length} off-route at ${dimmed.join(', ')}`,
+  );
+
+  await page.getByRole('button', { name: 'Clear' }).click();
+  check('Clear puts the bracket back', (await lit()) === 0, `${await lit()} still lit`);
+
+  // Shut and reopened, a row is back on the bracket with nothing selected — a route is a
+  // scope you set while looking, not a setting that outlives the looking.
+  await page.locator('.stats-table tbody tr').first().locator('th button').count();
+  await tab('Stats').click();
+  await page.locator('.stats-table tbody tr').first().locator('th button').click();
+  await page.locator('.tournament-row').first().click();
+  await page.locator('.tournament-row').first().click();
+  check(
+    'reopening a row is back on the bracket with no route',
+    (await tab('Bracket').getAttribute('aria-selected')) === 'true' && (await lit()) === 0,
+    `${await lit()} lit`,
+  );
+  await page.close();
+}
+
+console.log('\na tournament with no round detail shows its results and no rates');
+{
+  // The case decision 11 of docs/TOURNAMENT.md produces: a past tournament reached by
+  // tagging records that were already in the archive, imported from a written-down score.
+  // Every rate is unknowable, and a column of dashes reads as a fault rather than as a
+  // limitation — so the columns go and the screen says why. Nothing hermetic can see this:
+  // `hasRounds` is unit tested and `entrantStats` returns the same rows either way.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.waitForSelector('.setup');
+  const sides = [['Rho'], ['Tau'], ['Sigma'], ['Phi']];
+  const record = (id, a, b, final, endedAt) => ({
+    format: 1,
+    id,
+    tournament: 'old-cup',
+    mode: 'singles',
+    players: { a: [a, ''], b: [b, ''] },
+    colors: { a: '#2f80ed', b: '#eb5757' },
+    target: 21,
+    winner: final.a > final.b ? 'a' : 'b',
+    final,
+    rounds: [],
+    endedAt,
+  });
+  await page.getByRole('button', { name: 'Stats' }).click();
+  await page.setInputFiles('input[type=file]', {
+    name: 'old.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(
+      JSON.stringify({
+        format: 1,
+        tournaments: [
+          {
+            format: 1,
+            id: 'old-cup',
+            name: 'Hole Corn IV',
+            createdAt: 1,
+            mode: 'singles',
+            target: 21,
+            entrants: sides,
+          },
+        ],
+        matches: [
+          record('o1', 'Rho', 'Tau', { a: 21, b: 4 }, 1000),
+          record('o2', 'Sigma', 'Phi', { a: 21, b: 18 }, 2000),
+          record('o3', 'Rho', 'Sigma', { a: 21, b: 12 }, 3000),
+        ],
+      }),
+    ),
+  });
+  await page.waitForTimeout(600);
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  await page.locator('.setup-links button').first().click();
+  await page.waitForSelector('.tournament-list');
+  await page.locator('.tournament-row').first().click();
+  await page.getByRole('tab', { name: 'Stats' }).click();
+  check('its stats draw', await settles(() => page.waitForSelector('.tournament-stats')));
+  // Compared upper case: the headings are `text-transform`ed, and `allInnerTexts` returns
+  // what is drawn rather than what the JSX says.
+  const heads = await page.locator('.stats-table thead th').allInnerTexts();
+  check(
+    'the rate columns are gone, and the result ones are not',
+    !heads.includes('PPR') && heads.includes('W–L') && heads.includes('REACHED'),
+    heads.join(', '),
+  );
+  check(
+    'and it says why rather than showing a column of dashes',
+    (await page.locator('.tournament-note').count()) === 1,
+  );
+  // Read off the scores, which is the one thing these records do carry, so the pair of them
+  // is what the tab has to say about how the games went.
+  const extremes = await page.locator('.tie-extremes li').allInnerTexts();
+  check(
+    'both ends of the spread are named from the scores alone',
+    extremes.length === 2 &&
+      extremes[0].includes('21–4') &&
+      extremes[1].includes('21–18'),
+    extremes.join(' | '),
+  );
+  await page.close();
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : '\nall tournament checks passed');
 process.exit(failures ? 1 : 0);
