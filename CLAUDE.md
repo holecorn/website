@@ -783,6 +783,14 @@ project dependency. It starts and stops its own preview server.
   - **A name on both sides is refused by the script**, which is the setup screen's
     rule rather than the archive editor's — the source is a file that can be
     corrected, so it costs a keystroke. See **Nobody can play themselves**.
+  - **A name containing `&` or a comma cannot be transcribed, and this is the one
+    place left where such a name is misread.** Partners are separated by `[&,]` with
+    optional spaces, which is looser than the app's `" & "` — so `Ben&Jerry` splits
+    where `sideLabel` would have kept it whole. Deliberately not tightened: that is
+    the file format, and it mostly fails loudly, because a side must hold one or two
+    names and both sides must hold the same count (`Neil v Ben&Jerry` is refused as
+    "1 against 2"). Only a symmetric line slips through — `Alpha&Beta v Gamma, Delta`
+    imports as a doubles match of four people. Correct the file.
   - **A draw is refused too, and a null winner is not the tolerant option.**
     `playerStats` credits a loss to whichever side isn't the winner, so a
     winnerless record puts a loss and an `L` against *both* names, while
@@ -1366,8 +1374,37 @@ the alternatives that were rejected; this section holds what breaks when you cha
   present in the string. Both the app and the display call it, which is what
   stops them disagreeing — **don't add a `mode` field to the payload for this**,
   it costs bytes the worst case can't spare and changes a contract the firmware
-  tests pin. The known cost is that a singles player who puts " & " in their own
-  name gets the plural.
+  tests pin.
+  - **What makes reading the string exact rather than a guess is that `sideLabel`
+    keeps the join out of the names it joins**, collapsing the spaces around an
+    ampersand inside a name so "Ben & Jerry" is written `Ben&Jerry`. Without it a
+    singles player called that is announced as a pair *and* — the half nobody had
+    noticed — drawn on the panel as `BEN/JERRY`, because `splitPair` in `render.h`
+    divides the label to shorten each half and to rule the partner who is up. So the
+    underline covered half their own name and **swapped halves every round**, which
+    reads as a fault rather than as a quirk. A doubles pair with such a name was
+    fooled too, and differently: `winVerb` matches *any* occurrence and `splitPair`
+    the *first*, so `"A & B" + "C"` split into `A` / `B & C`.
+    - **It is done when a label is built, never when a name is typed.** `players`
+      and the archive keep the real spelling, so the lanes, the court, the career
+      table and the rename dialog all still say "Ben & Jerry"; only a joined label
+      collapses it. Same reason `casual` leaves `players` holding what was typed.
+    - **Any spacing containing the join has to go, not just the exact form.**
+      `"Ben  &  Jerry"` contains `" & "` and fooled both ends; a bare `Ben&Jerry`
+      never did, and is left alone — the rule is about the join, not the character.
+    - **`sideLabel` is exported because four callers join names** — `teamLabel`, the
+      career fold in `stats.js`, `entrantStats` and the tournament screen — and two
+      spellings of it would hold the invariant on some screens and not others. Note
+      `teamLabel` passes **both** doubles slots whatever they hold, blank included, so
+      a blank partner still leaves the join for `labelPart` to find an empty half in;
+      only the tournament filters blanks. `Tournament.jsx`'s own `seatLabel` was
+      called `sideLabel` until this collided with it — it labels a bracket *seat*,
+      which holds a plan (`winner of a quarter-final`) until it holds a side.
+    - **The firmware needs no change and could not carry the fix anyway**: it only
+      receives the label. The guarantee is the app's, which is why
+      `scoreboard.test.js` pins it at the payload — that is the contract boundary.
+      The residue is a message *retained* from before this change, which a board can
+      still be handed and will still split; one publish replaces it.
 - **The MQTT chunk is excluded from the PWA precache** (`globIgnores` in
   `vite.config.js`) — it's useless without a network, and precaching it cost
   every install ~100kB gzipped.

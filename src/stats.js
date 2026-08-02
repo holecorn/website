@@ -11,11 +11,11 @@
 import {
   BAGS_PER_SIDE,
   NO_SIDE,
-  TEAM_JOIN,
   nameKey,
   playerLabel,
   rawPoints,
   sideKeyOf,
+  sideLabel,
   tierCounts,
   totals,
 } from './scoring.js';
@@ -261,12 +261,12 @@ export function sideStats(matches) {
       if (key === NO_SIDE) continue;
       let p = acc.get(key);
       if (!p) {
-        p = { ...blank(names.join(TEAM_JOIN)), key, names };
+        p = { ...blank(sideLabel(names)), key, names };
         acc.set(key, p);
       }
       // Settle on the most recent spelling and order, the way `playerStats` does.
       p.names = names;
-      p.name = names.join(TEAM_JOIN);
+      p.name = sideLabel(names);
       if (!credited.has(key)) {
         credited.add(key);
         p.matches += 1;

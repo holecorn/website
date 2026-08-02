@@ -25,9 +25,10 @@
 //   * ~70 players, so the career table is long and the rivals list has depth.
 //   * Names at the app's 16-character cap, two-character names, names sharing initials,
 //     one accented (non-ASCII is what pushes the scoreboard payload to its widest), and
-//     one containing " & " — the documented case where `winVerb` reads a singles player as
-//     a pair. Deliberately no non-Latin script: the panel's font cannot draw it at all, so
-//     it exercises nothing the accent does not and only makes the board look broken.
+//     one containing " & " — the name that would read as a pair if a label were built by
+//     joining names raw. Deliberately no non-Latin script: the panel's font cannot draw it
+//     at all, so it exercises nothing the accent does not and only makes the board look
+//     broken.
 //   * Targets of 12 and 30, so there are both very short games and very long ones.
 //   * A wide skill spread — the opposite of the sample's deliberately narrow one — so
 //     there are plenty of skunks and blowouts for the summary chips and streaks.
@@ -100,8 +101,9 @@ const ROSTER = [
   // capped at 16 UTF-16 units, so an accent costs two of the board's bytes for one
   // character and pushes the packet towards its widest.
   'José',
-  // The documented quirk: `winVerb` keys off " & " being in the label, so this singles
-  // player is announced as though they were a pair.
+  // A name that looks like the join. The archive keeps it as typed; `sideLabel` is what
+  // stops a label built from it reading as two people, so this is the row that shows a
+  // singles player announced and drawn as one.
   'Alpha & Beta',
   // Compounds, to reach a field of 64 without inventing people.
   ...LETTERS.flatMap((a, i) =>

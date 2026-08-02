@@ -81,6 +81,16 @@ describe('scoreboardPayload', () => {
     });
   });
 
+  // The label is the whole contract here: it carries no mode, so `winVerb` on both
+  // ends and `splitPair` in render.h all decide whether this is one person or two by
+  // looking for " & " in it. A singles name carrying the join would be announced as
+  // a pair and drawn on the panel as "Ben/Jerry", ruled a half at a time.
+  it('publishes a singles name that cannot be read as a pair', () => {
+    const game = { ...newGame(21), mode: 'singles', players: { a: ['Ben & Jerry', ''], b: ['Iota', ''] } };
+
+    expect(scoreboardPayload(game)).toMatchObject({ teamA: 'Ben&Jerry', teamB: 'Iota' });
+  });
+
   // Absent, not null: both consumers already read a missing key as "nobody has
   // won", and the payload sits on a measured byte budget.
   it('leaves the winner out while the game is live', () => {

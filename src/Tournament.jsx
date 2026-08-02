@@ -11,7 +11,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { newMatchId } from './archive.js';
-import { DEFAULT_TARGET, MAX_TARGET, TEAM_JOIN, clampTarget, nameKey } from './scoring.js';
+import { DEFAULT_TARGET, MAX_TARGET, clampTarget, nameKey, sideLabel } from './scoring.js';
 import { hasRounds, summary } from './stats.js';
 import {
   MIN_ENTRANTS,
@@ -49,15 +49,16 @@ const TABS = [
 
 // Rounds are drawn deepest-first, so the screen reads the way the paper sheet does:
 // the preliminaries at the top, the final at the bottom.
-const sideNames = (side) => side.names.filter(Boolean).join(' & ');
+const sideNames = (side) => sideLabel(side.names.filter(Boolean));
 
-// Waiting on a tie rather than empty. Naming what it is waiting for is most of what a
-// bracket is for — "winner of Rho v Tau" is a plan, "—" is not.
+// What one seat in the bracket says, which is a side's names once it has one and a plan
+// until then. Naming what it is waiting for is most of what a bracket is for — "winner
+// of Rho v Tau" is a plan, "—" is not.
 //
 // Two levels up, the feeder's own sides are unknown too, and recursing there reads as
 // "winner of winner of ... v winner of ..." — so it falls back to the feeder's round.
 // "winner of a quarter-final" is true and readable where "winner of ? v ?" is neither.
-function sideLabel(side, from, ties, rounds) {
+function seatLabel(side, from, ties, rounds) {
   if (side) return sideNames(side);
   const feeder = ties.find((t) => t.id === from);
   if (!feeder) return '—';
@@ -91,7 +92,7 @@ function Tie({ tie, ties, rounds, onRoute, onPlay }) {
             onClick: () => onPlay(tie),
             // The visible word is only a glyph, so the name has to carry who it is for —
             // a bracket of identical markers says nothing on its own.
-            'aria-label': `Play ${sideLabel(tie.a, tie.fromA, ties, rounds)} against ${sideLabel(
+            'aria-label': `Play ${seatLabel(tie.a, tie.fromA, ties, rounds)} against ${seatLabel(
               tie.b,
               tie.fromB,
               ties,
@@ -110,7 +111,7 @@ function Tie({ tie, ties, rounds, onRoute, onPlay }) {
               side ? '' : ' is-waiting'
             }`}
           >
-            <span className="tie-who">{sideLabel(side, from, ties, rounds)}</span>
+            <span className="tie-who">{seatLabel(side, from, ties, rounds)}</span>
             {/* Only where there is one. An imported result with no score recorded has
                 no number to show, and `finalScore` is null rather than 0–0 for it. */}
             {Number.isFinite(points) && <span className="tie-points">{points}</span>}
@@ -368,7 +369,7 @@ function Route({ view, subject, route }) {
       {route.map((tie) => {
         const mine = tie.a?.key === subject.key ? 'a' : 'b';
         const other = mine === 'a' ? 'b' : 'a';
-        const opponent = sideLabel(
+        const opponent = seatLabel(
           tie[other],
           mine === 'a' ? tie.fromB : tie.fromA,
           view.ties,
@@ -490,7 +491,7 @@ function TournamentStats({ view, matches, selected, route, onSelect }) {
                       aria-pressed={r.key === selected}
                       onClick={() => onSelect(r.key === selected ? null : r.key)}
                     >
-                      {r.names.join(TEAM_JOIN)}
+                      {sideLabel(r.names)}
                     </button>
                   </th>
                   <td className="entrant-reached">{reachedLabel(r.reached, view.shape)}</td>
@@ -527,7 +528,7 @@ function TournamentStats({ view, matches, selected, route, onSelect }) {
       {subject && (
         <section className="tournament-section">
           <h3>
-            {subject.names.join(TEAM_JOIN)}
+            {sideLabel(subject.names)}
             <span className="route-sub">
               {DOT}
               {reachedLabel(subject.reached, view.shape).toLowerCase()}
@@ -890,7 +891,7 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
       selected && {
         key: selected,
         ids: new Set(routeTies.map((t) => t.id)),
-        names: view.entrants.find((e) => e.key === selected)?.names.join(TEAM_JOIN) ?? '',
+        names: sideLabel(view.entrants.find((e) => e.key === selected)?.names ?? []),
       },
     [selected, routeTies, view],
   );

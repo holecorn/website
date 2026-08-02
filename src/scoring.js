@@ -184,6 +184,18 @@ export function lineupFaults(game) {
     .map(({ team, slot, name, key }) => ({ team, slot, name, fault: key ? 'twice' : 'blank' }));
 }
 
+// `winVerb` and the panel's `splitPair` both tell a pair from one person by looking
+// for TEAM_JOIN in the label, so nothing inside a name may look like the join and
+// "Ben & Jerry" is written "Ben&Jerry". Labels only: `players` and the archive keep
+// the real spelling.
+const withoutJoin = (name) => String(name ?? '').replace(/\s*&\s*/g, '&');
+
+// How a side is written as one label, in one place because several callers join names
+// and two spellings of the rule above would hold it on some screens and not others.
+export function sideLabel(names) {
+  return (names ?? []).map(withoutJoin).join(TEAM_JOIN);
+}
+
 // Display name for a team: the single player, or both partners in doubles.
 export function teamLabel(game, team) {
   // One label per team in casual even in doubles: the colour is the whole
@@ -192,14 +204,16 @@ export function teamLabel(game, team) {
   // a team name, and is the one place casual diverges from the doubles plural.
   if (game.casual) return playerLabel(game, team, 0);
   const p = game.players[team];
-  return game.mode === 'doubles' ? `${p[0]}${TEAM_JOIN}${p[1]}` : p[0];
+  // Both slots whatever they hold, so a blank partner still leaves the join for
+  // `labelPart` to find an empty half in; only the tournament filters blanks.
+  return sideLabel(game.mode === 'doubles' ? [p[0], p[1]] : [p[0]]);
 }
 
 // "Neil wins" but "Rho & Tau win". Read off the label rather than the mode,
 // because the external display only ever receives the label — the scoreboard
 // payload is byte-budgeted and carries no mode — and deriving both ends the
-// same way is what stops the phone and the board disagreeing. The cost is that
-// a singles player who puts " & " in their own name gets the plural.
+// same way is what stops the phone and the board disagreeing. Exact rather than a
+// guess, because `sideLabel` keeps the join out of the names it joins.
 export function winVerb(label) {
   return String(label ?? '').includes(TEAM_JOIN) ? 'win' : 'wins';
 }

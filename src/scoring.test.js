@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MAX_TARGET,
+  TEAM_JOIN,
   clampTarget,
   emptyPositions,
   lineupFaults,
@@ -9,6 +10,7 @@ import {
   roundNets,
   newGame,
   playerLabel,
+  sideLabel,
   teamLabel,
   winVerb,
   setFirst,
@@ -173,6 +175,63 @@ describe('teamLabel', () => {
   it('joins both partners in doubles', () => {
     const g = { ...newGame(), mode: 'doubles', players: { a: ['Alice', 'Bob'], b: ['Carol', 'Dave'] } };
     expect(teamLabel(g, 'a')).toBe('Alice & Bob');
+  });
+
+  // A label is all `winVerb` and the panel's `splitPair` get, and both read the join
+  // to tell a pair from one person — so a name carrying the join would be one person
+  // announced as two, and drawn on the panel as "Ben/Jerry" with half of it ruled as
+  // the partner who is up. Any spacing that contains the join has to go, not just
+  // the exact form: " & " and "  &  " are both it.
+  describe('keeps the join out of the names it joins', () => {
+    const singles = (name) => ({
+      ...newGame(),
+      mode: 'singles',
+      players: { a: [name, ''], b: ['Carol', ''] },
+    });
+
+    it('collapses an ampersand inside a singles name', () => {
+      expect(teamLabel(singles('Ben & Jerry'), 'a')).toBe('Ben&Jerry');
+      expect(teamLabel(singles('Ben  &  Jerry'), 'a')).toBe('Ben&Jerry');
+      expect(teamLabel(singles('Ben & Jerry & Co'), 'a')).toBe('Ben&Jerry&Co');
+    });
+
+    // Left alone where it already reads as one name, which is the point — the rule
+    // is about the join, not about the character.
+    it('leaves a bare ampersand as typed', () => {
+      expect(teamLabel(singles('Ben&Jerry'), 'a')).toBe('Ben&Jerry');
+    });
+
+    it('leaves one join in a doubles label whichever partner carries an ampersand', () => {
+      const g = {
+        ...newGame(),
+        mode: 'doubles',
+        players: { a: ['Ben & Jerry', 'Tau'], b: ['Carol', 'Dave'] },
+      };
+      expect(teamLabel(g, 'a')).toBe('Ben&Jerry & Tau');
+      expect(teamLabel(g, 'a').split(TEAM_JOIN)).toHaveLength(2);
+    });
+
+    // The blank half survives: `labelPart` in render.h rules the whole label when a
+    // partner's side of the slash came out empty, and it needs the join to find it.
+    it('keeps the join when a partner is blank', () => {
+      const g = { ...newGame(), mode: 'doubles', players: { a: ['Rho', ''], b: ['Carol', 'Dave'] } };
+      expect(teamLabel(g, 'a')).toBe('Rho & ');
+    });
+  });
+});
+
+describe('sideLabel', () => {
+  it('writes one name and a pair', () => {
+    expect(sideLabel(['Rho'])).toBe('Rho');
+    expect(sideLabel(['Rho', 'Tau'])).toBe('Rho & Tau');
+  });
+
+  it('applies the same rule as teamLabel, so the two screens agree', () => {
+    expect(sideLabel(['Ben & Jerry', 'Tau'])).toBe('Ben&Jerry & Tau');
+  });
+
+  it('does not fall over on a missing list', () => {
+    expect(sideLabel(undefined)).toBe('');
   });
 });
 
@@ -349,6 +408,13 @@ describe('winVerb', () => {
   it('does not fall over on a missing label', () => {
     expect(winVerb(undefined)).toBe('wins');
     expect(winVerb(null)).toBe('wins');
+  });
+
+  // Exact rather than a guess: the verb can only be read off the string, so it is
+  // `teamLabel` keeping the join out of a name that makes the string answerable.
+  it('stays singular for a player whose own name has an ampersand', () => {
+    const g = { ...newGame(), mode: 'singles', players: { a: ['Ben & Jerry', ''], b: ['Carol', ''] } };
+    expect(`${teamLabel(g, 'a')} ${winVerb(teamLabel(g, 'a'))}`).toBe('Ben&Jerry wins');
   });
 });
 

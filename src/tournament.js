@@ -9,7 +9,7 @@
 // recomputes with nothing to un-advance, and a bracket can never disagree with the
 // results behind it. See docs/TOURNAMENT.md for the alternatives this rules out.
 
-import { NO_SIDE, TEAM_JOIN, nameKey, sideKeyOf } from './scoring.js';
+import { NO_SIDE, nameKey, sideKeyOf, sideLabel } from './scoring.js';
 import { blankStats, finalScore, rosterFor, sideStats } from './stats.js';
 
 // Stamped on every tournament so a later change of shape can be told from this one
@@ -370,7 +370,7 @@ export function entrantStats(view, matches) {
     .map((side) => {
       const found = rows.get(side.key);
       return {
-        ...(found ?? blankStats(side.names.join(TEAM_JOIN))),
+        ...(found ?? blankStats(sideLabel(side.names))),
         key: side.key,
         names: side.names,
         played: Boolean(found),
@@ -382,7 +382,7 @@ export function entrantStats(view, matches) {
         depthOf(x.reached) - depthOf(y.reached) ||
         ROUTE_END[x.reached.status] - ROUTE_END[y.reached.status] ||
         y.wins - x.wins ||
-        x.names.join(TEAM_JOIN).localeCompare(y.names.join(TEAM_JOIN)),
+        sideLabel(x.names).localeCompare(sideLabel(y.names)),
     );
 }
 
