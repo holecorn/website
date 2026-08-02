@@ -37,28 +37,18 @@ import {
 } from './stats.js';
 import { NAME_FIELD } from './nameField.js';
 import { shortDate } from './dates.js';
+import { minutes, one, pct, plural } from './format.js';
+import Chip, { Chips } from './Chip.jsx';
 import FormPips from './FormPips.jsx';
 import Modal from './Modal.jsx';
 import './Stats.css';
 
-const pct = (v) => `${Math.round(v * 100)}%`;
-const one = (v) => v.toFixed(1);
-// Both forms spelled out rather than a suffix rule: "wash" and "match" take "es" while
-// "round" takes "s", so anything that guesses gets one of them wrong.
-const plural = (n, one, many) => (n === 1 ? one : many);
 const matchCount = (n) => `${n} ${plural(n, 'match', 'matches')}`;
 const tournamentCount = (n) => `${n} ${plural(n, 'tournament', 'tournaments')}`;
 // One separator for every join in the rivals heading, so the gap after the
 // player's name matches the gap between the two rivalries rather than being a
 // margin that has to be eyeballed against it.
 const DOT = ' · ';
-
-function minutes(ms) {
-  if (!ms) return '—';
-  const mins = Math.round(ms / 60000);
-  if (mins < 1) return '<1m';
-  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
 
 // Wipe the history and start again. **Development only** — `import.meta.env.DEV` is a
 // compile-time constant, so Vite eliminates the whole branch and the built app cannot
@@ -273,7 +263,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
         </p>
       ) : (
         <>
-          <div className="stat-chips">
+          <Chips>
             {/* Counts take a singular label at exactly one — zero is plural, as English
                 has it. The two averages stay plural whatever they read, because a decimal
                 does: "1.0 avg rounds", not "1.0 avg round". */}
@@ -287,7 +277,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
               value={totalsFor.fourBaggers}
             />
             <Chip label={plural(totalsFor.skunks, 'skunk', 'skunks')} value={totalsFor.skunks} />
-          </div>
+          </Chips>
 
           <section className="stats-section">
             <h2>Players</h2>
@@ -754,11 +744,3 @@ function MatchRounds({ id, match, tie, onEdit }) {
   );
 }
 
-function Chip({ label, value }) {
-  return (
-    <div className="stat-chip">
-      <span className="stat-chip-value">{value}</span>
-      <span className="stat-chip-label">{label}</span>
-    </div>
-  );
-}
