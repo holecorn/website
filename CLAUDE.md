@@ -1059,6 +1059,70 @@ the alternatives that were rejected; this section holds what breaks when you cha
 - **The record carries only the tournament's id, and only when there is one.** Absent rather
   than null on an ordinary game, the way `winner` is absent while a game is live, so a
   record outside a tournament keeps exactly the shape it had before tournaments existed.
+- **A tournament may be a stored result and no draw**, which is the shape `recordedTournament`
+  makes and the one thing `bracket()` does not derive. The sheet for a tournament played
+  before the app is gone, so its ties cannot be in the archive and its bracket cannot be
+  computed — and the champions are the only thing left. Exactly the reasoning that gives a
+  record `final` when it has no rounds.
+  - **Only where there is no field, which is stricter than decision 12 in
+    `docs/TOURNAMENT.md` says.** That says "read only when there are no ties", which would
+    admit a tournament holding both a field and a stored champion — and a field with no draw
+    behind it is shuffled into pairings nobody played and then captioned with the real
+    winner, which is a bracket that is wrong in the one way only the people who were there
+    could see. So a stored champion is read when `entrants` cannot make a bracket, and a
+    tournament carrying both is simply the bracket. `tournament.test.js` pins that direction
+    as well as the other.
+  - **So the field is deliberately thrown away** where the draw is unknown, even when it is
+    remembered. Keeping it as a second list — a `field` that is not `entrants` — was
+    considered and not built: `entrants` means the draw everywhere else, and a second
+    meaning for the same names is what the note above is about.
+  - **`validTournament` had to learn the shape**, because `mergeTournaments` drops what it
+    refuses **silently** — the half-import trap `validRecord` and the sample archive already
+    carry notes about. A champion-only tournament imported before that change simply never
+    appeared.
+  - **`createdAt` is the day it was won**, not a draw date it never had. It is what both
+    lists sort on, so a recorded year lands among the played ones; the row says `Won` rather
+    than `Drawn` so nothing on screen claims a draw that was never taken.
+  - **The row still opens, onto a sentence rather than a bracket.** There is nothing behind
+    it, but `Delete` lives inside an open row and a file is the only way one of these
+    arrives — so a wrong one needs a way out. The delete dialog needs its own wording too:
+    the ordinary one promises the played ties stay in your history, and there are none.
+  - **The screen drops a tournament whose bracket comes back null**, so a shape `bracket()`
+    cannot read does not appear at all — no error, no empty row. That is why
+    `verify-tournament.mjs` asserts it is *listed*, which no unit test can see.
+- **Past tournaments are imported through `tools/import-legacy.mjs`, and the draw is
+  reconstructed rather than transcribed.** `bracket()` seats entrants in array order, so the
+  order *is* the pairings, and a sheet nobody kept cannot supply it. The backward walk in
+  `docs/TOURNAMENT.md` recovers the tree from the results alone, and `seatEntrants` then
+  embeds that tree into `bracketShape`'s canonical one.
+  - **It is an embedding, not a relabelling.** The canonical shape fixes which seats hold
+    preliminaries, so at every node both orientations of the two subtrees are tried — a bye
+    written ahead of the entrant who played off needs the swap, and which side of a tie was
+    written down first is an accident of transcription. **Every obvious fixture happens not
+    to need it**: verified by mutation, dropping the swap passed all of them until a fixture
+    was written for it.
+  - **A bracket the canonical shape cannot express is refused.** For six entrants the app
+    puts one preliminary in each half, so a sheet that put both in one half is a *different
+    tree* rather than a permutation of this one. Refusing says so; the alternative draws
+    pairings nobody played.
+  - **The reconstruction is checked by running the real `bracket()` over it** and requiring
+    every tie placed and the champion the results name. That failure is otherwise silent: a
+    tie the bracket cannot place renders as one still to play, months after it was won.
+  - **A tie carries `updatedAt` and an ordinary imported game still does not.** Both copies
+    tie at 0 otherwise and `mergeMatches` keeps the local one, so the tag would never reach a
+    record imported before tournaments existed — which is every legacy record there is. It is
+    stamped with the tournament's own date rather than the clock, so the file re-runs
+    identically, it beats an untouched local record, and it **loses to a name corrected in
+    the app**. Correct a tie's names in the file, not on the phone.
+  - **The tournament's id is a hash of its name**, so re-importing lands on the same
+    tournament. Renaming one in the file makes a new one and orphans its ties — loud rather
+    than silent, because the old bracket then reports every tie missing. It also means a
+    sheet turning up for a tournament already recorded as a bare result produces **the same
+    id**, which is why `mergeTournaments` lets an incoming draw replace a local result-only
+    copy — the one exception to local-wins, and without it that upgrade does nothing at all.
+  - **`createdAt` is the earliest tie**, since the draw date is not knowable either. A
+    finished row draws a bare span from there to the final, which then reads as when it was
+    played.
 - **Export grew an envelope for this.** A bare array of matches carries the ties but not the
   brackets, so it imports without complaint and leaves every tournament pointing at nothing.
   `readArchiveFile` still accepts a bare array, because that is every file exported before —
@@ -1067,6 +1131,8 @@ the alternatives that were rejected; this section holds what breaks when you cha
   - **`mergeTournaments` keeps the local copy, the opposite of `mergeMatches`.** A tournament
     is fixed the moment it is drawn, so two copies of one id are the same draw and an incoming
     one cannot be more right. `mergeMatches` needs `updatedAt` because records get edited.
+    **One exception: an incoming draw replaces a local result-only copy**, because a stored
+    result is what you keep when there is no draw — see the recorded-result bullet above.
   - **A deleted tournament is resurrected by a re-import, and it comes back *finished*.**
     Deletion propagates nowhere in this model — the archive's known limit — but here it is
     more surprising than for a match: deleting a bracket deliberately leaves its ties in the

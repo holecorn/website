@@ -251,6 +251,17 @@
   min-width: 0;
 }
 
+/* What an opened recorded result holds instead of a bracket. `.tournament-empty`'s
+   voice, because it is saying the same kind of thing — there is nothing here — rather
+   than a new one. Left-aligned rather than centred: it is a sentence about this row
+   sitting inside it, not a placeholder standing in for the whole screen. */
+.recorded-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 /* The bracket is drawn as a tree, columns running deepest-first to the final on the
    right — the BBC's knockout layout rather than the paper sheet's mirrored one, which
    is both simpler and half the width.

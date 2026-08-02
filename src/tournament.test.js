@@ -16,6 +16,7 @@ import {
   mergeTournaments,
   newTournament,
   newestFirst,
+  recordedTournament,
   removeTournament,
   shuffled,
   tieLabels,
@@ -421,6 +422,77 @@ describe('unfinished', () => {
     const played = [tie(t.id, 'singles', ['Rho'], ['Tau'], 'a')];
     expect(unfinished([t], played)).toEqual([]);
     expect(unfinished([t], [])).toHaveLength(1);
+  });
+});
+
+// A tournament played before the app existed, whose sheet nobody kept. The result is the
+// only thing about it that survives, so it is the only thing stored — the same shape a
+// match with no rounds takes when it carries `final` and nothing else.
+describe('a recorded result', () => {
+  const holecornI = recordedTournament({
+    id: 'hc1',
+    name: 'Hole Corn I',
+    createdAt: 5,
+    champion: ['Rho'],
+    runnerUp: ['Tau'],
+  });
+
+  it('is a finished bracket with nothing in it', () => {
+    const view = bracket(holecornI, []);
+    expect(view.recorded).toBe(true);
+    expect(view.done).toBe(true);
+    expect(view.champion.names).toEqual(['Rho']);
+    expect(view.runnerUp.names).toEqual(['Tau']);
+    // Present and empty rather than absent, so nothing reading a bracket needs a guard
+    // of its own. `total` in particular would be -1 from an empty field.
+    expect(view).toMatchObject({ ties: [], rounds: [], entrants: [], played: 0, total: 0 });
+  });
+
+  it('keeps the runner-up optional, because losing a final is the half people forget', () => {
+    const noLoser = recordedTournament({ id: 'hc2', name: 'Hole Corn II', champion: ['Rho'] });
+    expect('runnerUp' in noLoser).toBe(false);
+    expect(bracket(noLoser, []).runnerUp).toBeNull();
+  });
+
+  it('takes a doubles pair as one champion', () => {
+    const pairs = recordedTournament({ id: 'hc3', name: 'III', champion: ['Rho', 'Tau'] });
+    expect(bracket(pairs, []).champion.names).toEqual(['Rho', 'Tau']);
+  });
+
+  it('does not announce itself as still running', () => {
+    expect(unfinished([holecornI], [])).toEqual([]);
+  });
+
+  it('is nothing at all without a champion, the way a bare id always was', () => {
+    expect(bracket({ id: 'x', name: 'x' }, [])).toBeNull();
+    expect(bracket({ id: 'x', name: 'x', champion: ['', ''] }, [])).toBeNull();
+    expect(validTournament({ id: 'x', name: 'x' })).toBe(false);
+  });
+
+  it('survives an import, which is the only way one can arrive', () => {
+    expect(validTournament(holecornI)).toBe(true);
+    expect(mergeTournaments([], [holecornI]).map((t) => t.id)).toEqual(['hc1']);
+  });
+
+  // The id is the name, so a sheet turning up years later and being transcribed produces
+  // the same tournament. `mergeTournaments` keeps the local copy for everything else, and
+  // holding it here is silent rather than merely stubborn: the ties would import tagged
+  // with an id whose tournament has no bracket to place them in.
+  it('gives way to a real draw of the same tournament, and only that way round', () => {
+    const drawn = { ...tournamentOf([['Rho'], ['Tau']]), id: 'hc1', name: 'Hole Corn I' };
+    expect(bracket(mergeTournaments([holecornI], [drawn])[0], []).recorded).toBe(false);
+    expect(bracket(mergeTournaments([drawn], [holecornI])[0], []).recorded).toBe(false);
+  });
+
+  // The rule decision 12 in docs/TOURNAMENT.md sets: a stored result may never contradict
+  // a bracket. Here that is structural rather than a precedence — a field means a draw, and
+  // a draw derives its own champion — so a tournament carrying both is simply the bracket.
+  it('is ignored where there is a field to derive from', () => {
+    const both = { ...tournamentOf([['Rho'], ['Tau']]), champion: ['Sigma'] };
+    expect(bracket(both, []).champion).toBeNull();
+    expect(bracket(both, []).recorded).toBe(false);
+    const played = [tie(both.id, 'singles', ['Rho'], ['Tau'], 'b')];
+    expect(bracket(both, played).champion.names).toEqual(['Tau']);
   });
 });
 

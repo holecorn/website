@@ -1961,6 +1961,73 @@ console.log('\na tournament with no round detail shows its results and no rates'
   await page.close();
 }
 
+console.log('\na tournament whose sheet is gone');
+{
+  // The result and nothing else — `recordedTournament`, which only a file can produce.
+  // `bracket()` is unit tested, so what is left for a browser is the one thing those
+  // tests are blind to: the list drops a tournament whose bracket comes back null, so a
+  // shape it cannot read **does not appear at all**. There is no error and no empty row.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      'holecorn.tournaments.v1',
+      JSON.stringify([
+        {
+          format: 1,
+          id: 'hc1',
+          name: 'Hole Corn I',
+          // 30 August 2019, the only date such a tournament has.
+          createdAt: new Date(2019, 7, 30, 12).getTime(),
+          champion: ['Rho'],
+          runnerUp: ['Tau'],
+        },
+      ]),
+    );
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  check('it is listed at all', await settles(() => page.waitForSelector('.tournament-row')));
+  // Upper case: the headings are `text-transform`ed and `allInnerTexts` returns what is
+  // drawn rather than what the JSX says. Caught here for the second time in this file.
+  const heading = await page.locator('.tournament-list h2').allInnerTexts();
+  check('under Completed rather than In progress', heading.join() === 'COMPLETED', heading.join());
+  const row = (sel) => page.locator(sel).innerText();
+  check('the winner is named', (await row('.champion-who')).includes('Rho'), await row('.champion-who'));
+  check(
+    'and the runner-up, which is optional but was remembered here',
+    (await row('.runner-up-who')).includes('Tau'),
+    await row('.runner-up-who'),
+  );
+  // One date, and it is the final's — so there is no span to draw and no draw to name.
+  // `Drawn` is what the unfinished shape says, and it would be claiming a draw nobody took.
+  check('the date says it was won, not drawn', (await row('.tournament-when')).startsWith('Won'), await row('.tournament-when'));
+
+  await page.locator('.tournament-row').click();
+  check('opening it draws no bracket', (await page.locator('.bracket').count()) === 0);
+  check('and no tabs over an empty one', (await page.locator('.tournament-tabs').count()) === 0);
+  check(
+    'it says what it is instead',
+    (await page.locator('.recorded-note').count()) === 1 &&
+      (await row('.recorded-note')).includes('only the result'),
+  );
+  // Delete has to be reachable, which is the whole reason the row still opens — and the
+  // ordinary dialog would promise that its played ties stay in the archive, which is
+  // false here because there are none.
+  await page.locator('.tournament-drop').click();
+  const said = await page.locator('.modal-body').innerText();
+  check('the dialog does not promise ties it has not got', !said.includes('tie'), said);
+  await page.locator('.confirm-danger').click();
+  check('and it goes', (await page.locator('.tournament-row').count()) === 0);
+  await page.close();
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : '\nall tournament checks passed');
 process.exit(failures ? 1 : 0);

@@ -326,6 +326,55 @@ a dash where a rate would be, and the average round length ignores it. Someone
 whose whole history is imported results shows a record and dashes; play one
 scored game and the rates start from that game alone.
 
+### Tournaments played before the app
+
+Ties from a past tournament go in the same file, under a `tournament` header.
+Everything below one belongs to that tournament until the next header or a line
+reading `friendlies`:
+
+```
+tournament Hole Corn V
+2024-08-03  Rho v Tau     21-11
+2024-08-03  Sigma v Phi   21-16
+2024-08-10  Chi v Rho     21-19
+2024-08-10  Sigma v Psi   21-7
+2024-08-17  Chi v Sigma   21-20
+
+friendlies
+2024-09-08  Neil v Rho  21-16
+```
+
+**The draw doesn't have to be transcribed.** It is worked out from the results:
+the last tie is the final, each finalist's previous tie is a semi-final, and so
+on back to the entrants — so the bracket that comes out is the one that was
+played, byes and preliminaries included. It is checked before anything is
+written, so a section that doesn't add up is refused with a reason rather than
+importing as a half-filled bracket.
+
+What that means for the file: every tie of the tournament has to be in it,
+exactly once, all played to the same target and all singles or all doubles. An
+ordinary game left under the header by mistake shows up as an entrant count that
+can't be a knockout, and is reported.
+
+A tournament whose sheet is gone can still be recorded as its result. It carries
+the date and the winner, and the runner-up if that's remembered:
+
+```
+tournament Hole Corn I   won 2019-08-30 by Rho
+tournament Hole Corn II  won 2020-08-29 by Rho beating Tau
+```
+
+These sit under **Completed** with the year's winner named. There is no bracket
+behind them and nothing in anybody's record counts towards them — the ties
+themselves are lost. Nothing else can produce one of these; a tournament played
+in the app always has its ties.
+
+Re-importing is safe: tournaments are keyed by name and matches by content, so
+running the file again adds nothing. Ties are the one thing that will overwrite
+a record already on the phone, because that's how the tag reaches games imported
+before any of this existed — so correct a tie's names in the file rather than in
+the app.
+
 ### Sample history for testing
 
 `tools/fixtures/sample-archive.json` is a made-up history — three years, 141

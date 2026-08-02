@@ -5,6 +5,10 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.js'],
+    // `tools/` too, for the one thing in there with a rule behind it rather than a
+    // rendering: import-legacy.mjs reconstructs a past tournament's draw from its
+    // results, and a draw that comes out wrong shows up as a bracket with ties still
+    // to play rather than as an error.
+    include: ['src/**/*.test.js', 'tools/**/*.test.js'],
   },
 })

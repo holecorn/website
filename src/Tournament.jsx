@@ -855,6 +855,9 @@ function Draw({ knownNames, onDrawn }) {
 function whenLine(tournament, view, matches) {
   const drawn = tournament.createdAt;
   const last = lastPlayed(view, matches);
+  // A recorded result has one date and it is the final's, so there is no span to draw and
+  // no draw to name — see `recordedTournament`.
+  if (view.recorded) return drawn ? `Won ${shortDate(drawn)}` : null;
   if (view.done && last) return drawn ? dateSpan(drawn, last) : `Won ${shortDate(last)}`;
   if (!drawn) return last ? `Last played ${shortDate(last)}` : null;
   // Not a span: this one is still running, so the second date is where it has got to
@@ -951,82 +954,94 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
       </button>
       {isOpen && (
         <>
-          <div className="tournament-head">
-            {/* Real tabs rather than two buttons: the panels are alternative views of one
-                thing, so a roving tabindex and the arrow keys are what a keyboard expects.
-                The lit styling is `.mode-toggle`'s, which is the app's segmented control. */}
-            <div className="tournament-tabs" role="tablist" aria-label={`${tournament.name} view`}>
-              {TABS.map(([id, label], i) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  id={`${tournament.id}-tab-${id}`}
-                  aria-selected={tab === id}
-                  aria-controls={`${tournament.id}-panel-${id}`}
-                  tabIndex={tab === id ? 0 : -1}
-                  className={tab === id ? 'is-on' : undefined}
-                  onClick={() => setTab(id)}
-                  onKeyDown={(e) => {
-                    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-                    if (!step) return;
-                    e.preventDefault();
-                    const to = (i + step + TABS.length) % TABS.length;
-                    setTab(TABS[to][0]);
-                    e.currentTarget.parentElement.children[to]?.focus();
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {/* Beside the tabs rather than inside a panel, because both are full of scores
-                and a score cannot be read without this: a winning 35 is somebody squeaking
-                over the line to 35, or a rout that overshot a line at 26, and nothing in a
-                box says which. It is one fact for the whole tournament — fixed at the draw
-                like the mode, see `tieSetup` — so it belongs beside the name rather than
-                repeated in every box, and a line living on one tab would disappear the
-                moment you looked at the other.
-                Worded as the setup screen words it for a tie, so the two agree.
-                Absent where the stored draw has no target, the way the date line is: it
-                takes a hand-edited file, and reserving the space is the worse trade. */}
-            {Number.isFinite(tournament.target) && (
-              <span className="tournament-target">Play to {tournament.target}</span>
-            )}
-          </div>
+          {view.recorded ? (
+            /* Nothing to draw behind a recorded result — no bracket, no ties, and so no
+               rates or routes either. The row still opens, because `Delete` has to live
+               somewhere and a file is the only way one of these arrives. */
+            <p className="recorded-note">
+              The sheet for this one is gone, so only the result is kept. There are no ties
+              behind it, and nothing in anybody’s record counts towards it.
+            </p>
+          ) : (
+            <>
+              <div className="tournament-head">
+                {/* Real tabs rather than two buttons: the panels are alternative views of one
+                    thing, so a roving tabindex and the arrow keys are what a keyboard expects.
+                    The lit styling is `.mode-toggle`'s, which is the app's segmented control. */}
+                <div className="tournament-tabs" role="tablist" aria-label={`${tournament.name} view`}>
+                  {TABS.map(([id, label], i) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      id={`${tournament.id}-tab-${id}`}
+                      aria-selected={tab === id}
+                      aria-controls={`${tournament.id}-panel-${id}`}
+                      tabIndex={tab === id ? 0 : -1}
+                      className={tab === id ? 'is-on' : undefined}
+                      onClick={() => setTab(id)}
+                      onKeyDown={(e) => {
+                        const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                        if (!step) return;
+                        e.preventDefault();
+                        const to = (i + step + TABS.length) % TABS.length;
+                        setTab(TABS[to][0]);
+                        e.currentTarget.parentElement.children[to]?.focus();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {/* Beside the tabs rather than inside a panel, because both are full of scores
+                    and a score cannot be read without this: a winning 35 is somebody squeaking
+                    over the line to 35, or a rout that overshot a line at 26, and nothing in a
+                    box says which. It is one fact for the whole tournament — fixed at the draw
+                    like the mode, see `tieSetup` — so it belongs beside the name rather than
+                    repeated in every box, and a line living on one tab would disappear the
+                    moment you looked at the other.
+                    Worded as the setup screen words it for a tie, so the two agree.
+                    Absent where the stored draw has no target, the way the date line is: it
+                    takes a hand-edited file, and reserving the space is the worse trade. */}
+                {Number.isFinite(tournament.target) && (
+                  <span className="tournament-target">Play to {tournament.target}</span>
+                )}
+              </div>
 
-          {/* Only the chosen panel is drawn, rather than both with one hidden. Hiding
-              would keep the bracket's scroll position, but a `display: none` scroller
-              does not reliably keep it anyway — and coming back to the round with a live
-              tie in it is where the bracket opens in the first place. */}
-          <div
-            role="tabpanel"
-            id={`${tournament.id}-panel-${tab}`}
-            aria-labelledby={`${tournament.id}-tab-${tab}`}
-            className="tournament-panel"
-          >
-            {tab === 'bracket' ? (
-              /* A finished bracket gets no `onPlay`: every tie is played, so there is
-                 nothing to offer, and `Tie` draws a plain box without a handler. There
-                 used to be a "Ready to play" list above this, duplicating boxes the
-                 bracket already draws — it cost a screenful on a big field and showed a
-                 tie with none of the context that makes it worth looking at. */
-              <Bracket
-                view={view}
-                route={route}
-                onClearRoute={() => setSelected(null)}
-                onPlay={done ? undefined : (x) => onPlayTie(tournament, x)}
-              />
-            ) : (
-              <TournamentStats
-                view={view}
-                matches={matches}
-                selected={selected}
-                route={routeTies}
-                onSelect={setSelected}
-              />
-            )}
-          </div>
+              {/* Only the chosen panel is drawn, rather than both with one hidden. Hiding
+                  would keep the bracket's scroll position, but a `display: none` scroller
+                  does not reliably keep it anyway — and coming back to the round with a live
+                  tie in it is where the bracket opens in the first place. */}
+              <div
+                role="tabpanel"
+                id={`${tournament.id}-panel-${tab}`}
+                aria-labelledby={`${tournament.id}-tab-${tab}`}
+                className="tournament-panel"
+              >
+                {tab === 'bracket' ? (
+                  /* A finished bracket gets no `onPlay`: every tie is played, so there is
+                     nothing to offer, and `Tie` draws a plain box without a handler. There
+                     used to be a "Ready to play" list above this, duplicating boxes the
+                     bracket already draws — it cost a screenful on a big field and showed a
+                     tie with none of the context that makes it worth looking at. */
+                  <Bracket
+                    view={view}
+                    route={route}
+                    onClearRoute={() => setSelected(null)}
+                    onPlay={done ? undefined : (x) => onPlayTie(tournament, x)}
+                  />
+                ) : (
+                  <TournamentStats
+                    view={view}
+                    matches={matches}
+                    selected={selected}
+                    route={routeTies}
+                    onSelect={setSelected}
+                  />
+                )}
+              </div>
+            </>
+          )}
           <button
             className="tournament-drop"
             onClick={() => setConfirming(true)}
@@ -1046,11 +1061,14 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
                 {verb} {tournament.name}?
               </p>
               <p className="modal-body">
-                The bracket goes.{' '}
+                {/* A recorded result has no bracket to lose and no ties to keep, so both
+                    halves of the ordinary sentence would be false. The dialog is here to
+                    say what survives, so it has to say something different. */}
+                {view.recorded ? 'The result goes, and it is all there is of this one.' : 'The bracket goes.'}{' '}
                 {/* Both forms spelled out, noun *and* verb: a suffix rule gets "tie stays"
                     against "ties stay" the wrong way round, which is the same trap the
                     summary chips' labels already carry a note about. */}
-                {view.played === 0 && 'Nothing has been played in it yet.'}
+                {!view.recorded && view.played === 0 && 'Nothing has been played in it yet.'}
                 {view.played === 1 &&
                   "Its 1 played tie stays in your history and still counts towards everyone's record."}
                 {view.played > 1 &&

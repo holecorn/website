@@ -136,6 +136,27 @@ export function newTournament({ id, name, mode, target, entrants, createdAt }) {
   };
 }
 
+// A tournament whose sheet is gone, held as its result and nothing else — see
+// `storedResult`. There is no way to make one in the app, deliberately: it is a
+// transcription of something that happened before it, so it arrives from a file the way
+// a match with no rounds does, and nothing here can be played.
+//
+// `createdAt` is the day it was won rather than the day it was drawn, because that is the
+// one date such a tournament has and it is what both lists sort on. The row says `Won` for
+// it rather than `Drawn`, so nothing on screen claims a draw that was never taken.
+export function recordedTournament({ id, name, createdAt, champion, runnerUp }) {
+  return {
+    format: TOURNAMENT_FORMAT,
+    id,
+    name,
+    createdAt,
+    champion: asSide(champion).names,
+    // Absent rather than null when it is not known, the way a record leaves out `winner`
+    // while a game is live — the readers all take a missing key as "not known".
+    ...(runnerUp ? { runnerUp: asSide(runnerUp).names } : {}),
+  };
+}
+
 // Which archived match, if any, was this tie. Nothing on a record says where in a
 // bracket it sat — the two sides say it, because a knockout lets two sides meet at
 // most once, so within one tournament a pair of sides identifies exactly one tie.
@@ -223,10 +244,46 @@ function resolve(node, matches, tournamentId, level, half, out) {
   return { side: winner, from: tie.id };
 }
 
+// The result `recordedTournament` stored, read back. Stored at all for exactly the reason
+// a record with no rounds carries `final`: it is the one thing about such a tournament that
+// has nowhere else to live.
+//
+// **Only where there is no draw**, which is stricter than "no ties played". A field with
+// no draw behind it would be shuffled into pairings nobody played and then captioned with
+// the real winner — a bracket that is wrong in a way only the people who were there could
+// see. So a result is recorded *instead of* a field, not alongside one; a tournament
+// carrying both is an ordinary bracket and this is ignored.
+function storedResult(tournament) {
+  const side = (names) => {
+    const s = names ? asSide(names) : null;
+    return s && s.key !== NO_SIDE ? s : null;
+  };
+  const champion = side(tournament?.champion);
+  return champion ? { champion, runnerUp: side(tournament.runnerUp) } : null;
+}
+
 // Everything the screens need, derived from the stored draw plus the archive.
 export function bracket(tournament, matches = []) {
   const sides = (tournament?.entrants ?? []).map(asSide);
-  if (sides.length < MIN_ENTRANTS) return null;
+  if (sides.length < MIN_ENTRANTS) {
+    const result = storedResult(tournament);
+    // `recorded` is what the screen keys off to draw the row without a bracket behind it.
+    // Every other field is present and empty rather than absent, so a caller reading
+    // `ties` or `played` needs no guard of its own.
+    if (!result) return null;
+    return {
+      shape: null,
+      entrants: [],
+      ties: [],
+      rounds: [],
+      playable: [],
+      ...result,
+      played: 0,
+      total: 0,
+      done: true,
+      recorded: true,
+    };
+  }
   const shape = bracketShape(sides.length);
   const root = build(sides, shape);
   const ties = [];
@@ -254,6 +311,7 @@ export function bracket(tournament, matches = []) {
     played,
     total: sides.length - 1,
     done: Boolean(champion),
+    recorded: false,
   };
 }
 
@@ -475,7 +533,8 @@ export function lastPlayed(view, matches) {
   return stamps.length > 0 ? Math.max(...stamps) : null;
 }
 
-// Newest draw first. The lists used to render in the order the list happened to hold,
+// Newest first — the draw for a bracket, the day it was won for a recorded result, which
+// is why `createdAt` carries both. The lists used to render in the order the list happened to hold,
 // which is insertion order — locally drawn ones oldest first, imported ones appended
 // after every local one whatever their draw date. So the order recorded how a device
 // came by its tournaments rather than anything about them, two devices holding the same
@@ -495,18 +554,28 @@ export function unfinished(tournaments, matches) {
   return tournaments.filter((t) => !bracket(t, matches)?.done);
 }
 
+function hasField(t) {
+  return Boolean(
+    Array.isArray(t?.entrants) &&
+      t.entrants.length >= MIN_ENTRANTS &&
+      t.entrants.every((e) => Array.isArray(e)),
+  );
+}
+
 // A tournament can arrive from a file the user picked, so require the fields the
 // bracket reads without checking. `entrants` is what the whole derivation rests on;
 // a tournament without a usable field is not repairable, unlike a match.
+//
+// Or a stored result and no field at all — the shape `storedResult` describes. That is
+// the one thing `mergeTournaments` would otherwise drop **silently**, which is the same
+// half-import trap `validRecord` and the sample archive already guard against.
 export function validTournament(t) {
   return Boolean(
     t &&
       typeof t === 'object' &&
       typeof t.id === 'string' &&
       t.id &&
-      Array.isArray(t.entrants) &&
-      t.entrants.length >= MIN_ENTRANTS &&
-      t.entrants.every((e) => Array.isArray(e)),
+      (hasField(t) || storedResult(t)),
   );
 }
 
@@ -523,11 +592,20 @@ export function removeTournament(list, id) {
 // there: a tournament is fixed the moment it is drawn, so two copies of one id are
 // the same draw and there is nothing an incoming copy could be more right about.
 // Deleting still does not propagate, the same known limit the archive has.
+//
+// **A draw is the one thing that can be more right**, because a stored result is what you
+// keep when there is no draw — so an incoming field replaces a local result-only copy and
+// never the other way round. Without that the upgrade path is silent rather than merely
+// manual: a tournament's id is its name, so a sheet turning up years later and being
+// transcribed produces the same id, the local result-only copy holds, and the ties import
+// tagged with an id whose tournament has no bracket to place them in.
 export function mergeTournaments(list, incoming) {
   if (!Array.isArray(incoming)) return list;
-  return incoming
-    .filter(validTournament)
-    .reduce((acc, t) => (acc.some((x) => x.id === t.id) ? acc : upsertTournament(acc, t)), list);
+  return incoming.filter(validTournament).reduce((acc, t) => {
+    const mine = acc.find((x) => x.id === t.id);
+    if (mine && !(hasField(t) && !hasField(mine))) return acc;
+    return upsertTournament(acc, t);
+  }, list);
 }
 
 export function loadTournaments() {

@@ -14,8 +14,14 @@ Four scripts need nothing at all:
 
 `import-legacy.mjs` turns a text file of written-down results into an archive
 file the stats screen can import, and validates it with the app's own
-`validRecord` rather than a copy of it. See **Games played before the app** in
-`README.md` for the line format.
+`validRecord` and `validTournament` rather than copies of them. See **Games
+played before the app** in `README.md` for the line format. It is the only script
+in here with unit tests (`import-legacy.test.js`, which is why `vitest.config.js`
+reaches into `tools/`), because reconstructing a past tournament's draw from its
+results is a rule rather than a rendering — and a draw that comes out wrong shows
+as a bracket with ties still to play rather than as an error. It refuses to write
+one it cannot check: the reconstruction is run through the real `bracket()` and
+has to place every tie and produce the champion the results name.
 
 `make-sample-archive.mjs` writes `fixtures/sample-archive.json` — three years of
 made-up history to import when working on anything that reads the archive. Both

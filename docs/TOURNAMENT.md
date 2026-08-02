@@ -237,7 +237,8 @@ played yet. That, and only that, is what the stored draw buys.
 12. **A tournament may carry a champion and no ties.** The first tournament's results
     are lost, and the champions list is the only place that fact can live — exactly the
     reasoning that gives a record `final` when it has no rounds. Read only when there
-    are no ties, so it can never contradict a bracket that does exist.
+    are no ties, so it can never contradict a bracket that does exist. Built narrower
+    than that — see **How it came out differently**.
 
 ### How it came out differently
 
@@ -280,6 +281,34 @@ Decision above specified:
 - **The tournament-scoped stats of decision 9 are a tab inside the open row**, with the
   bracket first, rather than a scope selector on the stats screen. See **Where the stats
   went** below for the option that lost and why.
+- **A stored champion is read where there is no *field*, not merely no ties.** Decision 12's
+  rule would admit a tournament holding both a field and a champion, and that state is worse
+  than either half of it: the field would be shuffled into a draw, drawn as pairings nobody
+  played, and captioned with the real winner — wrong in the one way only the people who were
+  there could see. So a recorded result carries no entrants at all, and a tournament with a
+  field is simply a bracket. **The field is thrown away even where it is remembered**, which
+  is the cost: Hole Corn I's eleven names are not kept anywhere. Keeping them as a second
+  list beside `entrants` was considered and not built, because `entrants` means the draw
+  everywhere else and a second meaning for the same names is the drift this file exists to
+  prevent.
+- **Decision 11's tagging is done by `tools/import-legacy.mjs`, and it reconstructs the
+  draw rather than asking for it.** The decision assumed the ties were already in the
+  archive and only the tournament was missing, which is true — but `bracket()` seats
+  entrants in array order, so the *order* is the pairings and a sheet nobody kept cannot
+  supply it. **The Derivation below turns out to be the tool**: the backward walk rebuilds
+  the tree from the results, and the entrant order that reproduces it falls out by embedding
+  that tree in `bracketShape`'s canonical one. What the walk cannot do is run
+  mid-tournament; for a tournament long finished it is exactly the right instrument.
+  - **The embedding can fail, and that is reported rather than fudged.** The canonical shape
+    fixes which seats hold preliminaries — for six entrants, one in each half — so a sheet
+    that put both preliminaries in one half is a different tree and no entrant order
+    reproduces it. Relaxing `bracketShape` to accept an arbitrary preliminary layout is the
+    obvious follow-up if a real sheet ever hits this, and it has not been needed.
+  - **Tagging overwrites a record already imported.** Unedited records tie at 0 in
+    `mergeMatches`, so without an `updatedAt` the tag would never arrive for anyone who
+    imported their legacy games before tournaments existed. The stamp is the tournament's own
+    date, which loses to an edit made in the app — so the app still wins for names, and the
+    file wins for everything else.
 
 ## The perfect tree
 
@@ -420,10 +449,13 @@ actually decided.
 - **Seeding from career stats was rejected in favour of a random draw**, so newcomers
   with no history need no rule. If seeding ever returns, that is the question it
   brings back with it.
-- **The first tournament's results are lost.** A champion with no ties covers the
-  champions list, but the bracket itself is gone unless a sheet turns up. Worth asking
-  the family before building the import, because the accommodation is only needed if
-  nothing survives.
+- **~~The first tournament's results are lost~~** — answered: a champion with no ties is
+  built, and it is all Hole Corn I gets. If a sheet ever turns up, the ties go into the
+  legacy file under a `tournament` header and the reconstruction **replaces** the recorded
+  result on import: the id is the name, so both are the same tournament, and
+  `mergeTournaments` lets a draw beat a result-only copy for exactly this. Without that
+  rule the upgrade is silent rather than manual — the local copy holds and the ties import
+  tagged with an id whose tournament has no bracket to place them in.
 - **~~Two tournaments open at once~~** — answered: allowed, see **How it came out
   differently**. Kept because the reasoning is still what a change would argue with.
 - **Whether the setup screen's mode toggle should be disabled during a tournament**,
