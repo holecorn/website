@@ -744,6 +744,136 @@ console.log('\nthe draw cannot set a target the app would refuse');
   await page.close();
 }
 
+console.log('\nan open tournament says what it was played to, on both tabs');
+{
+  // A score on either tab is unreadable without it: 26–24 is somebody squeaking over the
+  // line in this cup and a blowout in one played to 12, and nothing on the bracket or in
+  // the tie log distinguishes them. The target is fixed at the draw, so it is one fact for
+  // the whole tournament and sits beside the tabs rather than in either panel — which is
+  // the only part of this a browser is needed for.
+  //
+  // Seeded rather than played, so the target is 26 and the result is the case above.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      'holecorn.tournaments.v1',
+      JSON.stringify([
+        {
+          format: 1,
+          id: 'c1',
+          name: 'Hole Corn V',
+          createdAt: Date.parse('2026-05-05'),
+          mode: 'singles',
+          target: 26,
+          entrants: [['Rho'], ['Tau'], ['Sigma'], ['Phi']],
+        },
+      ]),
+    );
+    localStorage.setItem(
+      'holecorn.matches.v1',
+      JSON.stringify([
+        {
+          format: 1,
+          id: 'm1',
+          tournament: 'c1',
+          mode: 'singles',
+          players: { a: ['Rho', ''], b: ['Tau', ''] },
+          rounds: [],
+          final: { a: 26, b: 24 },
+          winner: 'a',
+          endedAt: Date.parse('2026-05-06'),
+        },
+      ]),
+    );
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.locator('.tournament-row').first().click();
+  check(
+    'an open row says what its ties are played to',
+    await settles(() => page.waitForSelector('.tournament-target', { timeout: 3000 })),
+  );
+  // Null rather than a throw when the line is not there. Reading it as an assertion means
+  // a mutation that removes it must *report*, and `innerText` on nothing ends the run —
+  // which is the lesson the rest of this file already carries about bare waits. Verified:
+  // scoping the line to the Bracket tab killed every block below before this.
+  const text = async () =>
+    (await page.locator('.tournament-target').count()) === 0
+      ? null
+      : (await page.locator('.tournament-target').innerText()).trim();
+  // 26 rather than 21, so a line hardcoded to the app's default would fail here. Worded
+  // the way the setup screen words it for a tie, so the two screens agree.
+  check('and it is the draw\'s target, in the app\'s own words', (await text()) === 'Play to 26', await text());
+  // Beside the tabs, not inside a panel: a target that belongs to one tab is a target that
+  // disappears the moment you look at the numbers it explains. On the tabs' own line rather
+  // than under them, so it costs the open row no height at all.
+  //
+  // Measured at 360px, the narrowest width the app is held to: 214px of the 302 available on
+  // a Mac, and the deploy runner's `system-ui` is wider — the slack is what that is for, and
+  // it is the reason this measures the width it needs rather than only that it fits.
+  await page.setViewportSize({ width: 360, height: 852 });
+  const beside = await page.evaluate(() => {
+    const head = document.querySelector('.tournament-head');
+    const tabs = document.querySelector('.tournament-tabs').getBoundingClientRect();
+    const box = document.querySelector('.tournament-target').getBoundingClientRect();
+    const li = head.closest('li');
+    const pad = parseFloat(getComputedStyle(li).paddingLeft) * 2;
+    return {
+      sameLine: Math.abs(box.top - tabs.top) < tabs.height,
+      head: Math.round(head.getBoundingClientRect().height),
+      tabsH: Math.round(tabs.height),
+      needs: Math.round(head.getBoundingClientRect().width),
+      has: Math.round(li.getBoundingClientRect().width - pad),
+    };
+  });
+  check(
+    'it sits on the tabs\' own line, and costs that line nothing',
+    beside.sameLine && beside.head === beside.tabsH,
+    JSON.stringify(beside),
+  );
+  // Needed against available, not overflow: the row has nothing that clips, so a line too
+  // wide for a phone spills rather than shrinking and every overflow check passes. Same
+  // lesson `verify-lanes.mjs` and `.setup-top` both carry.
+  check(
+    'and the two of them fit a 360px phone with room to spare',
+    beside.needs <= beside.has,
+    `${beside.needs}px needed against ${beside.has}px`,
+  );
+  await page.setViewportSize(PHONE);
+  await page.getByRole('tab', { name: 'Stats' }).click();
+  check(
+    'and it is still there beside the numbers it explains',
+    await settles(() => page.waitForSelector('.tournament-stats', { timeout: 3000 })) &&
+      (await text()) === 'Play to 26',
+    await text(),
+  );
+  // A stored draw with no target at all takes a hand-edited file — `newTournament` has
+  // always stamped one. The line simply goes, the way the date line does.
+  await page.evaluate(() => {
+    const [t] = JSON.parse(localStorage.getItem('holecorn.tournaments.v1'));
+    delete t.target;
+    localStorage.setItem('holecorn.tournaments.v1', JSON.stringify([t]));
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.locator('.tournament-row').first().click();
+  check(
+    'a draw with no target says nothing rather than nothing-to-win',
+    (await settles(() => page.waitForSelector('.tournament-tabs', { timeout: 3000 }))) &&
+      (await page.locator('.tournament-target').count()) === 0,
+    `${await page.locator('.tournament-target').count()} shown`,
+  );
+  await page.close();
+}
+
 console.log('\na won tie advances the bracket, and undoing it takes the tie back out');
 {
   // The property the derived design exists for. Nothing is stored about the bracket's

@@ -271,6 +271,12 @@ Decision above specified:
   that the bracket only reads sides and winner — which is an argument about the mechanism, not
   about whether it is right, and is exactly why a tie played to 12 among ties played to 21
   would leave no trace anywhere.
+  - **So the open row says what it is**, beside the tabs. Fixing the target made every score
+    in the cup readable against one number, and then nothing on screen carried that number: a
+    winning 35 is somebody squeaking over the line to 35 or a rout that overshot a line at 26,
+    and neither the bracket's boxes nor the tie log can say which. It sits with the tabs
+    rather than in either panel because it is one fact for the whole tournament and both
+    panels are full of scores — and on the tabs' own line, so it costs the row no height.
 - **The tournament-scoped stats of decision 9 are a tab inside the open row**, with the
   bracket first, rather than a scope selector on the stats screen. See **Where the stats
   went** below for the option that lost and why.

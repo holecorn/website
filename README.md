@@ -375,6 +375,12 @@ On a phone the bracket shows one round at a time with **‹ ›** to step betwee
 them, and it opens on the round the live ties are in rather than at the outer
 edge. On an iPad the whole bracket fits at once.
 
+Beside the tabs of an open tournament is what it is played to — **Play to 26** —
+because the scores it holds cannot be read without it. A winning 35 is somebody
+squeaking over the line to 35, or a rout that overshot a line at 26, and the
+bracket cannot tell you which. Every tie in one is played to the same target, so
+it is said once rather than in every box.
+
 ### After the game
 
 Winning a tie advances the bracket; undoing the winning round takes it back out

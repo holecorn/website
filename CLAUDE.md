@@ -1010,6 +1010,16 @@ the alternatives that were rejected; this section holds what breaks when you cha
   target because a bracket where one tie was played to 12 among ties played to 21 is not one
   competition — and the bracket would never notice, which is exactly why nothing would say it
   had happened.
+  - **So an open row says what it is played to, beside the tabs**, and that placement is the
+    whole of it: the target is one fact for the tournament, both panels are full of scores
+    that cannot be read without it, and a line belonging to one tab disappears the moment you
+    look at the other. `verify-tournament.mjs` is the only thing that can see that — scoping
+    it to the Bracket tab passes all 412 unit tests. Worded as the setup screen words a tie
+    (`Play to 26`, `.target-fixed`), so the two agree. Measured, it costs the row **no
+    height**: `.tournament-head` is only as wide as the tabs and the line, 214px of the 304px
+    a 360px phone has and 232px on the deploy runner's own font, so it sits on the tabs' own
+    38px line. Drawn only where the stored draw has a target, the way the date line is —
+    that needs a hand-edited file, and reserving the space on every other row is worse.
   - **`Leave tie` is the only exit**, and it has to exist: with the names locked and nothing
     else on the screen, `Start` was the sole way off it. Gated on `gameStarted` for the reason
     `setCasual` is.

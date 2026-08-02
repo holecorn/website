@@ -950,33 +950,48 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
       </button>
       {isOpen && (
         <>
-          {/* Real tabs rather than two buttons: the panels are alternative views of one
-              thing, so a roving tabindex and the arrow keys are what a keyboard expects.
-              The lit styling is `.mode-toggle`'s, which is the app's segmented control. */}
-          <div className="tournament-tabs" role="tablist" aria-label={`${tournament.name} view`}>
-            {TABS.map(([id, label], i) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                id={`${tournament.id}-tab-${id}`}
-                aria-selected={tab === id}
-                aria-controls={`${tournament.id}-panel-${id}`}
-                tabIndex={tab === id ? 0 : -1}
-                className={tab === id ? 'is-on' : undefined}
-                onClick={() => setTab(id)}
-                onKeyDown={(e) => {
-                  const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-                  if (!step) return;
-                  e.preventDefault();
-                  const to = (i + step + TABS.length) % TABS.length;
-                  setTab(TABS[to][0]);
-                  e.currentTarget.parentElement.children[to]?.focus();
-                }}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="tournament-head">
+            {/* Real tabs rather than two buttons: the panels are alternative views of one
+                thing, so a roving tabindex and the arrow keys are what a keyboard expects.
+                The lit styling is `.mode-toggle`'s, which is the app's segmented control. */}
+            <div className="tournament-tabs" role="tablist" aria-label={`${tournament.name} view`}>
+              {TABS.map(([id, label], i) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  id={`${tournament.id}-tab-${id}`}
+                  aria-selected={tab === id}
+                  aria-controls={`${tournament.id}-panel-${id}`}
+                  tabIndex={tab === id ? 0 : -1}
+                  className={tab === id ? 'is-on' : undefined}
+                  onClick={() => setTab(id)}
+                  onKeyDown={(e) => {
+                    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                    if (!step) return;
+                    e.preventDefault();
+                    const to = (i + step + TABS.length) % TABS.length;
+                    setTab(TABS[to][0]);
+                    e.currentTarget.parentElement.children[to]?.focus();
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {/* Beside the tabs rather than inside a panel, because both are full of scores
+                and a score cannot be read without this: a winning 35 is somebody squeaking
+                over the line to 35, or a rout that overshot a line at 26, and nothing in a
+                box says which. It is one fact for the whole tournament — fixed at the draw
+                like the mode, see `tieSetup` — so it belongs beside the name rather than
+                repeated in every box, and a line living on one tab would disappear the
+                moment you looked at the other.
+                Worded as the setup screen words it for a tie, so the two agree.
+                Absent where the stored draw has no target, the way the date line is: it
+                takes a hand-edited file, and reserving the space is the worse trade. */}
+            {Number.isFinite(tournament.target) && (
+              <span className="tournament-target">Play to {tournament.target}</span>
+            )}
           </div>
 
           {/* Only the chosen panel is drawn, rather than both with one hidden. Hiding

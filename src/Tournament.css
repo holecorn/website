@@ -198,15 +198,23 @@
   text-transform: uppercase;
 }
 
+/* The tabs and what the tournament was played to, on one line. Left-aligned and only as
+   wide as the two of them: an open row is a metre wide with a bracket in it, and pushing
+   the target out to that edge leaves it a long way from the thing it describes. Sized to
+   its content is also what keeps the tabs from stretching, which is why `.tournament-tabs`
+   no longer needs an `align-self` of its own. */
+.tournament-head {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* The two views of an open tournament. Styled like `.mode-toggle`, the app's segmented
    control, rather than as a new kind of thing — but with its own class, because that one
    lives in App.css and redeclaring a name across files is the trap `.app.stats-screen`
-   already carries a note about.
-
-   `flex: 0 0 auto` and left-aligned: two tabs stretched across an open row a metre wide
-   read as two enormous buttons rather than as a switch. */
+   already carries a note about. */
 .tournament-tabs {
-  align-self: flex-start;
   display: flex;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -225,6 +233,15 @@
 .tournament-tabs button.is-on {
   background: var(--text);
   color: var(--bg);
+}
+
+/* Muted and small, the weight the date line on the row above carries: this is the terms the
+   cup was played on rather than a result. Never wraps — the row is only as wide as it and
+   the tabs, so there is nothing to wrap against. */
+.tournament-target {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 /* `min-width: 0` so the entrant table's own scroller can shrink below its content. A
