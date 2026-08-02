@@ -359,6 +359,28 @@ console.log('\nthe court shows both ends in doubles and only one in singles');
   await singles.close();
 }
 
+// Which end a singles pair starts at is not part of the arrangement, so setup
+// draws the one board and play draws both. Nothing below App.jsx can see which
+// screen it is on, so passing `setup` at the wrong call site — or at neither —
+// is invisible to the unit tests either way round.
+console.log('\nthe setup court drops the far end in singles and keeps it in play');
+{
+  const ends = (page) => page.locator('.court-end').count();
+
+  const setup = await open(WIDE, { mode: 'Singles', names: ['Neil', 'Cat'], start: false });
+  check('singles draws one end before the game starts', (await ends(setup)) === 1);
+  check('with no direction arrow to point at a board that is not there',
+    (await setup.locator('.throw-dir').count()) === 0);
+  check('and the mirror still on it', (await setup.locator('.swap-sides').count()) === 1);
+  const said = (await setup.locator('.positions .visually-hidden').innerText()).trim();
+  check('the spoken summary still names both players', said.includes('Neil') && said.includes('Cat'), said);
+  await setup.close();
+
+  const doubles = await open(WIDE, { start: false });
+  check('doubles keeps both ends there', (await ends(doubles)) === 2);
+  await doubles.close();
+}
+
 console.log('\nthe panels are a toggle on a phone and permanent on a wide screen');
 {
   const page = await open(PHONE);

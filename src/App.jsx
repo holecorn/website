@@ -594,6 +594,7 @@ export default function App() {
         <TossForFirst game={game} dispatch={dispatch} />
         <Positions
           game={game}
+          setup
           onSwapSides={(side) => dispatch({ type: 'setStartSide', side })}
         />
         {/* Text rather than a field on a tie, the way the names are: the target is fixed

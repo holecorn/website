@@ -271,6 +271,23 @@ project dependency. It starts and stops its own preview server.
     this round's swap puts it. Using the current round for both ends makes the
     far row flip on odd rounds without those players ever moving, which reads as
     a bug. One test covers exactly this and nothing else does.
+  - **The setup screen draws one board in singles and the play screen draws
+    two**, and the divergence is the point rather than an oversight. Which end a
+    singles pair starts at is not part of the arrangement — nobody changes box, so
+    the far row is empty and the throw arrow points at a board that swaps every
+    round anyway. What is left to set is which side of the board each player takes,
+    and that is one row. In play the lit end alternating *is* the information, so
+    both stay. Measured, dropping it takes the panel from 197px to 122px and the
+    singles setup screen from 943px to 868px against an 852px iPhone — 91px of
+    scroll to 16px, and 154px to 79px on an SE. Doubles is untouched at 197px.
+    - **The gate is a `setup` prop, not `gameStarted`.** That is false until the
+      first bag, so deriving it from state would open the play screen on one board
+      and grow a second row mid-round. It is also not `onSwapSides` being present:
+      that handler means "you may adjust", and the two facts only happen to
+      coincide today.
+    - **`spoken()` drops the end names with the drawing**, or the prose describes
+      a court that isn't there. The walk sentence goes too — `.positions-hint`
+      already says it in visible text.
   - **`startSide` is the only *new* state, not the only state that holds a
     position.** Which side of the court team A takes can't be derived from
     anything, so it is stored; it survives `New game` like the colours do, and an
@@ -2172,7 +2189,11 @@ which fails that assertion and nothing else. **The arrangement controls are ther
 for the same reason, and more so now that they sit in a different panel from the
 drawing they change**: a bag wired to the partner of its own row, and the setup
 handlers reaching the play screen's edit dialog, both pass all 220 unit tests and
-fail only here. The toss is covered there too, and only *properties* can be —
+fail only here. **Which screen the court is on is the same kind of gap**: nothing
+below `App.jsx` can see it, so the `setup` prop passed at neither call site or at
+both is invisible to the unit tests either way round. Verified by mutation — each
+fails only its own half, the missing prop on the setup assertions and the extra one
+on `singles leaves the far end empty`. The toss is covered there too, and only *properties* can be —
 the draw is random, so it asserts that both start-board players come up over 20
 presses, that no far partner ever does, and that the four names never move. It also
 holds the pause: the result faded out inside the window, the marker still where it

@@ -1,5 +1,5 @@
-// Top-down view of the court: two boards, each flanked by its two pitcher's
-// boxes. It shows who is standing where and nothing else — who throws first and
+// Top-down view of the court: a board flanked by its two pitcher's boxes, both
+// ends of it or one. It shows who is standing where and nothing else — who throws first and
 // which partner is at which board are set on the name fields, where the players
 // are already listed in board order. The one exception is the starting board's
 // swap control, because which side of the court a team takes isn't a property of
@@ -14,7 +14,7 @@ const END_NAME = ['starting', 'far'];
 // which survives being read aloud, so the panel carries the arrangement in prose
 // as well and hides the drawing from assistive tech. Reading four names in DOM
 // order would be worse than useless.
-function spoken({ ends, throwingEnd, first }) {
+function spoken({ ends, throwingEnd, first }, oneEnd) {
   const at = (end) => ['left', 'right'].map((side) => ({ side, ...ends[end].boxes[side] }));
   const up = at(throwingEnd).filter((box) => box.name);
   const here = END_NAME[throwingEnd];
@@ -22,15 +22,19 @@ function spoken({ ends, throwingEnd, first }) {
   const boxes = up.map((box) => `${box.name} in the ${box.side} box`).join(' and ');
   const firstName = up.find((box) => box.team === first)?.name;
   const sentences = [
-    `${boxes} at the ${here} board, throwing at the ${there} board.`,
+    oneEnd
+      ? `${boxes}, throwing at the board opposite.`
+      : `${boxes} at the ${here} board, throwing at the ${there} board.`,
     firstName ? `${firstName} throws first.` : null,
   ];
-  const waiting = at(1 - throwingEnd).filter((box) => box.name);
-  sentences.push(
-    waiting.length > 0
-      ? `${waiting.map((box) => box.name).join(' and ')} wait at the ${there} board and throw next round.`
-      : `Both walk to the ${there} board after this round.`,
-  );
+  if (!oneEnd) {
+    const waiting = at(1 - throwingEnd).filter((box) => box.name);
+    sentences.push(
+      waiting.length > 0
+        ? `${waiting.map((box) => box.name).join(' and ')} wait at the ${there} board and throw next round.`
+        : `Both walk to the ${there} board after this round.`,
+    );
+  }
   return sentences.filter(Boolean).join(' ');
 }
 
@@ -85,18 +89,26 @@ function End({ data, place, colors, first, onSwapSides }) {
   );
 }
 
-export default function Positions({ game, onSwapSides }) {
+export default function Positions({ game, onSwapSides, setup }) {
   const positions = courtPositions(game);
   const { ends, throwingEnd, first, walks } = positions;
   const colors = game.colors;
+  // Before the first round a singles court has nothing to say with two boards:
+  // nobody changes box, so which end they start at isn't part of the arrangement
+  // and the far one is an empty row. In play the ends alternate, so both stay.
+  const oneEnd = setup && game.mode !== 'doubles';
   return (
     <div className="positions">
-      <p className="visually-hidden">{spoken(positions)}</p>
+      <p className="visually-hidden">{spoken(positions, oneEnd)}</p>
       <div className="court">
-        <End data={ends[1]} place="far" colors={colors} first={first} />
-        <div className="throw-dir" aria-hidden="true">
-          {throwingEnd === 0 ? '▲' : '▼'}
-        </div>
+        {!oneEnd && (
+          <>
+            <End data={ends[1]} place="far" colors={colors} first={first} />
+            <div className="throw-dir" aria-hidden="true">
+              {throwingEnd === 0 ? '▲' : '▼'}
+            </div>
+          </>
+        )}
         <End
           data={ends[0]}
           place="near"
