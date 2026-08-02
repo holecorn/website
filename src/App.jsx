@@ -56,6 +56,7 @@ import {
   tieFor,
   tieSetup,
 } from './tournament.js';
+import { activeNames, inactiveKeys, loadInactive } from './inactive.js';
 import { NAME_FIELD } from './nameField.js';
 import './App.css';
 
@@ -245,6 +246,9 @@ export default function App() {
   // Held here rather than only inside the tournament screen, because a tie's banner needs
   // the tournament it belongs to and Import writes them from the stats screen.
   const [tournaments, setTournaments] = useState(loadTournaments);
+  // Who has stopped playing. Here for the same reason as the two above: it is set on the
+  // stats screen and read by the two screens that offer names.
+  const [inactive, setInactive] = useState(loadInactive);
   const confirmDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
   const archivedId = useRef(null);
@@ -431,8 +435,14 @@ export default function App() {
     }
   };
 
-  // Everyone the archive knows, newest spelling last so it is the one offered —
-  // the same rule `playerStats` settles a display name by.
+  // Everyone the archive knows and still plays, newest spelling last so it is the
+  // one offered — the same rule `playerStats` settles a display name by.
+  //
+  // The filter sits here and nowhere else: this list is what both the setup fields
+  // and the whole tournament draw screen offer from, so one place decides who gets
+  // suggested. It only ever removes a *suggestion* — every name is still accepted if
+  // it is typed, and playing takes the mark off again.
+  const hidden = useMemo(() => inactiveKeys(inactive, matches), [inactive, matches]);
   const knownNames = useMemo(() => {
     const seen = new Map();
     for (const m of [...matches].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0))) {
@@ -443,8 +453,8 @@ export default function App() {
         }
       }
     }
-    return [...seen.values()].sort((x, y) => x.localeCompare(y));
-  }, [matches]);
+    return activeNames([...seen.values()], hidden).sort((x, y) => x.localeCompare(y));
+  }, [matches, hidden]);
 
   if (screen === 'tournament') {
     return (
@@ -470,11 +480,13 @@ export default function App() {
     return (
       <Stats
         onBack={() => {
-          // Tournaments as well as matches: Import writes both, and a bracket that is in
-          // storage but not in state is a tournament the setup button cannot announce
-          // and the screen cannot draw until a reload.
+          // Tournaments and the inactive marks as well as matches: Import writes all
+          // three, and anything in storage but not in state is invisible until a
+          // reload — a bracket the setup button cannot announce, or somebody still
+          // being offered by the fields after being marked as gone.
           setMatches(loadArchive());
           setTournaments(loadTournaments());
+          setInactive(loadInactive());
           setScreen('setup');
         }}
         persisted={persisted}

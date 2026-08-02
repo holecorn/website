@@ -691,6 +691,135 @@ check(
   await ren.close();
 }
 
+// Marking somebody as no longer playing. `inactive.js` is pure and unit tested, so
+// what is left is entirely wiring, and it crosses three files: Stats writes the mark,
+// App re-reads it on the way back, and `knownNames` is what both the setup fields and
+// the tournament draw offer from. Each of those is individually correct however they
+// are joined up — a mark that is written and never read hides nobody, and nothing on
+// any screen says so.
+{
+  const off = await browser.newContext({ viewport: { width: 430, height: 932 } });
+  const offPage = await off.newPage();
+  offPage.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  const MARKS = 'holecorn.inactive.v1';
+  const offered = () =>
+    offPage.locator('#known-names option').evaluateAll((os) => os.map((o) => o.value));
+
+  await offPage.goto(URL);
+  // Three singles players, so there is somebody to mark, somebody to leave alone, and
+  // a third to prove the list is filtered rather than emptied. Rho plays the most
+  // recent game, which is what the return-on-play assertion below turns on.
+  await offPage.evaluate(() => {
+    localStorage.clear();
+    const rec = (id, a, b, endedAt) => ({
+      format: 1, id, startedAt: endedAt - 6e5, endedAt, mode: 'singles',
+      players: { a: [a, ''], b: [b, ''] },
+      colors: { a: '#27ae60', b: '#f2c94c' }, target: 21, winner: 'a',
+      final: { a: 21, b: 9 }, rounds: [],
+    });
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify([
+      rec('i1', 'Rho', 'Tau', 1.7e12),
+      rec('i2', 'Sigma', 'Tau', 1.7e12 + 1e6),
+    ]));
+  });
+  await offPage.reload();
+  await offPage.waitForSelector('.setup');
+  const before = await offered();
+  check(
+    'everyone in the archive is offered to begin with',
+    ['Rho', 'Sigma', 'Tau'].every((n) => before.includes(n)),
+    before.join(','),
+  );
+
+  await offPage.getByRole('button', { name: 'Stats' }).click();
+  await offPage.locator('.stats-table tbody tr', { hasText: 'Tau' }).locator('.player-select').click();
+  const tauRow = offPage.locator('.stats-table tbody tr', { hasText: 'Tau' });
+  check(
+    'a selected player offers the control',
+    await offPage.getByRole('button', { name: 'Mark inactive' }).isVisible(),
+  );
+  const playedBefore = await tauRow.locator('td').first().innerText();
+  await offPage.getByRole('button', { name: 'Mark inactive' }).click();
+
+  // Dimmed rather than tagged, so the sticky name column keeps its width. Read off
+  // the button inside the header cell, never the cell: fading the sticky cell's own
+  // background lets the columns scrolling under it show through the name.
+  const dimmed = await tauRow.locator('.player-select').evaluate((e) =>
+    Number(getComputedStyle(e).opacity),
+  );
+  const solidTh = await tauRow.locator('th').evaluate((e) => Number(getComputedStyle(e).opacity));
+  check('the row dims', dimmed < 1, `${dimmed}`);
+  check('but the sticky cell itself stays opaque', solidTh === 1, `${solidTh}`);
+  check(
+    'the panel says so in words, since dimming alone cannot',
+    await offPage.locator('.rivals-inactive').isVisible(),
+  );
+  check(
+    'their matches and their numbers are untouched',
+    (await tauRow.locator('td').first().innerText()) === playedBefore
+      && (await offPage.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]').length, KEY)) === 2,
+    playedBefore,
+  );
+  check(
+    'the control now offers the way back',
+    await offPage.getByRole('button', { name: 'Mark active' }).isVisible(),
+  );
+
+  await offPage.getByRole('button', { name: '‹ Back' }).click();
+  await offPage.waitForSelector('.setup');
+  const after = await offered();
+  check(
+    'they stop being offered by the setup fields, without a reload',
+    !after.includes('Tau'),
+    after.join(','),
+  );
+  check('and everybody else still is', after.length === 2, after.join(','));
+
+  await offPage.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await offPage.getByRole('button', { name: 'New tournament' }).click();
+  const chips = await offPage.locator('.roster-chip').allInnerTexts();
+  check(
+    'and the tournament roster drops them too, from the same list',
+    chips.length === 2 && !chips.includes('Tau'),
+    chips.join(','),
+  );
+  await offPage.getByRole('button', { name: '‹ Back' }).click();
+  await offPage.waitForSelector('.setup');
+
+  // The mark is a timestamp rather than a flag precisely so this needs no second
+  // write path: playing again is newer than the mark, so they are simply back.
+  check('the mark is stored as a stamp, not a flag', await offPage.evaluate((key) => {
+    const marks = JSON.parse(localStorage.getItem(key) || '{}');
+    return Number.isFinite(marks.tau) && marks.tau > 0;
+  }, MARKS));
+  await offPage.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem('holecorn.matches.v1'));
+    all.push({
+      format: 1, id: 'i3', startedAt: Date.now() - 6e5, endedAt: Date.now() + 6e5,
+      mode: 'singles', players: { a: ['Tau', ''], b: ['Rho', ''] },
+      colors: { a: '#27ae60', b: '#f2c94c' }, target: 21, winner: 'a',
+      final: { a: 21, b: 9 }, rounds: [],
+    });
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify(all));
+  });
+  await offPage.reload();
+  await offPage.waitForSelector('.setup');
+  const back = await offered();
+  check(
+    'playing again puts them back with nothing else written',
+    back.includes('Tau'),
+    back.join(','),
+  );
+  check(
+    'and the mark is still on disk, so it was derived rather than cleared',
+    await offPage.evaluate((key) => Boolean(JSON.parse(localStorage.getItem(key) || '{}').tau), MARKS),
+  );
+  await off.close();
+}
+
 // The stats screen on a wide screen. It is an `.app` too, so it was picking up the
 // play screen's wide-tier grid: everything landed in the 408px first column while
 // 340px stayed reserved for a rail that never renders, putting the content 196px left

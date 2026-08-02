@@ -445,6 +445,16 @@
   background: var(--border);
 }
 
+/* Somebody who has stopped playing keeps their row and every number in it; only the
+   ink comes down. **Never on the `th` itself** — it is the sticky column, so it
+   carries an opaque background, and fading that lets the cells scrolling underneath
+   show through the name. The button inside it fades instead, which leaves the
+   background doing its job. */
+.stats-table tbody tr.is-inactive td,
+.stats-table tbody tr.is-inactive .player-select {
+  opacity: 0.45;
+}
+
 /* One look for both dialogs' fields; only the width differs, since a doubles pair
    sits two to a row. 17px and not the 15px the match fields started at: under
    16px iOS zooms the page on focus, and these sit in a dialog it would then be
@@ -561,10 +571,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Two buttons rather than one since a player can be marked as gone, and at 11px
+     they still overrun a phone next to the count. Wrapping puts them on their own
+     line there and leaves the row alone everywhere it fits. */
+  flex-wrap: wrap;
   gap: 8px;
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 11px;
+}
+
+.rivals-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Says in words what the dimmed table row only implies. */
+.rivals-inactive {
+  font-weight: 600;
+  color: var(--text);
 }
 
 .rivals-none {

@@ -323,26 +323,40 @@ describe('archiveFile and readArchiveFile', () => {
   const match = matchRecord(wonGame(), 900);
   const tournament = { id: 't1', entrants: [['Neil'], ['Sigma']] };
 
-  it('writes an envelope carrying both', () => {
-    expect(archiveFile([match], [tournament])).toEqual({
+  it('writes an envelope carrying all three', () => {
+    expect(archiveFile([match], [tournament], { rho: 900 })).toEqual({
       format: FILE_FORMAT,
       matches: [match],
       tournaments: [tournament],
+      inactive: { rho: 900 },
     });
   });
 
   it('round-trips', () => {
-    const parsed = JSON.parse(JSON.stringify(archiveFile([match], [tournament])));
-    expect(readArchiveFile(parsed)).toEqual({ matches: [match], tournaments: [tournament] });
+    const parsed = JSON.parse(JSON.stringify(archiveFile([match], [tournament], { rho: 900 })));
+    expect(readArchiveFile(parsed)).toEqual({
+      matches: [match],
+      tournaments: [tournament],
+      inactive: { rho: 900 },
+    });
   });
 
   it('still reads an export taken before tournaments existed', () => {
     // A bare array is every file exported so far, and those have to keep importing.
-    expect(readArchiveFile([match])).toEqual({ matches: [match], tournaments: [] });
+    expect(readArchiveFile([match])).toEqual({ matches: [match], tournaments: [], inactive: {} });
   });
 
-  it('tolerates an envelope with no tournaments in it', () => {
-    expect(readArchiveFile({ matches: [match] })).toEqual({ matches: [match], tournaments: [] });
+  it('tolerates an envelope missing either of the other two sections', () => {
+    expect(readArchiveFile({ matches: [match] })).toEqual({
+      matches: [match],
+      tournaments: [],
+      inactive: {},
+    });
+    expect(readArchiveFile({ matches: [match], inactive: ['nope'] })).toEqual({
+      matches: [match],
+      tournaments: [],
+      inactive: {},
+    });
   });
 
   it('refuses anything that is not an export', () => {

@@ -246,6 +246,25 @@ tidy up after the fact:
 Neither one touches a game in progress, and neither is reachable from the play
 screen, so there's no way to move rounds around under a game you're scoring.
 
+### Players who have stopped playing
+
+People move away or drop out, and after a few years the name suggestions are
+mostly people who won't be back. **Mark inactive**, in the same panel as
+**Rename**, takes somebody out of the lists without touching a thing they did:
+every match, every number and every rivalry stays exactly as it is, and their row
+stays in the Players table, just dimmed.
+
+What it changes is only what gets *offered*. They stop appearing in the name
+suggestions on the setup screen and in the tournament draw's tap-to-add roster. If
+they turn up anyway you just type the name as usual — nothing is ever refused —
+and playing a game puts them back in both lists on their own. There's a **Mark
+active** button too, for one marked by mistake.
+
+Who is marked travels with **Export as JSON**, so a new phone doesn't start
+offering everybody again. Older export files are read as before; they simply have
+nobody marked. As with a deleted match, *un*-marking somebody doesn't propagate —
+importing an older file will mark them again.
+
 ### Form, before a game starts
 
 Once the names are in, a **Form** panel appears on the setup screen — below

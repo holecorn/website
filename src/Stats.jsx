@@ -35,6 +35,15 @@ import {
   finalScore,
   hasRounds,
 } from './stats.js';
+import {
+  inactiveKeys,
+  loadInactive,
+  markActive,
+  markInactive,
+  mergeInactive,
+  renameMark,
+  saveInactive,
+} from './inactive.js';
 import { NAME_FIELD } from './nameField.js';
 import { shortDate } from './dates.js';
 import { minutes, one, pct, plural } from './format.js';
@@ -104,6 +113,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // Read alongside the archive, so a match can say which tie it was. Nothing on this
   // screen edits a tournament; import is the one path that writes the list back.
   const [tournaments, setTournaments] = useState(loadTournaments);
+  // Owned here while the screen is open, like the two above, because this is the one
+  // screen that sets it. App re-reads on the way back.
+  const [inactive, setInactive] = useState(loadInactive);
   const [lastExport, setLastExport] = useState(loadLastExport);
   const [notice, setNotice] = useState(null);
   const [deleted, setDeleted] = useState(null);
@@ -124,6 +136,10 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // where in a bracket it sat — `tieLabels` works it back out from the two sides.
   const ties = useMemo(() => tieLabels(tournaments, matches), [tournaments, matches]);
   const players = useMemo(() => playerStats(matches), [matches]);
+  // Who is currently hidden from the name fields. Derived rather than read straight
+  // off the marks, so somebody who has played since being marked reads as back —
+  // here as well as on the screens that offer them.
+  const hidden = useMemo(() => inactiveKeys(inactive, matches), [inactive, matches]);
   // Resolved from the list rather than held alongside it, so a player who has
   // just lost their last match to a deletion takes the panel with them.
   const subject = players.find((p) => nameKey(p.name) === selected) ?? null;
@@ -170,8 +186,14 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // setup screen, so the old spelling can't walk straight back into the next
   // game. Safe to touch that lineup because this screen is only reachable from
   // setup, where nothing has been thrown yet.
-  const renamePlayer = (from, to) => {
+  // `merges` comes from the dialog, which has already had to answer that to word
+  // itself: two spellings of "this name already has a career" is drift with no symptom.
+  const renamePlayer = (from, to, merges) => {
     setMatches(savePlayerRename(from, to, Date.now()));
+    // The mark is keyed by name, so it has to move with the person or it goes on
+    // hiding a name nobody answers to. Whether this is a merge decides whose state
+    // survives — see `renameMark`.
+    setInactive(saveInactive(renameMark(inactive, from, to, merges)));
     onRenamePlayer?.(from, to);
     setRenaming(null);
     setNotice(null);
@@ -180,10 +202,23 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
     setSelected(nameKey(to));
   };
 
+  // Their matches and every number on this screen are untouched either way; all this
+  // decides is whether the lineup fields and the tournament draw go on offering them.
+  const setPlaying = (player, playing) => {
+    setInactive(
+      saveInactive(
+        playing
+          ? markActive(inactive, player.name)
+          : markInactive(inactive, player.name, matches, Date.now()),
+      ),
+    );
+    setNotice(null);
+  };
+
   const exportMatches = () => {
     const stamp = new Date().toISOString().slice(0, 10);
     const url = URL.createObjectURL(
-      new Blob([JSON.stringify(archiveFile(matches, loadTournaments()), null, 2)], {
+      new Blob([JSON.stringify(archiveFile(matches, loadTournaments(), inactive), null, 2)], {
         type: 'application/json',
       }),
     );
@@ -214,6 +249,10 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
         mergeTournaments(loadTournaments(), data.tournaments),
       );
       setTournaments(mergedTournaments);
+      // Not counted in the notice below, unlike the other two: a mark is about
+      // somebody the archive already knows, so it adds nothing to find and the
+      // Players table says who is out.
+      setInactive(saveInactive(mergeInactive(loadInactive(), data.inactive)));
       const merged = saveArchive(mergeMatches(loadArchive(), data.matches));
       const added = merged.length - matches.length;
       // Counted as well as the matches, because a bracket can arrive without one. A
@@ -305,7 +344,15 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                   {players.map((p) => (
                     <tr
                       key={p.name}
-                      className={nameKey(p.name) === selected ? 'is-selected' : undefined}
+                      className={[
+                        nameKey(p.name) === selected && 'is-selected',
+                        // Dimmed rather than tagged: the sticky name column has no
+                        // width to give a word. Dimming cannot say *what* is special,
+                        // so the panel below does and the row carries it for a reader.
+                        hidden.has(nameKey(p.name)) && 'is-inactive',
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined}
                     >
                       <th scope="row">
                         {/* The name is the select target because it is the only
@@ -321,6 +368,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                           aria-pressed={nameKey(p.name) === selected}
                         >
                           {p.name}
+                          {hidden.has(nameKey(p.name)) && (
+                            <span className="visually-hidden">, inactive</span>
+                          )}
                         </button>
                       </th>
                       <td>{p.matches}</td>
@@ -417,12 +467,29 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
               )}
               <p className="rivals-foot">
                 <span>
+                  {/* The one place the dimmed row is put into words, and the only
+                      thing on this screen that says what marking somebody does:
+                      every number above stays exactly as it is. */}
+                  {hidden.has(nameKey(subject.name)) && (
+                    <span className="rivals-inactive">Inactive · </span>
+                  )}
                   {rivals.length} opponent{rivals.length === 1 ? '' : 's'} ·{' '}
                   {rivals.reduce((n, o) => n + o.met, 0)} meetings
                 </span>
-                <button className="match-edit" onClick={() => setRenaming(subject)}>
-                  Rename {subject.name}
-                </button>
+                {/* Beside Rename, and here for the same reason it is: a control in the
+                    table would sit off-screen on a phone and turn a mis-tap into a
+                    change rather than a selection. */}
+                <span className="rivals-buttons">
+                  <button
+                    className="match-edit"
+                    onClick={() => setPlaying(subject, hidden.has(nameKey(subject.name)))}
+                  >
+                    {hidden.has(nameKey(subject.name)) ? 'Mark active' : 'Mark inactive'}
+                  </button>
+                  <button className="match-edit" onClick={() => setRenaming(subject)}>
+                    Rename {subject.name}
+                  </button>
+                </span>
               </p>
             </section>
           )}
@@ -534,7 +601,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
           player={renaming}
           players={players}
           onCancel={() => setRenaming(null)}
-          onSave={(to) => renamePlayer(renaming.name, to)}
+          onSave={(to, merges) => renamePlayer(renaming.name, to, merges)}
         />
       )}
     </div>
@@ -562,7 +629,7 @@ function RenamePlayer({ player, players, onCancel, onSave }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (changed) onSave(to);
+          if (changed) onSave(to, Boolean(merges));
         }}
       >
         {/* Same 16 as the setup field: it is the cap the scoreboard payload's

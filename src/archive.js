@@ -213,19 +213,29 @@ export function mergeMatches(records, incoming) {
 // import perfectly and belong to nothing.
 export const FILE_FORMAT = 1;
 
-export function archiveFile(matches, tournaments) {
-  return { format: FILE_FORMAT, matches, tournaments };
+export function archiveFile(matches, tournaments, inactive) {
+  return { format: FILE_FORMAT, matches, tournaments, inactive };
 }
 
-// Reads both shapes. An export taken before tournaments existed is a bare array, and
-// it has to keep importing — the same merge-on-load tolerance `loadGame` uses rather
-// than bumping a key and abandoning what is already on people's phones.
+function marksOrNone(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+// Reads every shape an export has ever had. A file taken before tournaments existed
+// is a bare array, and one taken before players could be marked inactive has no
+// `inactive` — both have to keep importing, the same merge-on-load tolerance
+// `loadGame` uses rather than bumping a key and abandoning what is on people's
+// phones. A missing section is the empty one, never a refusal.
 export function readArchiveFile(parsed) {
-  if (Array.isArray(parsed)) return { matches: parsed, tournaments: [] };
+  if (Array.isArray(parsed)) return { matches: parsed, tournaments: [], inactive: {} };
   if (!parsed || typeof parsed !== 'object') return null;
-  const { matches, tournaments } = parsed;
+  const { matches, tournaments, inactive } = parsed;
   if (!Array.isArray(matches)) return null;
-  return { matches, tournaments: Array.isArray(tournaments) ? tournaments : [] };
+  return {
+    matches,
+    tournaments: Array.isArray(tournaments) ? tournaments : [],
+    inactive: marksOrNone(inactive),
+  };
 }
 
 // Matches finished since the last export. Measured against the newest end time

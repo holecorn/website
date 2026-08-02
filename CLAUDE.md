@@ -53,6 +53,10 @@ project dependency. It starts and stops its own preview server.
   tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
 - `src/nameField.js` — `NAME_FIELD`, the props every person-name field needs to stop
   the browser's own contact autofill fighting the archive's suggestions.
+- `src/inactive.js` — who has stopped playing, and so is no longer offered by the
+  name fields. **Stores when they were marked and derives the rest**, the way
+  `tournament.js` stores the draw — see **Marking a player inactive**. Pure, plus the
+  localStorage wrapper the same split; tested in `src/inactive.test.js`.
 - `src/dates.js` — how a date is written on screen, shared by the stats screen's recent
   list and the tournament rows. Pure and framework-free; tested in `src/dates.test.js`.
 - `src/Lineup.jsx` / `src/Lineup.css` — the setup screen's pre-game form panel.
@@ -1274,6 +1278,88 @@ the alternatives that were rejected; this section holds what breaks when you cha
   of more than a week between ties in a *tab* takes the archive with it. Not a coding problem;
   `requestPersistence` already runs and the stats screen already reports the answer.
 
+## Marking a player inactive
+
+Somebody who has stopped playing keeps every match and every number, and stops being
+offered when a lineup or a tournament field is filled in.
+
+- **This is the app's only stored fact about a person, and that is the cost to weigh
+  before adding a second.** A player is otherwise a string inside match records and
+  nothing else — no id, no profile, no per-player table — which is what lets a rename
+  be two array rewrites (see **Editing names**). So `inactive.js` holds one fact and
+  no display name; the archive already has the spelling.
+  - **The derivable alternative was considered and cannot express this.** "Offer only
+    people who played in the last N months" needs no state at all, but this group
+    plays seasonally, so somebody back next summer is indistinguishable from somebody
+    gone — and it would change what is offered with nothing to set and nothing to see.
+- **What is stored is *when* somebody was marked, not that they are.** Being inactive
+  is derived: marked, and not seen playing since. That is the whole reason there is no
+  second write path — playing again brings them back with nothing to remember, and the
+  mark cannot come to disagree with the history beside it.
+  - **The bare-set alternative needs a mutation inside the archive effect in
+    `App.jsx`**, which is the one place with careful win → undo → re-win idempotency,
+    *and* is still stale after an import brings in games played on another phone.
+  - **A mark is stamped past the person's last match as well as by the clock**
+    (`Math.max(at, since + 1)`). Both are `Date.now()` values, so a slow clock would
+    otherwise stamp somebody earlier than the game they just finished and the button
+    would do nothing visible — a dead button, not a clock problem, as far as anyone
+    pressing it can tell. It is the same reasoning as the toss withholding its result.
+  - **`lastSeen` counts the mode's roster, the rule `playedIn` credits by**, so a
+    singles record's unused second slot cannot keep a phantom in the group.
+- **It hides, it never refuses.** Every name is still accepted if it is typed, so a
+  returning player is never locked out of the lineup they are standing in. That is
+  what makes the whole feature safe to get wrong — the worst outcome is typing a name
+  — and it is why nothing in `lineupFaults` or `entrantFaults` knows about this.
+- **The filter is one line in `App.jsx`'s `knownNames` and nowhere else.** That memo is
+  what both the setup `datalist` and the entire tournament draw screen offer from, so
+  one place decides who gets suggested. **A new surface that offers names must read
+  `knownNames`** or it will be the one list still naming people who left.
+  - The career table and everything on the stats screen deliberately read the archive
+    unfiltered: the point is that the numbers stay.
+- **The mark has to move with a career rename**, or it goes on hiding a name nobody
+  answers to. **On a merge the surviving name's own state stands** — renaming a
+  departed player onto somebody still playing must not retire them, and a mark being
+  folded away has no claim on a career that already existed. A plain rename carries
+  the *original* stamp rather than restamping: they stopped playing when they stopped
+  playing, not when their name was fixed.
+  - **`merges` is passed in from the rename dialog**, which has already had to answer
+    that question to word itself. Two spellings of "this name already has a career" is
+    the drift with no symptom.
+- **The export envelope carries it, and the merge takes the newer mark** — the rule
+  `mergeMatches` settles an edited record by, because another device may have retired
+  somebody since the file was written. **Making somebody active again does not
+  propagate**, because it is the *absence* of a mark and an absence cannot outrank
+  one; re-importing an old file brings the mark back. Exactly the limit a deleted
+  match already has, and for the same reason: an export is a snapshot, not a log.
+  - **A file with no `inactive` section reads as nobody marked**, the merge-on-load
+    tolerance `readArchiveFile` already applies to `tournaments`. Never a refusal.
+  - **Not counted in the import notice**, unlike matches and tournaments: a mark is
+    about somebody the archive already knows, so it adds nothing to go and find.
+- **The Players table dims the row; it does not tag it.** The name column is sticky and
+  the only cell always on screen — measured at 81px, with names already scrolling
+  inside it past about 12 characters — so a word in there is width the table cannot
+  spare. What dimming cannot do is say *what* is special, the fault the shaded nemesis
+  row had, so the panel below says it in words and the row carries it for a reader.
+  - **Never fade the `th` itself.** It is the sticky cell, so it carries an opaque
+    background, and fading that lets the columns scrolling underneath show through the
+    name. `.player-select` inside it fades instead, and `verify-stats.mjs` asserts both
+    halves — the button dims *and* the cell stays at opacity 1.
+- **The panel's foot row wraps on a phone and that is deliberate.** Two buttons plus
+  the count need 328px against the 361px a 393px phone has — 33px, where the longer
+  labels this shipped with left 11px, which the deploy runner's wider `system-ui` would
+  have eaten. The *inactive* state needs 371px and so wraps below about 440px, and at
+  320px both states do. Nothing asserts one line here, so a wrap is 24px of height
+  rather than a red deploy — but that is the budget, and it is why the buttons say
+  **`Mark inactive`** rather than anything longer.
+- **One word — *inactive* — runs through the module, the storage key, the CSS class and
+  the button labels.** Two words for one concept is the drift these notes are full of.
+- **`verify-stats.mjs` is the only thing that can see any of this**, because it crosses
+  three files: `Stats` writes the mark, `App` re-reads it on the way back, and
+  `knownNames` is what the two offering screens read. Each is individually correct
+  however they are joined up, and a mark written but never read hides nobody with
+  nothing on any screen saying so. Verified by mutation — dropping the re-read fails
+  exactly the three offering assertions, and dropping the row class fails only the dim.
+
 ## Editing names
 
 - **Rewriting a record's `players` array *is* the reattribution, and that is the
@@ -1305,6 +1391,8 @@ the alternatives that were rejected; this section holds what breaks when you cha
   because renaming a slot mid-game would move rounds already committed to it. Same
   reasoning as the arrangement controls: the guard is what makes a second caller
   safe, not the current call site.
+- **A rename also has to carry the inactive mark**, which is keyed by name — see
+  **Marking a player inactive** for why a merge is the case that decides it.
 - **Renaming onto an existing name is a merge and needs no code**, because
   name-folding already is the identity. What it needs is *saying*: the dialog names
   whose history is about to absorb which, and how many matches, since this screen
