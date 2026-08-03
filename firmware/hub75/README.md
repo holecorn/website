@@ -522,6 +522,15 @@ wordmark, in **two of the app's four team colours picked at random each boot**, 
 a 2x2 connect indicator in the top-right corner: red for no WiFi, amber for WiFi but
 no broker, green once subscribed.
 
+**Amber is the indicator's ceiling, so green on the splash is not a state to wait for.**
+The first `connectMqtt()` is gated on `millis() - lastReconnectAttempt > RECONNECT_INTERVAL`
+with the stamp starting at zero, so it fires just after t = 5000 ms — which is exactly
+when `SPLASH_MS` expires. A healthy board therefore ends its splash on amber. Read
+**red vs not-red** off the dot and nothing more; the broker is answered by what the panel
+does *after* the splash clears, or by `subscribed to …` on serial. Raising the ceiling
+would mean firing the connect earlier, which puts a blocking `client.connect()` inside the
+throws — see the animation cost two sections down. The dot is worth less than the splash.
+
 **The mark assembles itself by being thrown there.** The two boxes the wordmark draws
 round its words are two cornhole boards, so they are up from the first frame and the
 eight letters are thrown into them — HOLE's from the left, CORN's from the right, the
@@ -838,6 +847,42 @@ to it cannot short their rear traces the way a metal backer could.
   block that never changed colour while the sketch cycled fills, which means no
   data at all; once on the right socket it went *blank*, which is an
   uninitialised FM6126A.
+- **The network lives in the binary, so changing WiFi means a reflash.** `WIFI_SSID`
+  and `WIFI_PASS` are `secrets.h` constants compiled into `setup()` — there is no
+  runtime config, no captive portal, nothing stored. Editing `secrets.h` and rebooting
+  changes nothing at all, which reads exactly like a network fault. `esptool` is the
+  quickest way to tell whether flash already matches: **"No changed sectors found …
+  verified"** on `hub75.ino.bin` means the compiled binary is byte-identical to what is
+  on the board, and since the credentials are baked in, that is proof the edit is
+  already live.
+- **The ESP32-S3 radio is 2.4 GHz only**, and this is silicon rather than
+  configuration — a 5 GHz SSID is not merely unsupported, it is invisible. So a router
+  that splits the bands into separate names needs the 2.4 GHz one in `secrets.h`, and
+  one that publishes a single SSID across both bands needs nothing special. Hit on
+  2026-08-03 changing networks: the AP was 5 GHz, and the symptom was a red dot with
+  an otherwise perfectly working board.
+- **Nothing is logged when WiFi never comes up, so the dot is the only report.**
+  `ensureWifi()` prints on *transitions* only — `wifi ok` on the way up, `wifi lost`
+  when a good link drops. A board that has never associated has `wifiWasUp == false`,
+  so neither fires and the 10 s retry is silent; serial silence is therefore not
+  evidence of anything. To get the reason code, reflash with the debug level raised
+  and the ESP-IDF stack will name the failure (`NO_AP_FOUND` vs an auth failure,
+  which need different fixes):
+
+  ```bash
+  arduino-cli compile --upload -p <port> \
+    -b esp32:esp32:adafruit_matrixportal_esp32s3:DebugLevel=info firmware/hub75
+  ```
+
+  It is a build-menu option, so no edit to the sketch — but it costs ~90 kB of flash,
+  and the board should not be left running it.
+- **The board needs a route to the internet, not just an access point.** `MQTT_HOST`
+  is `broker.emqx.io`, so an AP with no uplink gets you a joined network and no
+  broker — WiFi up, amber, dashes forever. On 2026-08-03 the Beryl AX was serving
+  2.4 GHz with its WAN unplugged and that was the whole of the remaining fault.
+  Removing the internet dependency is what `docs/OFFLINE-SCOREBOARD.md` is for, and
+  it is a bigger job than a WAN cable: mosquitto, a certificate, a DNS override, and
+  the phone on the same network.
 - **Chain direction.** If the two halves come out swapped — team B on the left —
   that is not a bug, it is which panel the controller is plugged into. Swap the
   ribbon.
@@ -862,6 +907,13 @@ to it cannot short their rear traces the way a metal backer could.
 
 The board is fed from a phone hotspot, so the network is expected to vanish and
 come back — not just the broker.
+
+**In practice, since 2026-08-03, it has run off the Beryl AX instead** — 2.4 GHz with
+5 GHz disabled, WAN connected so `broker.emqx.io` is reachable. That is a strictly
+easier network than a hotspot: a router does not sleep when its last client leaves, so
+the failure at the bottom of this section does not apply to it. Everything else here
+still earns its keep, because the beach case is still a hotspot and the reconnection
+paths are shared.
 
 - **`setup()` does not wait for WiFi.** `loop()` owns reconnection via
   `ensureWifi()`, so blocking in setup would only hang the board on dashes when

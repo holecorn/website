@@ -101,6 +101,14 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
     don't lift the rule. What it cannot cover is the board *printing* one: `subscribed
     to holecorn/<GAME_CODE>/state` puts the code in any serial log, so treat a bench
     code as disposable.
+  - **The consequence for debugging: the network is in the binary, so a WiFi change
+    needs a reflash.** Editing `secrets.h` and power-cycling changes nothing, and looks
+    identical to a network fault. `esptool` saying **"No changed sectors found"** on
+    `hub75.ino.bin` proves the edit is already flashed, since the credentials are baked
+    in. Also worth knowing before theorising: the radio is **2.4 GHz only** in silicon,
+    and `ensureWifi()` logs transitions only — a board that never associated prints
+    nothing, so serial silence is not evidence. `README.md`'s `Things that will bite`
+    has the debug-level flag that makes the stack name the reason.
 - **`host/` holds the two host suites and the vendored `ArduinoJson.h`, and must not
   be `src/`** — Arduino recurses into `src/` and ignores every other subdirectory,
   which is the whole mechanism. Beside the sketch, `test_render.cpp` and
@@ -192,6 +200,13 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
   refreshes from DMA in hardware, so blocking would *not* flicker the digits — the
   `millis()` timers are there because a blocking reconnect stalls MQTT, which is what
   makes the board miss a round.
+  - **`RECONNECT_INTERVAL` also gates the *first* MQTT attempt, and that is why the
+    splash's connect dot can only ever reach amber**: the stamp starts at zero, so the
+    attempt lands just after t = 5000 ms, exactly as `SPLASH_MS` expires. It reads like
+    an off-by-one worth fixing and is not — firing earlier puts a blocking
+    `client.connect()` inside the 3.58 s of splash throws and freezes the mark
+    part-thrown. The dot is worth less than the animation, so **read red vs not-red off
+    it and nothing more.**
 - **PubSubClient's 256-byte default is too small.** ASCII names land ~251 bytes
   including topic and headers and non-ASCII reach ~379, because the app caps names at
   16 UTF-16 code units rather than 16 bytes. Oversized messages are dropped silently,
