@@ -16,12 +16,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const CXX = process.env.CXX ?? 'c++';
 const ARDUINOJSON = 'v7.4.3';
-const JSON_HEADER = resolve(root, 'firmware/hub75/ArduinoJson.h');
+const JSON_HEADER = resolve(root, 'firmware/hub75/host/ArduinoJson.h');
 
 let failed = false;
 
@@ -101,15 +101,24 @@ step('the generated logo masks match public/logo.svg', () => {
   process.stdout.write(`   logo.h and src/panelLogo.js built from ${sha.slice(0, 12)}\n`);
 });
 
+// The suites sit in host/ rather than beside the sketch because Arduino compiles
+// every source file in a sketch folder: two main()s collide at link, and the
+// vendored ArduinoJson.h shadows the real 7.4.3 library. Arduino ignores
+// subdirectories other than src/, so one level down is the whole fix. They still
+// build with firmware/hub75 as the working directory, which is what keeps out/ and
+// the -I. onto render.h/board_logic.h where they were.
 const SUITES = [
-  { dir: 'firmware/hub75', src: 'test_board_logic.cpp', inc: ['-I.'] },
+  { dir: 'firmware/hub75', src: 'host/test_board_logic.cpp', inc: ['-I.', '-Ihost'] },
   // Writes PPMs into out/, so it needs the directory to exist.
-  { dir: 'firmware/hub75', src: 'test_render.cpp', inc: ['-I.'], out: true },
+  { dir: 'firmware/hub75', src: 'host/test_render.cpp', inc: ['-I.', '-Ihost'], out: true },
 ];
 
 const ran = {};
 for (const suite of SUITES) {
-  ran[suite.src] = step(`${suite.dir}/${suite.src}`, () => {
+  // Keyed on the bare filename, not the path: the lookup below decides whether the
+  // pixel check runs or *skips*, so a moved suite would otherwise silently stop
+  // comparing framebuffers and still report a pass.
+  ran[basename(suite.src)] = step(`${suite.dir}/${suite.src}`, () => {
     const cwd = resolve(root, suite.dir);
     if (suite.out) mkdirSync(resolve(cwd, 'out'), { recursive: true });
     // Binary goes to the system temp dir, so running the suite never leaves

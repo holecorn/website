@@ -2,7 +2,7 @@
 paths:
   - "src/*.test.js"
   - "tools/*.mjs"
-  - "firmware/hub75/test_*.cpp"
+  - "firmware/hub75/host/test_*.cpp"
 ---
 
 # Testing

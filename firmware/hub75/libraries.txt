@@ -1,11 +1,27 @@
-Arduino libraries for the HUB75 build, with the versions this was written
-against. Install through Library Manager, or pin these if something breaks.
+Arduino libraries for the HUB75 build. These versions are what the sketch was
+written against *and* what it has now been compiled against.
 
   ESP32 HUB75 LED MATRIX PANEL DMA Display   3.0.12   mrcodetastic
   PubSubClient                               2.8      Nick O'Leary
   ArduinoJson                                7.4.3    Benoit Blanchon
 
-Board: "Adafruit MatrixPortal S3" from the esp32 package by Espressif (3.x).
+  Adafruit GFX Library                       1.12.6   Adafruit   <- transitive
+  Adafruit BusIO                             1.17.4   Adafruit   <- transitive
 
-None of this has been compiled for the board or run on hardware. The versions
-above are what the code was written against, not what it was verified with.
+The bottom two are not used by any code here. The HUB75 library's own header
+includes Adafruit_GFX.h, so the build fails at the first #include without it, and
+GFX in turn pulls BusIO. Library Manager installs them for you; arduino-cli does
+not, which is how they came to be missing from this list for so long. Don't drop
+them for being unreferenced.
+
+Board: "Adafruit MatrixPortal ESP32-S3" from the esp32 package by Espressif.
+FQBN: esp32:esp32:adafruit_matrixportal_esp32s3
+Core: esp32:esp32 3.3.11
+
+Compiled clean on 2026-08-03 — no warnings from any file here, including at
+--warnings all. 996,467 bytes of flash (47% of 2,097,152) and 81,076 bytes of
+global RAM (24% of 327,680), leaving 246,604 for locals.
+
+**Still never run on hardware, and nothing here exercises WiFi or MQTT.** A clean
+compile says the code is well-formed for this target; it says nothing about the
+pinmap being right, the panel driver IC, or the broker.

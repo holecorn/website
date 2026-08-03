@@ -231,7 +231,7 @@ static const uint32_t SPLASH_STAGGER_MS = SPLASH_FLIGHT_MS;
 static const int SPLASH_THUMP = 1;
 static const uint32_t SPLASH_THUMP_MS = 70;
 
-// Everything is at rest by here, which is what sketch.ino's SPLASH_MS has to outlast.
+// Everything is at rest by here, which is what hub75.ino's SPLASH_MS has to outlast.
 static const uint32_t SPLASH_ANIM_MS =
     (SPLASH_THROWS - 1) * SPLASH_STAGGER_MS + SPLASH_FLIGHT_MS + SPLASH_SKID_MS;
 

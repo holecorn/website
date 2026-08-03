@@ -682,7 +682,7 @@ the broker on the LAN.
     fighting the antialiasing. Checked at 3x dot size, not assumed.
   - **`drawSplash` takes its two colours as arguments and picks nothing.** `render.h`
     has to give the same frame for the same inputs or the pixel check cannot hold it, so
-    the randomness lives in `sketch.ino` (`esp_random()`, because `random()` is seeded
+    the randomness lives in `hub75.ino` (`esp_random()`, because `random()` is seeded
     identically every boot and would show the same pair every time) and in `Panel.jsx`
     for the emulator. The picker cannot repeat a colour: the second index steps past the
     first over the remaining ones rather than being redrawn.

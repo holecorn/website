@@ -259,7 +259,7 @@ the broker. Do not add port forwards.
 
 ### 10. Firmware
 
-In `firmware/hub75/sketch.ino`, with `USE_TLS` left at `0`:
+In `firmware/hub75/hub75.ino`, with `USE_TLS` left at `0`:
 
 ```c
 const char* WIFI_SSID = "holecorn";

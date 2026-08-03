@@ -94,7 +94,7 @@ const DRAW_CUP_MAX = 97;
 const DRAW_SIDE_MAX = 100;
 const DRAW_OPPONENTS_MAX = 2;
 
-// How long the board shows the wordmark at power-on. Mirrored in sketch.ino, the
+// How long the board shows the wordmark at power-on. Mirrored in hub75.ino, the
 // same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
 // The throws are the other way round — they are drawing, so render.h owns them and this
 // is the copy the pixel check holds.
@@ -112,7 +112,7 @@ const SPLASH_THUMP_MS = 70;
 export const SPLASH_ANIM_MS =
   (SPLASH_THROWS - 1) * SPLASH_STAGGER_MS + SPLASH_FLIGHT_MS + SPLASH_SKID_MS;
 
-// The board's redraw rate while the splash is up, mirrored from sketch.ino for the same
+// The board's redraw rate while the splash is up, mirrored from hub75.ino for the same
 // reason SPLASH_MS is. The emulator steps the animation's clock in these increments, so
 // it draws the frames the panel draws rather than the ones a 60Hz browser could.
 export const SPLASH_RENDER_INTERVAL = 25;
@@ -141,7 +141,7 @@ export const PANEL_LAYOUTS = ['full', 'score'];
 const LEVEL_LIVE = 255;
 const LEVEL_STALE = 60;
 export const LIVE_GRACE_MS = 30000;
-// Mirrors WINNER_BLINK in sketch.ino. Not in render.h — `blinkOn` is an input
+// Mirrors WINNER_BLINK in hub75.ino. Not in render.h — `blinkOn` is an input
 // there — so nothing checks this one; it is the beat, not the drawing.
 export const WINNER_BLINK = 500;
 

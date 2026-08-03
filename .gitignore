@@ -17,7 +17,7 @@ dist-ssr
 .claude/settings.local.json
 
 # Downloaded for the firmware host tests (see firmware/hub75/README.md)
-firmware/hub75/ArduinoJson.h
+firmware/hub75/host/ArduinoJson.h
 
 # Renders from tools/ (see tools/README.md)
 tools/out/

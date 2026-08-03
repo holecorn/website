@@ -7,7 +7,7 @@ MatrixPortal S3.
 **The only firmware target.** A SevSeg build lived alongside this one in
 `firmware/wokwi/` until 2026-07-27, kept because Wokwi has no HUB75 part so it
 was the only target that could be simulated. It was removed once the two
-`sketch.ino` files had diverged far enough that the simulation stopped being
+sketches had diverged far enough that the simulation stopped being
 evidence: this one gained `ensureWifi()`, a non-blocking `setup()` and
 `liveWithGrace()`, and that one still blocked in `setup()` waiting for WiFi. A
 green simulator run said nothing about the code that ships, which is worse than
@@ -113,7 +113,7 @@ one.
  |    [VH4 5V]           |    |     [USB-C]  |    |
  +-------^---------------+----|--------|-----|----+
          |                    |        |     |
-         +--------------------+--------|-----+  a pair to each panel
+         +-------- Y-lead ----+--------|-----+  one lead, splitting to both
                                        |
                                   power bank  (one port, 15 W)
 ```
@@ -125,12 +125,39 @@ one.
   USB-C cable and both panels hang off those terminals. **They are outputs only** —
   never feed 5 V *into* them, because anything in the USB port at the same time
   can damage the board, and flashing always puts something in the USB port.
-- **They take crimped spade terminals, not bare wire under the screw.** Each
-  panel's supplied lead bolts on, two spades stacked per M3 screw.
+- **They take crimped spade terminals, not bare wire under the screw**, and the
+  supplied lead arrives with them already crimped.
+- **One Y-lead feeds both panels, so it is one spade per screw.** The supplied
+  lead is fork terminals at the supply end splitting to two VH4 plugs, which is
+  exactly this topology — so the second panel's lead is a spare and nothing is
+  stacked. That matters more than tidiness: the lug end is the only unprotected
+  polarity in the build, and one spade under each screw is one thing to get right
+  rather than two things to get right while they slide against each other.
+  - **The shared trunk is not a concern at this duty.** It carries both panels —
+    ~0.98 A worst case at full brightness, against a 4 A VH4. The vendor's 8 A
+    all-white figure is not reachable by a layout of coloured digits on black.
+  - **The branch just reaches, with very little slack** — laid out against both
+    panels butted side by side, checked 2026-08-03. The stub is sized for panels
+    stacked *vertically* (~160 mm between VH4 sockets, not ~320 mm), which is the
+    vendor assuming a 320 x 320 arrangement rather than this one. Worth knowing
+    generally: **anything else sourced from Waveshare may assume stacking**, and
+    lead length is where that surfaces first.
+  - **So the lead must be tied to the backer, and this is not tidiness.** With no
+    slack, the fork terminals become the strain member — and they sit on the one
+    unprotected polarity in the build, over the controller's exposed underside
+    pads. A tie close to the split, with the lead approaching the standoffs
+    straight rather than round a corner, puts any tug on the tie instead of on a
+    spade under an M3 screw. Route it before drilling; a detour spends reach the
+    lead does not have.
+  - **The spare Y-lead is the fallback, at a price.** Feeding each panel from its
+    own lead gives generous slack, but puts two spades back under each screw —
+    which is the awkwardness this topology removed. Prefer the tie.
 - **One data chain, and a pair of conductors to each panel.** The ribbon carries
   data only. It *does* tie the panels' grounds together, but that is a signal
-  reference, not a conductor rated to carry a panel's supply current back, so
-  each panel takes its own return rather than borrowing the ribbon's.
+  reference, not a conductor rated to carry a panel's supply current back, so each
+  panel takes its own pair from the Y-lead's split rather than borrowing the
+  ribbon's — which the Y-lead honours, since the branches are separate conductors
+  all the way to each panel.
 - **The controller needs no bracket.** Its 2x10 socket keys straight into panel
   A's HUB75 port, so it hangs off the back of the panel. That is Adafruit's own
   intent and it is why no standoffs appear in the parts list.
@@ -172,31 +199,86 @@ left, swap which panel the controller is in. Then the backer, then the mount.
 | USB power bank, any that holds 5 V at a few hundred mA | Belkin BoostCharge 10K, to hand |
 | A USB-C cable | the one in the bank's box |
 | Backer, ~660 x 180 mm of 6 mm ply | offcut; seal it or use exterior ply |
-| Spade terminals on the panels' power leads | check the box |
-| M3 hardware, panels to the ply | needed |
+| Spade terminals on the panels' power leads | **supplied, already crimped** |
+| M3 hardware, panels to the ply | needed; the supplied screws are short |
 
 The 16 AWG silicone and the Wago 222s are not needed after all — this wiring has
 nothing to fan out, and no chopped lead to join. They were bought for a design
 that ran a 5 V bus from a second bank port, which powering through the controller
 made unnecessary.
 
-Each panel ships with its own VH4 power lead and a ~30 cm 16p ribbon, per the
-vendor listing — so two panels cover both power feeds and the one chaining
-ribbon, with a spare. Worth confirming against the actual box before ordering
-anything to fill a gap that is not there.
+**What is actually in each panel's bag**, checked against both boxes on
+2026-08-03 rather than the vendor listing:
+
+| Item | Used here? |
+| --- | --- |
+| Power **Y-lead**: fork terminals crimped on, splitting to two VH4 plugs, ferrite beads | **yes** — one lead feeds both panels |
+| 16-way grey IDC ribbon, both ends shrouded | **yes** — one of the two chains the panels |
+| 4 machine screws with threaded standoffs | maybe — panel mounting; too short for 6 mm ply |
+| 16-way rainbow ribbon, IDC one end, Dupont pins the other | **no** — a GPIO breakout for a bare micro; the MatrixPortal keys straight into the HUB75 socket |
+| 5.5 x 2.1 mm barrel jack to 2-pin screw terminal | **no**, and see below |
+
+So the fork terminals the assembly assumes are supplied and crimped — nothing to
+buy or crimp, and the only thing still to source is M3 hardware long enough to
+reach through the ply. Because one Y-lead feeds both panels, the second panel's
+bag is entirely spare: a spare Y-lead and a spare grey ribbon, plus both rainbow
+ribbons and both barrel adapters unused.
+
+**The barrel-jack adapter is the one part to put back in the bag.** It exists to
+bring an external 5 V supply to fork terminals, which is precisely the second
+power source this build is designed not to have. It cannot cause the collision on
+its own — that needs the forks on the standoffs *and* the adapter energised — but
+it means the collision is now a part away rather than unbuildable. See
+`How to destroy it`.
 
 ## Building the sketch
 
-Arduino IDE with the ESP32 board package; see `libraries.txt` for the libraries
-and the versions this was written against. Nothing here has been compiled for
-the board or run on hardware.
+Arduino IDE or `arduino-cli` with the ESP32 board package; `libraries.txt` has the
+libraries, the FQBN, the core version, and the compile figures. **It compiles clean
+as of 2026-08-03** — 47% of flash, 24% of global RAM, no warnings even at
+`--warnings all`. It has still never run on hardware.
+
+```bash
+arduino-cli compile -b esp32:esp32:adafruit_matrixportal_esp32s3 firmware/hub75
+```
+
+**Arduino compiles every source file in a sketch folder, and that shapes this
+directory.** Until 2026-08-03 neither the IDE nor `arduino-cli` could open it at
+all, for two independent reasons — both now fixed by naming and placement rather
+than by any build config:
+
+- **`hub75.ino` is named after its folder, and has to stay that way.** Both tools
+  take the main sketch file's name from the directory and refuse anything else
+  ("main file missing from sketch: .../hub75.ino"). So **renaming the file, or
+  renaming the directory on its own, breaks the build** rather than just looking
+  untidy. It was `sketch.ino` for the whole of the project before that date.
+- **The host suites live in `host/`, and that is load-bearing.** With
+  `test_render.cpp` and `test_board_logic.cpp` beside the sketch, Arduino compiled
+  both into it and the link failed on two `main()`s. Arduino ignores
+  subdirectories other than `src/`, so one level down is the entire fix — and it
+  must not be `src/`.
+  - **It also un-shadows ArduinoJson**, which is the half you would not have
+    noticed. The sketch folder is on the include path, so the vendored
+    `ArduinoJson.h` the host suites compile against was satisfying the firmware's
+    `#include <ArduinoJson.h>` too — the library was silently absent from
+    `Used library`. Harmless while the two versions agree; the day they don't, the
+    board ships a different ArduinoJson than the one `test_board_logic.cpp` sized
+    `MQTT_BUFFER` against, with nothing to say so. `arduino-cli compile -v` prints
+    `Alternatives for ArduinoJson.h` if this is ever worth re-checking.
+- **A clean compile is a weak signal here, deliberately.** It proves the code is
+  well-formed for this target and nothing more — the pinmap, the driver IC, WiFi
+  and MQTT are all still unexercised, which is what `Things that will bite` is for.
 
 **Flash with everything still connected.** The panels stay bolted to the
 standoffs; you swap the bank out of the USB-C socket and the laptop in. There is
-only one USB-C connector, so with the panels fed *from* the board rather than
-into it there is nowhere for a second 5 V source to be — the collision described
-in How to destroy it is not something to remember to avoid, it is something the
-hardware cannot express.
+only one USB-C connector, so as long as the parts on the bench are the ones this
+build uses, there is nowhere for a second 5 V source to be.
+
+That was originally written as "something the hardware cannot express", which the
+delivered kit no longer supports: **each panel ships a barrel-jack-to-screw-terminal
+adapter**, so a 5 V barrel supply now has a ready-made path onto fork terminals.
+It takes two deliberate steps rather than one slip, but the guarantee is a
+convention now, not a physical impossibility.
 
 The laptop is then paying for the panels: ~185 mA at `PANEL_BRIGHTNESS = 40`,
 ~980 mA at full brightness. Fine for a USB-C port advertising 3 A, but above the
@@ -284,7 +366,7 @@ the pixel check — it is what turns a framebuffer into dots on screen.
 ## Two layouts
 
 Both fit 128x32; the choice arrives on `holecorn/<code>/layout` and is held in
-`layout` in `sketch.ino`.
+`layout` in `hub75.ino`.
 
 | id | draws | digits | worst-case duty |
 | --- | --- | --- | --- |
@@ -445,7 +527,7 @@ different arrangement every boot, which is a truer picture of a round and a wors
   that some scene carries a splash.
 - **The two colours, the clock and the throwing order are arguments to `drawSplash`, not
   read inside it.** `render.h` host-compiles and the pixel check needs the same inputs to
-  produce the same frame, so the randomness lives in `sketch.ino` — `esp_random()`, not
+  produce the same frame, so the randomness lives in `hub75.ino` — `esp_random()`, not
   `random()`, which is seeded identically every boot and would show the same pair every
   time. The second colour index steps past the first over the remaining colours, so it
   cannot repeat it without a retry loop; the order is a Fisher-Yates shuffle per board.
@@ -686,7 +768,7 @@ to it cannot short their rear traces the way a metal backer could.
 
 - **The library has no MatrixPortal preset.** `platform_detect.hpp` has no
   `#ifdef` for the board, so it falls through to the generic ESP32-S3 defaults —
-  and not one of those pins matches the MatrixPortal S3. `sketch.ino` therefore
+  and not one of those pins matches the MatrixPortal S3. `hub75.ino` therefore
   sets the pinmap explicitly, from Adafruit's own Protomatter mapping. Leaving
   it to the defaults gives a dark panel and no error, which is a bad evening.
   Don't "simplify" the pin block away.
@@ -697,10 +779,11 @@ to it cannot short their rear traces the way a metal backer could.
 - **Chain direction.** If the two halves come out swapped — team B on the left —
   that is not a bug, it is which panel the controller is plugged into. Swap the
   ribbon.
-- **Power does not chain.** The HUB75 ribbon carries data only, so each panel
-  takes its own 5 V through its VH4 connector — one data chain, two power feeds,
-  plus the controller. The VH4's 4 A is the panel's rating, not a draw to
-  provision for; see Power for what this layout actually pulls.
+- **Power does not chain *through the ribbon*.** It carries data only, so each
+  panel takes its own 5 V through its own VH4 connector — one data chain, two
+  power feeds, both branches of the one supplied Y-lead. The VH4's 4 A is the
+  panel's rating, not a draw to provision for; see Power for what this layout
+  actually pulls.
 - **1/16 scan, so no E pin**, and no `VirtualMatrixPanel` remapping. That is the
   reason this panel was chosen over an outdoor 1/8-scan one.
 - **`PIN_LIGHTSENSOR A5` in the board's `pins_arduino.h` is a phantom.** The
@@ -862,7 +945,9 @@ All of it goes through the one USB-C cable. Runtime, against ~30 Wh usable (10,0
 | Worst case at full brightness | ~4.9 W | ~980 mA | ~6 h | 33% |
 
 A session is a couple of hours, so runtime is not the constraint either. Two
-things might be, and both want an inline USB meter at first power-up:
+things might be, and **both announce themselves without instrumentation** — the
+board either starts or it doesn't, and the bank either stays awake through the
+idle screen or it doesn't:
 
 - **The board may not start at all, and there are two mechanisms.** One is
   inrush: two panels' bulk capacitance charging at switch-on draws far more than
@@ -961,9 +1046,23 @@ the net delta anything. So this needs a protocol decision first.
 
 ### What still wants measuring
 
-All of the above is derived. One inline USB meter at first power-up settles the
-lot: the running current against the ~0.98 A worst case, whether inrush trips the
-bank before the board starts, and whether the idle screen holds it awake.
+All of the above is derived, and **first power-up is deliberately not
+instrumented.** An inline USB meter was considered and skipped, because it does
+not answer the questions that matter here:
+
+- **Inrush is beyond it.** A UM24C-class meter updates at a few Hz; the switch-on
+  event is milliseconds. It would read a comfortable steady current either side of
+  a spike that trips the bank, so the meter cannot distinguish inrush from the OE
+  window from a wiring fault. The fix ladder — 10k pull-up on OE, then lower
+  brightness, then a different bank — is the same whatever it displayed.
+- **The two real risks are binary.** The board starts or it doesn't; the bank
+  holds through the 1.4%-duty idle screen or it cuts out. Both are visible to the
+  eye, and the idle fix (charge the scoring phone off the same bank) is free and
+  needs no diagnosis first.
+- **The ~0.98 A worst case is bounded anyway.** The bank folds back at 3 A, so a
+  wrong derivation trips it rather than being unsafe. **Borrow a meter the day the
+  bank is swapped for mains** — that removes the fold-back bound and makes these
+  derived figures load-bearing for the first time.
 
 Two things the meter cannot answer and only dusk can: whether 40 is dark enough
 to play under, which decides if `BRIGHTNESS_LEVELS` needs a step below it, and
@@ -971,9 +1070,13 @@ whether the five steps read as evenly spaced or bunch at one end.
 
 ## Names the panel cannot show
 
-The font is 5x7 ASCII. `fontIndex` maps anything outside it to a space, so a
-name in a non-Latin script renders as blank cells that still consume the
-nine-character budget — and the rule marking who throws would sit under nothing.
+The font is 5x7 ASCII. `fontIndex` maps anything outside it to `FONT_UNKNOWN`, a
+dash — one per *byte*, so a name in a non-Latin script draws as a run of dashes
+twice as long as the name, still consuming the nine-character budget. A dash
+rather than a space because a name that vanishes entirely reads as a fault: two
+Greek names lit 13 pixels of the name row against 181 for two Latin ones, and now
+light 103. Accented Latin degrades readably — `José` draws as `JOS-`.
+
 `copyLabel` also truncates at 39 **bytes**, which can cut a multi-byte character
 in half. The app does not restrict input to ASCII, so this is reachable; it is
 accepted rather than fixed, because a Unicode font does not fit either the panel

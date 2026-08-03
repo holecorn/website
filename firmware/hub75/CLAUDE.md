@@ -6,7 +6,7 @@ colours. **Wokwi has no HUB75 part**, so it is verified by a host renderer
 instead. Full reasoning for everything here is in `README.md`.
 
 A second SevSeg target in `firmware/wokwi/` was removed on 2026-07-27, once the two
-`sketch.ino` files had diverged enough that simulating it proved nothing about what
+sketches had diverged enough that simulating it proved nothing about what
 ships. **The cost is that nothing exercises WiFi or MQTT until the board is on the
 bench** — the host suites stop at parsing, layout and duty. **Don't reintroduce a
 second target to get coverage back**: a divergent copy reads as coverage without
@@ -58,10 +58,35 @@ drift being guarded against.
   `?display=1` too — irrelevant while `Panel` is statically imported, but it would
   defeat a lazy boundary if one were added.
 
+## This directory's shape is the build config
+
+Arduino compiles **every** source file in a sketch folder and takes the main file's
+name from the folder. Both facts bite here, and both are fixed by placement rather
+than by any setting — so the layout is not tidiness and rearranging it breaks the
+build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean at
+`--warnings all`); before that neither the IDE nor `arduino-cli` could open it.
+
+- **`hub75.ino` must keep the folder's name.** Renaming either one alone gives
+  "main file missing from sketch". It was `sketch.ino` until that date.
+- **`host/` holds the two host suites and the vendored `ArduinoJson.h`, and must not
+  be `src/`** — Arduino recurses into `src/` and ignores every other subdirectory,
+  which is the whole mechanism. Beside the sketch, `test_render.cpp` and
+  `test_board_logic.cpp` collide on two `main()`s.
+- **`host/` is also what un-shadows ArduinoJson**, which is the half with no symptom:
+  the sketch folder is on the include path, so a vendored `ArduinoJson.h` beside the
+  sketch satisfies the firmware's own `#include` and the real library drops out of
+  `Used library` silently. The board would then ship a different ArduinoJson than the
+  one `MQTT_BUFFER` was sized against. `arduino-cli compile -v` prints
+  `Alternatives for ArduinoJson.h` to check.
+- **`libraries.txt` lists two libraries nothing here references** — Adafruit GFX and
+  BusIO, pulled in by the HUB75 library's own header. Library Manager installs them
+  silently and `arduino-cli` does not, which is why they went unlisted until the
+  first real compile. Don't prune them for looking unused.
+
 ## The rest, before touching it
 
 - **`board_logic.h` is deliberately Arduino-free** so it host-compiles against desktop
-  ArduinoJson — `test_board_logic.cpp` is how `MQTT_BUFFER` was sized rather than
+  ArduinoJson — `host/test_board_logic.cpp` is how `MQTT_BUFFER` was sized rather than
   guessed. Keep parsing and digit formatting there, not in the `.ino`.
 - **The panel is sized against 7m, not "as big as possible."** 100mm digits (11.4m)
   and 9-char names clear it, the names marginally. Width buys name length, height buys
