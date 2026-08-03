@@ -61,6 +61,7 @@ const uint32_t BUTTON_LOCKOUT = 30;
 // ----------------------------------------------------------------- state ----
 
 MatrixPanel_I2S_DMA* panel = nullptr;
+bool panelBegan = false;
 PubSubClient client(net);
 
 char stateTopic[64];
@@ -339,11 +340,12 @@ void setup() {
       47, 14, 2,  // LAT, OE, CLK
   };
   HUB75_I2S_CFG mxconfig(64, 32, 2, pins);
-  // Waveshare do not publish the driver IC. If the panel shows nothing or
-  // garbage on first power-up, uncomment this before assuming a wiring fault.
-  // mxconfig.driver = HUB75_I2S_CFG::FM6126A;
+  // Waveshare do not publish the driver IC, and this panel needs the FM6126A
+  // register init: without it, first power-up drew one green square in a corner
+  // and nothing else — no splash, no layout.
+  mxconfig.driver = HUB75_I2S_CFG::FM6126A;
   panel = new MatrixPanel_I2S_DMA(mxconfig);
-  panel->begin();
+  panelBegan = panel->begin();
   panel->setBrightness8(PANEL_BRIGHTNESS);
   panel->clearScreen();
 
@@ -376,6 +378,19 @@ void setup() {
 }
 
 void loop() {
+  // Reported here rather than from setup(): begin() allocates the DMA buffers and
+  // returns false rather than complaining, which on a panel is indistinguishable
+  // from a wiring fault — and native USB CDC drops everything printed before a
+  // host attaches, so saying it in setup() says it to nobody. Gated on time and
+  // not on `Serial`, because macOS /dev/cu.* deliberately does not assert DTR, so
+  // that test never becomes true for the way this board is actually read.
+  static bool panelReported = false;
+  if (!panelReported && millis() > 3000) {
+    panelReported = true;
+    if (panelBegan) Serial.printf("panel begin() ok, free heap %u\n", ESP.getFreeHeap());
+    else Serial.println("panel begin() FAILED, DMA not allocated");
+  }
+
   pollBrightness();
 
   if (ensureWifi()) {

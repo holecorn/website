@@ -38,10 +38,15 @@ dropped, so `MQTT_BUFFER` at 512 is right.
 healthy connected board says nothing for minutes. Don't read a quiet log as a dead
 one — tap RESET with the port open if you need evidence.
 
-**Still untested: everything to do with the panel itself** — the pinmap, the driver
-IC, whether a single pixel lights. The host suites cover parsing, buffer sizing,
-layout, bounds, duty and `liveWithGrace()`; the browser emulator covers publish →
-retain → subscribe → this layout. Neither says anything about the HUB75 side.
+**First light came the same day, on one panel.** The wordmark drew, letter by
+letter, and then the `full` layout with the retained score — so the pinmap, the
+FM6126A init, the DMA path, `logo.h`, the glyph tables and `render.h` are all
+confirmed against real hardware, not just against `src/panelRender.js`. Two faults
+had to be fixed together to get there and they mask each other; see
+`Things that will bite`.
+
+**Still untested:** the second panel and the chain, the brightness buttons, the
+power figures, and whether 40 is dark enough to play under at dusk.
 
 ## Why this size
 
@@ -802,10 +807,26 @@ to it cannot short their rear traces the way a metal backer could.
   sets the pinmap explicitly, from Adafruit's own Protomatter mapping. Leaving
   it to the defaults gives a dark panel and no error, which is a bad evening.
   Don't "simplify" the pin block away.
-- **Driver IC is unpublished.** Waveshare do not state it. If the panel shows
-  nothing or garbage on first power-up, uncomment
-  `mxconfig.driver = HUB75_I2S_CFG::FM6126A;` in `setup()` before assuming a
-  wiring fault.
+- **The panel is FM6126A, confirmed on hardware 2026-08-03.** Waveshare do not
+  state it, and an FM6126A panel with no register init is **completely dark** —
+  not garbled, dark. `mxconfig.driver = HUB75_I2S_CFG::FM6126A;` in `setup()` is
+  therefore load-bearing, not a fallback to try. Removing it looks exactly like a
+  dead panel.
+- **The controller goes in the socket the PCB arrow points *away* from.** A
+  Waveshare P5 has two identical 2x8 sockets, an input and an output, and the
+  keying that stops an off-by-one does nothing to stop this. In the output socket
+  the panel is powered and lit with its own power-on garbage, `begin()` still
+  returns true, and nothing you draw ever reaches the shift registers. The only
+  marking is an arrow between the two sockets showing data flow; there is no
+  IN/OUT silkscreen.
+- **Those two faults mask each other, which is what made first light take hours.**
+  Either one alone gives a panel that looks dead, so every single-variable test
+  reads as a failure while the other fault is still in place. If a panel shows
+  nothing, **change the socket and enable FM6126A together**, then bisect. What
+  finally distinguished them: on the wrong socket the panel showed a *static*
+  block that never changed colour while the sketch cycled fills, which means no
+  data at all; once on the right socket it went *blank*, which is an
+  uninitialised FM6126A.
 - **Chain direction.** If the two halves come out swapped — team B on the left —
   that is not a bug, it is which panel the controller is plugged into. Swap the
   ribbon.

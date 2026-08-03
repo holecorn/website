@@ -74,6 +74,13 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
 
 - **`hub75.ino` must keep the folder's name.** Renaming either one alone gives
   "main file missing from sketch". It was `sketch.ino` until that date.
+- **`mxconfig.driver = FM6126A` is load-bearing, not a fallback.** Confirmed on
+  hardware 2026-08-03: this panel is FM6126A, and without the register init it is
+  *completely dark*. Deleting that line looks exactly like a dead panel or a wiring
+  fault. It pairs with a physical trap — the controller must go in the socket the
+  panel's arrow points *away* from — and **the two mask each other**, so a
+  single-variable test reads as a failure while the other is still wrong. See
+  `Things that will bite` in `README.md` before debugging a dark panel.
 - **Credentials live in `secrets.h`, which is gitignored, and nothing may move them
   back.** This repo is public: a `WIFI_PASS` committed once is in the history forever
   whatever the next commit does. `secrets.example.h` is the tracked template and owns
