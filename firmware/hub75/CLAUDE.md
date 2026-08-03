@@ -7,10 +7,16 @@ instead. Full reasoning for everything here is in `README.md`.
 
 A second SevSeg target in `firmware/wokwi/` was removed on 2026-07-27, once the two
 sketches had diverged enough that simulating it proved nothing about what
-ships. **The cost is that nothing exercises WiFi or MQTT until the board is on the
-bench** — the host suites stop at parsing, layout and duty. **Don't reintroduce a
-second target to get coverage back**: a divergent copy reads as coverage without
-being it.
+ships. The cost was that nothing exercised WiFi or MQTT until the board was on the
+bench — the host suites stop at parsing, layout and duty. **That gap is now closed
+by hardware, not by a test**: first boot on 2026-08-03 connected, subscribed and
+recovered the retained state, so the network stack is evidenced but still
+unregression-tested. **Don't reintroduce a second target to get coverage back**: a
+divergent copy reads as coverage without being it.
+
+**Serial silence means healthy, not dead.** The firmware prints only on transitions,
+so a connected board is quiet for minutes; a 20-second read proves nothing either
+way. Tap RESET with the port open when you need a boot sequence.
 
 ## `src/panelRender.js` is a second implementation of `render.h`
 

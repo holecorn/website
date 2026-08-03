@@ -35,6 +35,12 @@ config in docs/OFFLINE-SCOREBOARD.md, which puts the board on plain 1883 for
 exactly that reason, and note the app's wss:// is a browser constraint rather than
 the same choice made differently.
 
-**Still never run on hardware, and nothing here exercises WiFi or MQTT.** A clean
-compile says the code is well-formed for this target; it says nothing about the
-pinmap being right, the panel driver IC, or the broker.
+Flashed and run on 2026-08-03 with no panel attached: WiFi, PubSubClient and the
+retained-state recovery all worked first try. Upload is
+
+  arduino-cli compile --upload -p <port> -b <fqbn> firmware/hub75
+
+and note the port changes after upload — the ROM bootloader enumerates as
+cu.usbmodem<MAC> and the running sketch as cu.usbmodem101.
+
+**Still untested: the pinmap, the panel driver IC, and whether a pixel lights.**

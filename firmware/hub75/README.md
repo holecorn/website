@@ -14,16 +14,34 @@ green simulator run said nothing about the code that ships, which is worse than
 having no simulator, because it reads as coverage. `board_logic.h` and
 `test_board_logic.cpp` moved here when it went.
 
-**Nothing now exercises WiFi, MQTT or PubSubClient before the board is on the
-bench.** The host suites cover parsing, buffer sizing, layout, bounds, duty and
-`liveWithGrace()`; the network stack is first tested at first power-up. That is a
-known gap, not an oversight.
+**The network stack ran for the first time on 2026-08-03, and worked.** With no
+panel attached, the board connected, subscribed, and recovered the full retained
+game state on its own:
 
-The browser emulator (below) narrows it a little and must not be mistaken for
-closing it: over a real broker it exercises publish → retain → subscribe →
-this layout, so a payload change that breaks the panel shows up without hardware.
-It says nothing about the ESP32's WiFi stack or PubSubClient, which are the parts
-that will actually fail first.
+```
+wifi ok, ip 192.168.178.123
+subscribed to holecorn/<code>/state
+score 0-0 (round 0, to 21)
+layout full
+lineup 2 rows
+```
+
+That closes what was the largest gap here — nothing had exercised WiFi,
+PubSubClient or the ESP32 side of MQTT before. Worth reading precisely, because the
+last three lines are the valuable ones: they are **retained** messages arriving on
+subscribe, so the whole-state-retained model recovered a late-joining board with no
+resync protocol, on hardware, first try. `parseBoardState`, `parseLayout` and
+`parseLineup` all accepted real app payloads rather than fixtures, and nothing was
+dropped, so `MQTT_BUFFER` at 512 is right.
+
+**Silence on this port is normal.** The firmware prints on transitions only, so a
+healthy connected board says nothing for minutes. Don't read a quiet log as a dead
+one — tap RESET with the port open if you need evidence.
+
+**Still untested: everything to do with the panel itself** — the pinmap, the driver
+IC, whether a single pixel lights. The host suites cover parsing, buffer sizing,
+layout, bounds, duty and `liveWithGrace()`; the browser emulator covers publish →
+retain → subscribe → this layout. Neither says anything about the HUB75 side.
 
 ## Why this size
 
@@ -236,7 +254,8 @@ it means the collision is now a part away rather than unbuildable. See
 Arduino IDE or `arduino-cli` with the ESP32 board package; `libraries.txt` has the
 libraries, the FQBN, the core version, and the compile figures. **It compiles clean
 as of 2026-08-03** — 47% of flash, 24% of global RAM, no warnings even at
-`--warnings all`. It has still never run on hardware.
+`--warnings all`. It has also been flashed and run: see the top of this file for
+what the first boot proved and what it did not.
 
 ```bash
 cp firmware/hub75/secrets.example.h firmware/hub75/secrets.h   # once, then fill it in
