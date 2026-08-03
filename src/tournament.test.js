@@ -14,10 +14,16 @@ import {
   tieExtremes,
   tieHistory,
   tieMatches,
+  groupBySeries,
   mergeTournaments,
   newTournament,
   newestFirst,
+  nextEditionName,
+  nextEditions,
   recordedTournament,
+  seriesKey,
+  seriesStats,
+  splitSeriesName,
   removeTournament,
   shuffled,
   tieLabels,
@@ -1131,5 +1137,275 @@ describe('tieHistory', () => {
     const first = bracket(t, []).playable[0];
     const matches = [tie(t.id, t.mode, first.a.names, first.b.names, 'a')];
     expect(tieHistory(bracket(t, matches), matches).length).toBe(1);
+  });
+});
+
+// A cup played again every year, grouped by the suffix on its name. Nothing about a
+// lineage is stored, so every one of these is a question about the *names*.
+describe('splitSeriesName', () => {
+  it('reads a Roman numeral, an integer and a year alike', () => {
+    expect(splitSeriesName('Hole Corn VI')).toMatchObject({ series: 'Hole Corn', edition: 6 });
+    expect(splitSeriesName('Hole Corn 7')).toMatchObject({ series: 'Hole Corn', edition: 7 });
+    expect(splitSeriesName('Hole Corn 2026')).toMatchObject({ series: 'Hole Corn', edition: 2026 });
+  });
+
+  it('keeps the style, because that is what the next one is written in', () => {
+    expect(splitSeriesName('Hole Corn VI').style).toBe('roman');
+    expect(splitSeriesName('Hole Corn 2026').style).toBe('number');
+    expect(splitSeriesName('Summer Cup').style).toBe(null);
+  });
+
+  // The uppercase rule, and it is not fussiness: read case-insensitively `mix` is 1009
+  // and `did` is 501, so a lineage ending in an ordinary word would be split at it.
+  it('does not take a lowercase word for a numeral', () => {
+    expect(splitSeriesName('The Great Mix').series).toBe('The Great Mix');
+    expect(splitSeriesName('What They Did').series).toBe('What They Did');
+    expect(splitSeriesName('The Great MIX').edition).toBe(1009);
+  });
+
+  it('wants a whole trailing word, not a trailing run of letters', () => {
+    expect(splitSeriesName('Hole CornVI').series).toBe('Hole CornVI');
+    expect(splitSeriesName('HoleCorn2026').series).toBe('HoleCorn2026');
+  });
+
+  // Otherwise a cup called `V` is the fifth edition of a series with no name, and every
+  // bare numeral in the list groups together under it.
+  it('leaves a name that is nothing but a numeral alone', () => {
+    expect(splitSeriesName('V')).toMatchObject({ series: 'V', edition: null });
+    expect(splitSeriesName('2026')).toMatchObject({ series: '2026', edition: null });
+  });
+
+  it('refuses a numeral written the long way round', () => {
+    // Canonical forms only, which is the point of the strict shape: the looser the rule
+    // the more ordinary words it swallows.
+    expect(splitSeriesName('Hole Corn IIII').series).toBe('Hole Corn IIII');
+    expect(splitSeriesName('Hole Corn DIM').series).toBe('Hole Corn DIM');
+  });
+
+  it('is unbothered by the spacing it was typed with', () => {
+    expect(splitSeriesName('  Hole Corn   VI  ')).toMatchObject({
+      series: 'Hole Corn',
+      edition: 6,
+    });
+  });
+});
+
+describe('seriesKey', () => {
+  it('is the same lineage however the lineage name was cased', () => {
+    expect(seriesKey('hole corn VII')).toBe(seriesKey('Hole Corn VI'));
+  });
+
+  // The known cost of the uppercase rule, pinned so it is a decision rather than a
+  // surprise: a numeral typed in lowercase is not read as one, so the name keys to itself
+  // and the edition sits in its own lineage. Visible — two headings — rather than silent,
+  // and the alternative is worse: read case-insensitively, `Hole Corn Mix` is edition 1009
+  // of Hole Corn, which is wrong in the way only somebody who knew the rule could spot.
+  it('does not group an edition whose numeral was typed in lowercase', () => {
+    expect(seriesKey('hole corn vii')).not.toBe(seriesKey('Hole Corn VI'));
+  });
+
+  it('groups a first edition that was never numbered with the ones that are', () => {
+    expect(seriesKey('Summer Cup')).toBe(seriesKey('Summer Cup II'));
+  });
+
+  it('keeps two different cups apart', () => {
+    expect(seriesKey('Hole Corn VI')).not.toBe(seriesKey('Summer Cup II'));
+  });
+});
+
+describe('nextEditionName', () => {
+  it('steps the suffix in the style the last one used', () => {
+    expect(nextEditionName('Hole Corn VI')).toBe('Hole Corn VII');
+    expect(nextEditionName('Hole Corn 2026')).toBe('Hole Corn 2027');
+    expect(nextEditionName('Hole Corn 8')).toBe('Hole Corn 9');
+  });
+
+  it('numbers a cup that never was', () => {
+    expect(nextEditionName('Summer Cup')).toBe('Summer Cup II');
+  });
+
+  it('carries a Roman numeral over its awkward boundaries', () => {
+    expect(nextEditionName('Cup III')).toBe('Cup IV');
+    expect(nextEditionName('Cup VIII')).toBe('Cup IX');
+    expect(nextEditionName('Cup XXXIX')).toBe('Cup XL');
+  });
+
+  // `Draw` refuses a name already in use, so a suggestion landing on one would be a
+  // button that fills the form and then holds `Make the draw` off.
+  it('steps past a name already taken', () => {
+    expect(nextEditionName('Hole Corn VI', ['Hole Corn VII'])).toBe('Hole Corn VIII');
+    expect(nextEditionName('Hole Corn VI', ['hole corn vii'])).toBe('Hole Corn VIII');
+  });
+
+  it('reads its own output back as the same lineage', () => {
+    for (const name of ['Hole Corn V', 'Summer Cup', 'Cup 2026', 'Cup 39']) {
+      expect(seriesKey(nextEditionName(name))).toBe(seriesKey(name));
+    }
+  });
+});
+
+const cup = (id, name, entrants, createdAt) =>
+  newTournament({
+    id,
+    name,
+    mode: 'singles',
+    target: 21,
+    entrants: entrants.map((e) => [e]),
+    createdAt,
+  });
+
+describe('groupBySeries', () => {
+  const six = cup('t6', 'Hole Corn VI', ['Rho', 'Tau'], 600);
+  const five = cup('t5', 'Hole Corn V', ['Rho', 'Tau'], 500);
+  const summer = cup('s1', 'Summer Cup', ['Phi', 'Chi'], 550);
+
+  it('puts every edition of a cup under one lineage', () => {
+    const groups = groupBySeries([five, six, summer]);
+    expect(groups.map((g) => g.name)).toEqual(['Hole Corn', 'Summer Cup']);
+    expect(groups[0].editions.map((t) => t.id)).toEqual(['t6', 't5']);
+  });
+
+  // `newestFirst`'s ordering carried through the grouping, so this section reads in the
+  // same order as the lists beside it rather than in whatever order the array held.
+  it('orders lineages by their newest edition, newest edition first within one', () => {
+    const groups = groupBySeries([five, summer, six]);
+    expect(groups.map((g) => g.key)).toEqual([seriesKey('Hole Corn'), seriesKey('Summer Cup')]);
+  });
+
+  it('takes the lineage name from the most recent spelling', () => {
+    const fixed = cup('t7', 'Hole  Corn VII', ['Rho', 'Tau'], 700);
+    expect(groupBySeries([five, fixed])[0].name).toBe('Hole  Corn');
+  });
+
+  it('is one lineage of one for a cup played once', () => {
+    expect(groupBySeries([summer]).map((g) => g.editions.length)).toEqual([1]);
+  });
+
+  // A blank name needs a hand-edited file, and grouping every one of them together would
+  // invent a lineage out of the fault.
+  it('drops a tournament with no name at all', () => {
+    expect(groupBySeries([{ ...five, name: '' }])).toEqual([]);
+  });
+});
+
+describe('seriesStats', () => {
+  const six = cup('t6', 'Hole Corn VI', ['Rho', 'Tau'], 600);
+  const five = cup('t5', 'Hole Corn V', ['Rho', 'Tau'], 500);
+  // Rho won the newer one, Tau the older, so neither column can be right by accident.
+  const played = [
+    tie('t6', 'singles', ['Rho'], ['Tau'], 'a'),
+    tie('t5', 'singles', ['Rho'], ['Tau'], 'b'),
+  ];
+  const row = (stats, name) => stats.rows.find((r) => r.name === name);
+
+  it('adds up titles, finals and editions across the lineage', () => {
+    const stats = seriesStats([six, five], played);
+    expect(row(stats, 'Rho')).toMatchObject({ entered: 2, titles: 1, finals: 2 });
+    expect(row(stats, 'Tau')).toMatchObject({ entered: 2, titles: 1, finals: 2 });
+    expect(stats.decided).toBe(2);
+    expect(stats.champions).toBe(2);
+  });
+
+  // The thing one cup structurally cannot say: inside a knockout every meeting is 1–0 and
+  // every surviving entrant's form is all wins, because a beaten side plays no more ties.
+  it('folds the tie record across editions, which one bracket cannot', () => {
+    const stats = seriesStats([six, five], played);
+    expect(row(stats, 'Rho')).toMatchObject({ matches: 2, wins: 1, losses: 1, played: true });
+  });
+
+  it('counts no honours for an edition still being played', () => {
+    const seven = cup('t7', 'Hole Corn VII', ['Rho', 'Tau'], 700);
+    const stats = seriesStats([seven, six, five], played);
+    expect(stats.decided).toBe(2);
+    expect(row(stats, 'Rho')).toMatchObject({ entered: 3, titles: 1, finals: 2 });
+  });
+
+  // The retroactive half, and the one a stored series id could not have: a recorded result
+  // kept no field, so there is nothing on it to have tagged.
+  it('counts a recorded result, whose sheet is gone', () => {
+    const one = recordedTournament({
+      id: 't1',
+      name: 'Hole Corn I',
+      createdAt: 100,
+      champion: ['Sigma'],
+      runnerUp: ['Rho'],
+    });
+    const stats = seriesStats([six, five, one], played);
+    expect(row(stats, 'Sigma')).toMatchObject({ entered: 1, titles: 1, finals: 1, played: false });
+    expect(row(stats, 'Rho')).toMatchObject({ entered: 3, titles: 1, finals: 3 });
+    expect(stats.recorded).toBe(true);
+    expect(stats.champions).toBe(3);
+  });
+
+  it('leads with the most decorated', () => {
+    const four = cup('t4', 'Hole Corn IV', ['Rho', 'Tau'], 400);
+    const more = [...played, tie('t4', 'singles', ['Rho'], ['Tau'], 'a')];
+    expect(seriesStats([six, five, four], more).rows[0].name).toBe('Rho');
+  });
+
+  it('says nothing at all about a lineage that is not there', () => {
+    expect(seriesStats([], [])).toMatchObject({ editions: [], rows: [], decided: 0 });
+  });
+});
+
+describe('nextEditions', () => {
+  const six = cup('t6', 'Hole Corn VI', ['Rho', 'Tau'], 600);
+  const won = [tie('t6', 'singles', ['Rho'], ['Tau'], 'a')];
+
+  it('offers the next name, and the terms the last one was played on', () => {
+    expect(nextEditions([six], won)).toEqual([
+      {
+        key: seriesKey('Hole Corn'),
+        name: 'Hole Corn VII',
+        after: 'Hole Corn VI',
+        mode: 'singles',
+        target: 21,
+      },
+    ]);
+  });
+
+  // You do not draw Hole Corn VII while VI is still going, and that filter is most of
+  // what keeps the row of chips short.
+  it('offers nothing for a lineage still being played', () => {
+    expect(nextEditions([six], [])).toEqual([]);
+  });
+
+  it('reads a doubles cup back as doubles', () => {
+    const pairs = newTournament({
+      id: 'd1',
+      name: 'Pairs Cup II',
+      mode: 'doubles',
+      target: 15,
+      entrants: [['Rho', 'Tau'], ['Phi', 'Chi']],
+      createdAt: 900,
+    });
+    const done = [tie('d1', 'doubles', ['Rho', 'Tau'], ['Phi', 'Chi'], 'a')];
+    expect(nextEditions([pairs], done)[0]).toMatchObject({
+      name: 'Pairs Cup III',
+      mode: 'doubles',
+      target: 15,
+    });
+  });
+
+  // A recorded result is a finished lineage with no mode and no target, and handing the
+  // form an undefined mode is worse than letting it keep its own defaults.
+  it('offers a next edition of a cup that only survives as a result', () => {
+    const one = recordedTournament({
+      id: 'r1',
+      name: 'Hole Corn I',
+      createdAt: 100,
+      champion: ['Sigma'],
+    });
+    expect(nextEditions([one], [])[0]).toMatchObject({
+      name: 'Hole Corn II',
+      mode: 'singles',
+      target: null,
+    });
+  });
+
+  it('does not offer a name a tournament already has', () => {
+    const seven = cup('t7', 'Hole Corn VII', ['Rho', 'Tau'], 700);
+    const both = [...won, tie('t7', 'singles', ['Rho'], ['Tau'], 'a')];
+    expect(nextEditions([six, seven], both).map((s) => s.name)).toEqual(['Hole Corn VIII']);
   });
 });

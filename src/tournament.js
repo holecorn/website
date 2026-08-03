@@ -619,6 +619,259 @@ export function unfinished(tournaments, matches) {
   return tournaments.filter((t) => !bracket(t, matches)?.done);
 }
 
+// ---------------------------------------------------------------- the series --
+//
+// A cup played again every year, its editions told apart by a suffix on the name — Hole
+// Corn V, Hole Corn VI. **Read off those names and never stored:** no series record, no
+// field on a tournament, so `newTournament`, `validTournament`, `mergeTournaments` and the
+// storage shape are all untouched. `docs/TOURNAMENT.md` under **The series** holds why,
+// and the stored-series option that lost; the one reason worth having here is that a
+// `recordedTournament` keeps no field at all, so nothing else could have reached it.
+
+// Roman numerals in canonical form only, which is the point of the strict shape rather
+// than a loop that adds up letters: `IIII` and `DIM` both parse under a loose rule, and
+// the looser it is the more ordinary words it swallows.
+const ROMAN = /^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/;
+
+const ROMAN_UNITS = [
+  [1000, 'M'],
+  [900, 'CM'],
+  [500, 'D'],
+  [400, 'CD'],
+  [100, 'C'],
+  [90, 'XC'],
+  [50, 'L'],
+  [40, 'XL'],
+  [10, 'X'],
+  [9, 'IX'],
+  [5, 'V'],
+  [4, 'IV'],
+  [1, 'I'],
+];
+
+function toRoman(n) {
+  let left = n;
+  let out = '';
+  for (const [value, letters] of ROMAN_UNITS) {
+    while (left >= value) {
+      out += letters;
+      left -= value;
+    }
+  }
+  return out;
+}
+
+// What a word is worth as a Roman numeral, or null if it is not one.
+//
+// **Uppercase only, and that is doing real work rather than being fussy.** Read
+// case-insensitively, `mix` is 1009 and `did` is 501 — so any series whose name happened
+// to end in an ordinary word like those would be split at it. A numeral written in capitals
+// is how this group writes them and how a suffix is told from a word.
+function romanValue(word) {
+  if (!word || word !== word.toUpperCase() || !ROMAN.test(word)) return null;
+  let at = 0;
+  let total = 0;
+  for (const [value, letters] of ROMAN_UNITS) {
+    while (word.startsWith(letters, at)) {
+      total += value;
+      at += letters.length;
+    }
+  }
+  return total;
+}
+
+// A tournament's name split into the series it belongs to and the edition it is.
+//
+// The suffix has to be a whole trailing **word** — `\s+` in front of it — so a name merely
+// *ending* in those letters is left alone, and there has to be something in front of it, so
+// a cup actually called `V` is its own series rather than the fifth edition of a series
+// with no name.
+//
+// A number and a year are one case, not two: both step by one, so the only thing the style
+// decides is how the next one is written. An apostrophe year (`'26`) is deliberately not
+// read — it would have to be written back out the same way, and nothing here uses one.
+export function splitSeriesName(name) {
+  const text = String(name ?? '').trim();
+  const parts = /^(.*\S)\s+(\S+)$/.exec(text);
+  if (parts) {
+    const [, head, tail] = parts;
+    if (/^\d+$/.test(tail)) {
+      return { series: head, edition: Number(tail), suffix: tail, style: 'number' };
+    }
+    const roman = romanValue(tail);
+    if (roman !== null) return { series: head, edition: roman, suffix: tail, style: 'roman' };
+  }
+  // A name with no suffix keys to itself, which is what makes a one-off cup a series of
+  // one — so nothing reading this needs a special case — and what groups the common shape
+  // where the first edition was never numbered: `Summer Cup`, then `Summer Cup II`.
+  return { series: text, edition: null, suffix: null, style: null };
+}
+
+// Which series a tournament belongs to. `nameKey` because `hole corn vii` typed in a
+// hurry is the same cup to a reader, which is the rule the draw form already refuses a
+// duplicate by — the same question asked once.
+export function seriesKey(name) {
+  return nameKey(splitSeriesName(name).series);
+}
+
+function bumpEdition(name) {
+  const { series, edition, style } = splitSeriesName(name);
+  if (style === null) return `${series} II`;
+  return `${series} ${style === 'roman' ? toRoman(edition + 1) : String(edition + 1)}`;
+}
+
+// What the next edition of a series would be called: the same series name, its suffix
+// stepped, written in the style the edition it follows was written in. So a series that
+// numbers itself in Roman keeps doing so and one that uses the year keeps doing that,
+// without anybody choosing a style — the style is whatever you did last year.
+//
+// `taken` steps past a name already in use, which is not hypothetical: an edition drawn
+// out of order, or a sheet imported after this year's cup was already started, would
+// otherwise offer a name `Draw` then refuses. The loop is bounded as well as terminating,
+// since every step strictly increases the edition.
+export function nextEditionName(name, taken = []) {
+  const used = new Set((taken ?? []).map(nameKey));
+  let candidate = bumpEdition(name);
+  for (let i = 0; i < 64 && used.has(nameKey(candidate)); i += 1) {
+    candidate = bumpEdition(candidate);
+  }
+  return candidate;
+}
+
+// Every tournament grouped into its series, newest edition first within a series and
+// series ordered by their newest edition — which is `newestFirst`'s ordering carried
+// through the grouping, so the section reads in the same order as the lists beside it.
+//
+// The series takes its name from its **newest** edition's spelling, the rule `playerStats`
+// follows for a person: a name corrected this year should not be shown as it was written
+// five years ago.
+//
+// A tournament with no name at all has no series and is dropped. That needs a hand-edited
+// file — `Draw` refuses a blank name — and grouping every one of them under the empty
+// string would invent a series out of the fault.
+export function groupBySeries(tournaments) {
+  const groups = new Map();
+  for (const t of newestFirst(tournaments ?? [])) {
+    const key = seriesKey(t?.name);
+    if (!key) continue;
+    const found = groups.get(key);
+    if (found) found.editions.push(t);
+    else groups.set(key, { key, name: splitSeriesName(t.name).series, editions: [t] });
+  }
+  return [...groups.values()];
+}
+
+// How a series has gone, across all of its editions. The second thing a series buys after
+// simply being grouped, and the one the single-cup Stats tab structurally cannot say — see
+// `docs/TOURNAMENT.md`: within one knockout every head-to-head is 1–0 and every entrant's
+// form is all wins, because a beaten side plays no more ties. Across editions both mean
+// something again.
+//
+// Builds its own brackets rather than taking the screen's, the way `tieLabels` does: one
+// per edition, which is a handful, and it keeps this answerable from the tournaments and
+// the archive alone.
+export function seriesStats(editions, matches = []) {
+  const views = (editions ?? [])
+    .map((tournament) => ({ tournament, view: bracket(tournament, matches) }))
+    .filter((x) => x.view);
+  const ties = views.flatMap(({ view }) => tieMatches(view, matches));
+  const thrown = new Map(sideStats(ties).map((s) => [s.key, s]));
+  const acc = new Map();
+  const at = (side) => {
+    let row = acc.get(side.key);
+    if (!row) {
+      // `views` is newest first, so the first spelling seen is the most recent one.
+      row = { key: side.key, names: side.names, entered: 0, titles: 0, finals: 0 };
+      acc.set(side.key, row);
+    }
+    return row;
+  };
+
+  for (const { view } of views) {
+    // Who is known to have been in this edition. A recorded result kept no field — see
+    // `recordedTournament`, which throws it away deliberately — so the two names on the
+    // trophy are all such an edition can contribute, and the screen says so.
+    const inIt = view.recorded ? [view.champion, view.runnerUp].filter(Boolean) : view.entrants;
+    for (const side of inIt) at(side).entered += 1;
+    // **Off the decided final, not off who is standing in one.** `champion` and `runnerUp`
+    // exist only once the final has a winner, so an edition still being played contributes
+    // its entrants and its ties and no honours — which is right: reaching a final you have
+    // not lost yet is not a result.
+    if (view.champion) at(view.champion).titles += 1;
+    for (const side of [view.champion, view.runnerUp].filter(Boolean)) at(side).finals += 1;
+  }
+
+  const rows = [...acc.values()]
+    .map((row) => {
+      const played = thrown.get(row.key);
+      return {
+        ...(played ?? blankStats(sideLabel(row.names))),
+        ...row,
+        name: sideLabel(row.names),
+        // The `lineupStats` flag: a genuine zero told from no ties behind it at all, which
+        // is every entrant of a series made only of recorded results.
+        played: Boolean(played),
+      };
+    })
+    .sort(
+      (x, y) =>
+        y.titles - x.titles ||
+        y.finals - x.finals ||
+        y.wins - x.wins ||
+        y.entered - x.entered ||
+        x.name.localeCompare(y.name),
+    );
+
+  return {
+    // Newest first, each already carrying the bracket the honours line reads.
+    editions: views,
+    rows,
+    ties,
+    decided: views.filter(({ view }) => view.champion).length,
+    // How many different names are on the trophy, which is the one figure that is about
+    // the series rather than about any edition of it.
+    champions: new Set(views.map(({ view }) => view.champion?.key).filter(Boolean)).size,
+    // Whether any edition is a bare result, so the screen can caption what the table is
+    // therefore missing rather than reporting a short count as a fact.
+    recorded: views.some(({ view }) => view.recorded),
+  };
+}
+
+// How many next-edition suggestions the draw form offers. A cap, and it is worth saying
+// that it is one: the chips sit above the name field, so an unbounded row of them pushes
+// the whole form down on the screen it exists to shorten. Three is well past what this
+// group runs — and a series that falls off the end is still reachable by typing.
+export const MAX_SUGGESTIONS = 3;
+
+// What `New` offers as a starting point: for each series whose newest edition is
+// **finished**, the name the next one would take and the terms it was last played on.
+//
+// Finished, because you do not draw Hole Corn VII while VI is still going — and that
+// filter is most of what keeps the row short, since a series in progress is exactly the
+// one you are not starting again.
+//
+// It deliberately does not carry the field. Who plays changes year to year, and the roster
+// chips already enter everybody the app knows in one press.
+export function nextEditions(tournaments, matches = []) {
+  const used = (tournaments ?? []).map((t) => t?.name);
+  return groupBySeries(tournaments)
+    .map((group) => {
+      const latest = group.editions[0];
+      if (!bracket(latest, matches)?.done) return null;
+      return {
+        key: group.key,
+        name: nextEditionName(latest.name, used),
+        after: latest.name,
+        // A recorded result has neither, so the form keeps its own defaults rather than
+        // being handed an undefined mode and a target of nothing.
+        mode: latest.mode === 'doubles' ? 'doubles' : 'singles',
+        target: Number.isFinite(latest.target) ? latest.target : null,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, MAX_SUGGESTIONS);
+}
+
 function hasField(t) {
   return Boolean(
     Array.isArray(t?.entrants) &&

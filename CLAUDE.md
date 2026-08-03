@@ -305,6 +305,12 @@ What constrains code outside those files:
   of name keys, which is what makes singles and fixed doubles pairs one concept.
 - **`game.tournament` is deliberately not sticky across `New game`**, unlike `mode` and
   `casual`, or the next friendly is filed silently into somebody's bracket.
+- **A cup played every year is grouped by *reading its name*, and nothing about that is
+  stored.** `seriesKey` strips a trailing uppercase Roman numeral or year; there is no
+  series record and no field on a tournament, so `newTournament`, `validTournament`,
+  `mergeTournaments` and the export envelope are untouched. It had to be derived to reach
+  a recorded result, which deliberately keeps no field to tag. **A new surface that groups
+  or names tournaments must read `seriesKey`**, not a rule of its own.
 - **`.tournament-screen` must stay excluded from the wide tier's grid in `App.css`** —
   the same trap `.stats-screen` carries. Without it the bracket draws in 408px with
   340px reserved for a rail that never renders.

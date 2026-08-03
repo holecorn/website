@@ -130,9 +130,13 @@
 }
 
 /* Both statuses sit on the row's first line and neither may wrap, so the row reads the
-   same whichever list it is in. */
+   same whichever list it is in. A series' two — how many editions, and who holds it —
+   sit in the same places and are listed here rather than reusing the names, because they
+   are different facts and the names are queried by the browser checks. See `SeriesRow`. */
 .tournament-progress,
-.champion-who {
+.champion-who,
+.series-count,
+.series-holder {
   grid-area: 1 / 2;
   justify-self: end;
   color: var(--muted);
@@ -140,7 +144,8 @@
   white-space: nowrap;
 }
 
-.champion-who {
+.champion-who,
+.series-holder {
   color: var(--text);
   font-size: 14px;
   font-weight: 700;
@@ -646,7 +651,8 @@ button.tie {
   gap: 12px;
 }
 
-.roster h3 {
+.roster h3,
+.draw-next h3 {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -1198,6 +1204,94 @@ button.tie {
 .tie-log-when {
   color: var(--muted);
   font-size: 12px;
+}
+
+/* ------------------------------------------------------------------- a series -- */
+
+/* Every edition of a cup played again each year. The row itself reuses `.tournament-row`
+   and its parts wholesale — it is the same shape saying the same kinds of things in the
+   same places — so only what is inside an open one is new. */
+.series-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* The roll of honour. One grid for every row rather than a grid per row, so the edition
+   track sizes to the widest name across all of them and the results start at one offset —
+   `.ceremony-sheet` and `.field-rows` do the same, and for the same reason: a ragged left
+   edge down a list reads as broken. `display: contents` keeps the row a real element.
+
+   Unlike `.ceremony-sheet` the two cells carry no shared background, so a column gap is
+   free here rather than putting the page through the middle of a pill. */
+.honours {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.honours li {
+  display: contents;
+}
+
+/* Never wraps: it is the track everything else lines up against, so letting it fold would
+   move the column on one row only. The names are short — a suffix on a cup name — and the
+   result beside it is what gives instead. */
+.honours-edition {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Wraps rather than clipping, which is the opposite of the tournament row's rule and for
+   the opposite reason: a row is a summary with the detail a tap away, and this *is* the
+   detail. A doubles final is two pairs and four names. */
+.honours-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+/* An edition still being played has no result yet, so its line is a description of where it
+   has got to rather than a name — the same voice `.tie-side.is-waiting` uses in the bracket
+   for a seat nobody has reached. */
+.honours-what.is-waiting {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.honours-when {
+  color: var(--muted);
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* The name cell carries its own padding here, because `.stats-table tbody th` gives it up to
+   the `.player-select` button inside it — and this table has no button to select with, so
+   without this the name sits hard against the cell's edge. Two classes deep, so it wins on
+   specificity whichever order the two stylesheets are bundled in. */
+.series-stats .stats-table tbody th {
+  padding: 10px 12px;
+}
+
+/* Capped for the same reason `.tournament-stats`'s row is: this one is only three chips
+   long, and three `1fr` tracks make each of them a card's width on a tablet. */
+.series-stats .stat-chips {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 160px));
+  justify-content: start;
+}
+
+/* The next edition, offered above the name field it fills. Laid out as the roster is — a
+   caption over a row of chips — and sharing `.roster-chips` and `.roster-chip`, because it
+   is the same affordance: tap this and it goes in the form. */
+.draw-next {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* One column fills the screen and the `‹ ›` buttons step between rounds, because four

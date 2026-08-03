@@ -450,6 +450,62 @@ the alternatives that were rejected; this section holds what breaks when you cha
   tournament fixture card** under External scoreboard: in a knockout every side arrives
   at a tie unbeaten, so a form line inside a tournament is all wins for everyone. What
   changes tie to tie is the round, so that is what `holecorn/<code>/tie` carries.
+- **A cup played again each year is a *series*, and it is read off the names rather than
+  stored.** `seriesKey` strips a trailing edition marker and folds the rest with `nameKey`;
+  `groupBySeries` groups on that, `seriesStats` rolls a series up, and `nextEditions` offers
+  the next name. **Nothing was added to `newTournament`, `validTournament`,
+  `mergeTournaments`, the storage shape or the export envelope**, and that is the whole
+  design — see `docs/TOURNAMENT.md` under **The series** for the stored-series option that
+  lost.
+  - **It had to be derived to be retroactive at all.** `recordedTournament` deliberately
+    keeps no field, so Hole Corn I has nowhere to hang a series id — a stored series could
+    not have included the one tournament whose honours are the only thing left of it.
+  - **The convention it reads is already forced.** `Draw` refuses a name a tournament has,
+    so an annual cup has always had to number itself. This reads a rule the app imposes; it
+    does not impose a new one.
+  - **The numeral must be uppercase, and that is load-bearing.** Read case-insensitively
+    `mix` is 1009 and `div` is 504, so `Hole Corn Mix` would silently become edition 1009 of
+    Hole Corn. The cost — a numeral typed in lowercase starts its own series — is *visible*
+    as two headings, and `tournament.test.js` pins both directions so it is a decision
+    rather than a surprise. The regex is strict (canonical numerals only) for the same
+    reason: the looser it is, the more ordinary words it swallows.
+  - **A name with no suffix keys to itself**, which is doing two jobs: a one-off is a series
+    of one so nothing needs a special case, and `Summer Cup` groups with `Summer Cup II`.
+  - **`nextEditions` steps past a name already taken**, and that is not hypothetical —
+    `import-legacy.mjs` dates a reconstructed tournament by its *earliest tie*, so a sheet
+    transcribed years later lands out of numerical order and the obvious next name is one
+    `Draw` would then refuse. Dropping the argument gives a chip that fills the form and
+    leaves `Make the draw` off; verified by mutation, it fails all four prefill assertions.
+  - **`seriesStats` counts honours off `champion`/`runnerUp`, which exist only once a final
+    has a winner** — so an edition still being played contributes its entrants and its ties
+    and no titles. Reaching a final you have not lost yet is not a result.
+  - **A recorded edition contributes its two finalists and nobody else**, because it kept no
+    field. So `entered` is who is *known* to have been in it, and the panel captions that
+    rather than reporting the short count as a fact. Such an entrant's `W–L` is a dash and
+    not `0–0`, the `played` flag `lineupStats` already draws a first-timer with.
+  - **`SeriesRow` has its own `.series-holder` and `.series-count`, sharing the tournament
+    row's *rules* rather than its class names.** They are different facts — how many
+    editions, and who holds the cup — and the names are **queried**: `verify-tournament.mjs`
+    reads `.tournament-progress` unscoped, so a series row carrying one resolves the locator
+    to two elements and ends the run on a strict-mode violation in a block a thousand lines
+    away. Found exactly that way. The same is true of a third section: treating a cup played
+    *once* as a series puts a second `.tournament-list h2` on every one-tournament fixture
+    and kills the run the same way, which is why the browser check mutates the threshold
+    upwards instead.
+  - **The Stats-tab table selects and this one does not**, so its name cell is plain text —
+    and `.stats-table tbody th` gives its padding up to the `.player-select` button it does
+    not have. `.series-stats .stats-table tbody th` puts it back, two classes deep so source
+    order cannot decide it. Verified by mutation; nothing else notices, because every number
+    in the table is still right.
+  - **Neither a `P` column nor a `Finals` column, and both were there.** `P` is exactly wins
+    plus losses; `Finals` is the honours list immediately above, which names both finalists
+    of every edition. Dropping them is what fits the table on a phone without abbreviating
+    the headings — measured, `overflows` 0 at 393px where the career table deliberately
+    overflows by 198–235px. `seriesStats` still derives `finals` as the tie-break under
+    titles: a sort key, not a column.
+  - **The edition count is not a chip.** The row above says it and stays on screen while the
+    row is open, so it was the same fact twice — and three chips orphan one on a phone where
+    two fill the row exactly.
 - **A tournament runs over weeks, and that is the sharpest risk in the feature.**
   `localStorage` is per browser and a home-screen app is a different container from a Safari
   tab, so whichever device takes the draw must score every tie — and ITP deletes

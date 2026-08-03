@@ -173,6 +173,24 @@ rate columns while one played through the app keeps them. Verified by mutation �
 the route off from the bracket, dropping the reset when a row shuts, and pinning the
 detail gate on each fail only their own assertions.
 
+The series blocks cover the same kind of crossing again. `groupBySeries`, `seriesStats`
+and `nextEditions` are pure and unit tested against those very fixtures, so the browser
+checks assert only what no unit test can reach: that the screen draws a `Series` section at
+all, that it draws one only where a cup has been played more than once, and — the one the
+block exists for — that **the name the draw form is handed is a name the draw form will
+accept**. `nextEditions` and the form's duplicate rule are each correct alone and only their
+pairing can be wrong, so the fixture carries a sixth edition dated *before* the fifth;
+without it the suggestion never collides and the assertion cannot fail, which is the file's
+own recorded habit happening again.
+
+**Two of those mutations landed nowhere near the block under test**, which is worth knowing
+before adding a section to that screen: a series row reusing `.tournament-progress`, and a
+one-off cup being treated as a series, each end the run on a strict-mode violation in an
+*existing* block a thousand lines above — one because the class is queried unscoped, the
+other because every one-tournament fixture then grows a second `.tournament-list h2`. The
+first was a real defect and is fixed by `.series-holder`/`.series-count`; the second is why
+that mutation is done by raising the threshold instead.
+
 **That file taught the same two lessons repeatedly, and they are worth knowing before
 adding to it:**
 

@@ -525,6 +525,36 @@ one reason: **whichever device takes the draw has to score every tie**, because
 the history is per-browser. Add Holecorn to your home screen before you start —
 see **Keeping the history**.
 
+### The same cup, every year
+
+Play a cup twice and its editions gather into a **Series** section between the two
+lists. Nothing sets this up: the app reads the numeral or year off the end of the
+name, so *Hole Corn V* and *Hole Corn VI* are two editions of *Hole Corn*, and every
+tournament you have already played groups itself — including one that survives only
+as a recorded result.
+
+A series row names who holds the cup, how many editions it has run to and the span
+they cover. Opening it gives the roll of honour — every edition newest first, with
+both finalists and the day it was decided — and a table of everyone who has entered:
+how many editions, how many titles, and their tie record across all the years.
+
+Those last two are the point of it. Inside a single knockout everybody who is still
+in has won every tie they have played and no two people meet twice, so form and
+head-to-heads say nothing. Across editions they do, and *how many has she won* has no
+single-cup answer at all.
+
+When you draw a new one, the form offers the next edition by name — **Hole Corn VII**
+— along with the mode and target the last one used. Tap it and the name is filled in
+correctly, which matters because the name is what does the grouping: a cup typed as
+*Holecorn VII* starts a series of its own. It only offers a cup whose latest edition
+is finished, and it skips a name already in use. It doesn't enter the field — who
+plays changes year to year, and **Select all** is one press.
+
+Two things worth knowing. A numeral has to be in capitals: *Hole Corn VI* groups and
+*Hole Corn vi* does not, because read loosely an ordinary word like *Mix* is a Roman
+numeral too and would quietly become edition 1009. And a cup played once is not a
+series — it is just a tournament, in the list it was always in.
+
 ## External scoreboard
 
 Holecorn can mirror the score onto a second screen — a spare tablet or laptop

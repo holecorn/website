@@ -20,11 +20,14 @@ import {
   drawSteps,
   entrantFaults,
   entrantStats,
+  groupBySeries,
   lastPlayed,
   levelName,
   newTournament,
   newestFirst,
+  nextEditions,
   routeFor,
+  seriesStats,
   shuffled,
   tieExtremes,
   tieHistory,
@@ -712,7 +715,7 @@ function Roster({ knownNames, taken, onToggle, onAll }) {
   );
 }
 
-function Draw({ knownNames, usedNames, onDrawn, onCancel }) {
+function Draw({ knownNames, usedNames, suggestions, onDrawn, onCancel }) {
   const [name, setName] = useState('');
   const [mode, setMode] = useState('singles');
   const [target, setTarget] = useState(DEFAULT_TARGET);
@@ -844,6 +847,39 @@ function Draw({ knownNames, usedNames, onDrawn, onCancel }) {
 
   return (
     <div className="draw">
+      {/* A cup played every year is the same three answers every year, and the name is the
+          one that has to be exactly right — it is what groups the editions, so a typo
+          silently starts a new series. Filling it from the last edition is what removes
+          most of the typing that would cause that.
+
+          It deliberately does **not** enter the field. Who plays changes year to year, and
+          the roster below already enters everybody the app knows in one press.
+
+          A plain chip rather than a toggle, unlike the roster's: this fills three boxes and
+          they can all be typed over afterwards, so there is no state for it to be in. */}
+      {suggestions.length > 0 && (
+        <div className="draw-next">
+          <h3>Next edition</h3>
+          <div className="roster-chips">
+            {suggestions.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className="roster-chip"
+                onClick={() => {
+                  setName(s.name);
+                  setMode(s.mode);
+                  // A cup that survives only as a result has no target, so the form keeps
+                  // its own default rather than being handed nothing.
+                  if (s.target !== null) setTarget(s.target);
+                }}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <label className="draw-name">
         Name
         <input
@@ -1185,6 +1221,191 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
   );
 }
 
+// ------------------------------------------------------------------ the series --
+
+// One date per edition: the day it was won. A finished bracket's is its final's, a recorded
+// result's is the only date it has, and a cup still being played has none to give — which is
+// right, because its line says where it has got to instead of naming a winner.
+function editionWhen(tournament, view, matches) {
+  if (view.recorded) return tournament.createdAt ? shortDate(tournament.createdAt) : null;
+  const last = lastPlayed(view, matches);
+  return view.done && last ? shortDate(last) : null;
+}
+
+// What an edition contributed to the series, in one line. A cup still being played says
+// where it has got to in the same words its row in `In progress` uses, so the two agree.
+function honoursLine(view) {
+  if (view.champion && view.runnerUp) {
+    return `${sideNames(view.champion)} beat ${sideNames(view.runnerUp)}`;
+  }
+  if (view.champion) return sideNames(view.champion);
+  return `${view.played} of ${view.total} ${plural(view.total, 'tie', 'ties')} played`;
+}
+
+// How far the series runs. Every date it has — each edition's draw and each edition's last
+// tie — collapsed to a span, so a series of one afternoon reads as a date and one of six
+// years reads as a range. `dateSpan` collapses the ends itself.
+function seriesWhen(stats, matches) {
+  const stamps = stats.editions
+    .flatMap(({ tournament, view }) => [tournament.createdAt, lastPlayed(view, matches)])
+    .filter((ms) => Number.isFinite(ms) && ms > 0);
+  return stamps.length > 0 ? dateSpan(Math.min(...stamps), Math.max(...stamps)) : null;
+}
+
+// What an open series shows: the roll of honour, and how everybody has done across it.
+//
+// **These are the two questions a single bracket structurally cannot answer**, which is why
+// this is worth a section rather than being folded into the Stats tab — see
+// `docs/TOURNAMENT.md`. Inside one knockout every head-to-head is 1–0 and every surviving
+// entrant's form is all wins, because a beaten side plays no more ties. Across editions
+// both mean something again, and "how many has she won" has no single-cup equivalent at all.
+function SeriesPanel({ stats, matches }) {
+  return (
+    <div className="series-stats">
+      {/* Two, and deliberately not the throwing figures the Stats tab carries: those are
+          about how the games went and are already a tap away inside each edition. These are
+          about the series, which is the only thing this panel can say that they cannot.
+
+          **The edition count is not a third chip**, though it was: the row above says it
+          already — `4 editions · 10 Jul 21 – 20 Jun 26`, and that line stays on screen while
+          the row is open — so the chip was the same fact twice. It also orphaned itself,
+          because two chips fill a phone's row exactly and three do not. */}
+      <Chips>
+        <Chip
+          value={stats.champions}
+          label={`different ${plural(stats.champions, 'winner', 'winners')}`}
+        />
+        <Chip value={stats.ties.length} label={plural(stats.ties.length, 'tie', 'ties')} />
+      </Chips>
+
+      <section className="tournament-section">
+        <h3>Honours</h3>
+        {/* One grid for every row rather than a grid per row, so the edition track sizes to
+            the widest name across all of them and the results start at one offset — the
+            `.ceremony-sheet` and `.field-rows` trick, and for the same reason: a ragged left
+            edge down a list reads as broken. */}
+        <ol className="honours">
+          {stats.editions.map(({ tournament, view }) => {
+            const when = editionWhen(tournament, view, matches);
+            return (
+              <li key={tournament.id}>
+                <span className="honours-edition">{tournament.name}</span>
+                <span className={`honours-what${view.champion ? '' : ' is-waiting'}`}>
+                  {honoursLine(view)}
+                  {when && <span className="honours-when">{DOT}{when}</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <section className="tournament-section">
+        {/* Concrete rather than "Across the series", which is the word the code and the
+            section heading use: this is a sentence rather than a label, and what the table
+            is actually about is the years. The abstract noun earns its place where a thing
+            has to be named and not where a phrase will do. */}
+        <h3>Across the years</h3>
+        <div className="stats-scroll">
+          <table className="stats-table">
+            <thead>
+              <tr>
+                <th scope="col">Entrant</th>
+                <th scope="col" title="Editions entered">
+                  Editions
+                </th>
+                <th scope="col" title="Editions won">
+                  Titles
+                </th>
+                {/* Four columns, and the two that are not here were. Both were dropped to
+                    fit a phone without abbreviating the headings into `Ed`/`Fin`, and both
+                    were saying something already on screen:
+
+                    `P` is exactly wins plus losses, so `W–L` beside it carries it.
+                    `Finals` is the honours list immediately above, which names *both*
+                    finalists of every edition — on a four-edition series the two are the
+                    same four lines. `seriesStats` still derives it, as the tie-break under
+                    titles; it is a sort key rather than a column. */}
+                <th scope="col" title="Ties won–lost">
+                  W–L
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.rows.map((r) => (
+                <tr key={r.key}>
+                  {/* Plain text, unlike the career and entrant tables: those select
+                      something — a player's rivals, an entrant's route — and there is
+                      nothing here for a selection to scope. */}
+                  <th scope="row">{sideLabel(r.names)}</th>
+                  <td>{r.entered}</td>
+                  <td>{r.titles}</td>
+                  {/* A dash rather than `0–0` for somebody known only from an edition whose
+                      sheet is gone: they have played no ties the archive can see, which is
+                      not the same as having played none. The `played` flag `lineupStats`
+                      draws a first-timer with. */}
+                  <td>{r.played ? `${r.wins}–${r.losses}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {stats.recorded && (
+          <p className="tournament-note">
+            An edition whose sheet is gone kept no field, so only its winner and runner-up
+            are counted in it.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// A series — every edition of a cup played again each year — as a row you open.
+//
+// **Nothing about it is stored.** `groupBySeries` reads the suffix off the names, so this is
+// a *view* over the same tournaments the lists above and below draw, and an edition appears
+// in both. That is the point rather than a duplication: the lists answer "what is running"
+// and "what has finished", and this answers "who has won this thing".
+function SeriesRow({ group, stats, matches, isOpen, onToggle }) {
+  // The most recent edition to have been decided, which is what holding a cup means. The
+  // editions are newest first, so it is simply the first with a champion.
+  const holder = stats.editions.find(({ view }) => view.champion)?.view.champion ?? null;
+  const when = seriesWhen(stats, matches);
+  const count = `${stats.editions.length} ${plural(stats.editions.length, 'edition', 'editions')}`;
+  // The caption carries the count only where the holder has taken the line above it,
+  // because otherwise the count is already up there and would be said twice.
+  const caption = holder ? [count, when].filter(Boolean).join(DOT) : when;
+  return (
+    <li className={isOpen ? 'is-open' : undefined}>
+      <button type="button" className="tournament-row" aria-expanded={isOpen} onClick={onToggle}>
+        <span className="tournament-name">{group.name}</span>
+        {/* **Its own classes, sharing the tournament row's rules rather than its class
+            names**, and that is not tidiness. `.tournament-progress` means "how far has this
+            bracket got" and `.champion-who` means "who won this cup"; a series' versions
+            are different facts — how many editions, and who holds it. They are also *queried*
+            by name: `verify-tournament.mjs` reads `.tournament-progress` unscoped, so a
+            series row carrying one resolves the locator to two elements and ends the run on a
+            strict-mode violation in a block that has nothing to do with this. Found by
+            mutation, in an existing block 1200 lines above the new ones. The styling is
+            shared in `Tournament.css` by adding these to the same rules, so there is one
+            declaration and no second thing to keep in step. */}
+        {holder ? (
+          <span className="series-holder">
+            <span className="result-cap">Holder</span>
+            {DOT}
+            {sideNames(holder)}
+          </span>
+        ) : (
+          <span className="series-count">{count}</span>
+        )}
+        {caption && <span className="tournament-when">{caption}</span>}
+      </button>
+      {isOpen && <SeriesPanel stats={stats} matches={matches} />}
+    </li>
+  );
+}
+
 // How long the name is withheld after a press. The same reasoning as `TOSS_MS` in
 // App.jsx, and longer than it: a toss is between two names you can already see, where
 // this is a name nobody knows yet and the pause is what the children are there for.
@@ -1345,6 +1566,24 @@ export default function Tournament({
   const open = views.filter((x) => !x.view.done);
   const done = views.filter((x) => x.view.done);
   const toggle = (id) => setOpenId((was) => (was === id ? null : id));
+  // Series with more than one edition. A cup played once is already a row in the lists
+  // below and a `Series` heading over a single edition of it says nothing — so the section
+  // simply is not there until a cup has been played again, which is the year it starts
+  // being worth asking who has won it.
+  //
+  // Keyed with a prefix so one `openId` can hold either kind of row: a series key is a
+  // folded name and a tournament id is a random hex, so they could not collide in practice,
+  // but one thing open at a time is the screen's rule and this is what keeps it one rule.
+  const series = useMemo(
+    () =>
+      groupBySeries(tournaments)
+        .filter((g) => g.editions.length > 1)
+        .map((group) => ({ group, stats: seriesStats(group.editions, matches) })),
+    [tournaments, matches],
+  );
+  // What `New` offers as a starting point, computed here because only this screen holds
+  // both the tournaments and the archive the "is it finished" filter needs.
+  const suggestions = useMemo(() => nextEditions(tournaments, matches), [tournaments, matches]);
 
   const list = (label, rows) =>
     rows.length > 0 && (
@@ -1407,6 +1646,7 @@ export default function Tournament({
         <Draw
           knownNames={knownNames}
           usedNames={tournaments.map((t) => t.name)}
+          suggestions={suggestions}
           onCancel={() => setDrawing(false)}
           onDrawn={(t) => {
             // Saved whole before a single name is revealed, which is what makes the
@@ -1424,6 +1664,27 @@ export default function Tournament({
             </p>
           )}
           {list('In progress', open)}
+          {/* Between the two lists rather than at either end: `In progress` is what you came
+              to the screen for, and a series is the history lens on everything below it —
+              so it reads in the order the questions are asked, "what is on" then "who has
+              won this" then "what else has been played". */}
+          {series.length > 0 && (
+            <section className="tournament-list">
+              <h2>Series</h2>
+              <ul>
+                {series.map(({ group, stats }) => (
+                  <SeriesRow
+                    key={group.key}
+                    group={group}
+                    stats={stats}
+                    matches={matches}
+                    isOpen={openId === `series:${group.key}`}
+                    onToggle={() => toggle(`series:${group.key}`)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
           {list('Completed', done)}
 
         </>

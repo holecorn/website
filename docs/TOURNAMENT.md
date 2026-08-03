@@ -661,6 +661,106 @@ longest.
   objection again: information that appears only on the short shape reads as the panel
   losing it once the draw starts.
 
+## The series
+
+Hole Corn is played every year and the editions are told apart by a suffix — Hole Corn V,
+Hole Corn VI. The app now groups them, so the screen can answer the two questions a single
+bracket structurally cannot: **who has won this thing**, and **how has everybody done across
+the years**.
+
+It is worth being precise about why those two are missing rather than merely thin. **Where
+the stats went** above records that most of the career screen is degenerate when scoped to
+one cup — every head-to-head inside a knockout is 1–0, so `RIVAL_MIN_MEETINGS` can never
+fire, and every surviving entrant's form is all wins, because a beaten side plays no more
+ties. Those are facts about the *format*, so no amount of data fixes them. Across editions
+both come back: sides meet again in later years, and a record can have losses in it. And
+"how many has she won" has no single-cup equivalent at all.
+
+### Options considered
+
+#### A stored series, with editions created under it
+
+The shape the idea arrived in: create `Hole Corn` once with its target and suffix style,
+then create each year's edition under it and have the app allocate the next suffix. The
+most explicit option, and the only one that could express a series whose names do not
+follow a pattern.
+
+*Eliminated because:* it is a second source of truth about something the names already say,
+and the failure mode is the one this file exists to prevent — a stored membership saying one
+thing while the names on screen say another, with no symptom. It also cannot be
+retroactive: **`recordedTournament` deliberately keeps no field at all**, so Hole Corn I has
+nowhere to hang a series id, and every other existing tournament would need backfilling. And
+it adds a concept to `validTournament`, `mergeTournaments` and the export envelope — the
+three places a new stored field is most expensive, since a merge that drops one is silent.
+
+#### Derived from the name — **chosen**
+
+`seriesKey` strips a trailing edition marker and folds what is left with `nameKey`. Nothing
+is stored, so every tournament already drawn groups itself the moment it ships, a recorded
+result included; there is no migration, and tuning the rule re-groups everything rather than
+needing a repair.
+
+*Chosen because:* the convention it reads is already **forced**. The draw form refuses a
+name a tournament already has (see **How it came out differently**), and the note there
+records the consequence in as many words — "an annual cup cannot reuse its name … which is
+what this group does anyway (Hole Corn V, VI)". So the numbering is not a convention being
+introduced for this; it is one the app already requires, now being read.
+
+It is the same move as the rest of the feature: `bracket()` stores the draw and derives
+progress, `inactive.js` stores when somebody was marked and derives the rest, and this
+stores nothing and derives all of it.
+
+### What the rule is
+
+A whole trailing **word**, with something left in front of it, that is either an **uppercase**
+Roman numeral in canonical form or a run of digits. Four details do real work:
+
+- **Uppercase only for the numeral.** Read case-insensitively, `mix` is 1009 and `div` is
+  504, so `Hole Corn Mix` would silently become edition 1009 of Hole Corn — wrong in the one
+  way only somebody who knew the rule could spot. The cost is that a numeral typed in
+  lowercase starts its own series, which is *visible* as two headings. `tournament.test.js`
+  pins both directions.
+- **Canonical numerals only**, which is why the shape is a strict regex rather than a loop
+  that adds letters up. `IIII` parses under a loose rule and so do more real words.
+- **A whole word**, so `Hole CornVI` is left alone.
+- **Something in front of it**, so a cup actually called `V` is its own series rather than
+  the fifth edition of a series with no name.
+
+A number and a year are one case, not two — both step by one, and the style only decides how
+the next is written. **A name with no suffix keys to itself**, which gives two behaviours for
+free: a one-off is a series of one, so nothing needs a special case, and the common shape
+where the first edition went unnumbered (`Summer Cup`, then `Summer Cup II`) groups
+correctly.
+
+### The prefill is the other half
+
+Deriving from names means a typo splits a series, so the draw form offers the next edition
+by name, with the mode and target the last one was played on. That removes most of the
+typing that would cause the split, and it is why no "suffix style" is ever chosen: the style
+is whatever last year's was.
+
+It steps past a name already taken, and that is not hypothetical —
+`import-legacy.mjs` dates a reconstructed tournament by its **earliest tie**, so a sheet
+transcribed years later lands wherever its ties say rather than in numerical order. Without
+it a suggestion could fill the form with a name the same form then refuses.
+
+It deliberately does **not** carry the field. Who plays changes year to year, and the roster
+chips already enter everybody the app knows in one press.
+
+### Explicitly not doing
+
+- **No series entity, and so no renaming, deleting or merging one.** Renaming a series is
+  renaming its editions, which is a thing the app does not do to a tournament at all.
+- **No form scoped to the series on the pre-game screen.** The obvious next payoff — a tie's
+  Form panel showing the two sides across every edition rather than across all history — and
+  the reason it is not here is that it is a separate decision with its own questions: whether
+  the board publishes it, and whether it replaces career form or sits beside it. **What the
+  scoreboard shows** above rejected in-cup form as degenerate for exactly the reason this
+  section opens with; across editions that objection lifts, so this is the change that
+  argument would be revisited for.
+- **No seeding from a series' record.** The draw is random, which **Open questions** already
+  settles; knowing who has won it four times does not change that.
+
 ## Where the rules live
 
 This repo has no pull requests — work goes straight to `main` — so the rules a future change

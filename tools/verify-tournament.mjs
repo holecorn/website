@@ -2419,6 +2419,283 @@ console.log('\na tournament whose sheet is gone');
   await page.close();
 }
 
+// The editions of a cup played again each year, grouped. `groupBySeries`, `seriesStats` and
+// `nextEditions` are pure and unit tested against exactly these fixtures, so what is left
+// for a browser is the wiring: that the screen draws a section at all, that it draws one
+// only where there is more than one edition, and — the one this block exists for — that the
+// name the draw form is *handed* is a name the draw form will *accept*.
+//
+// Seeded rather than played: four editions is four draws and eleven ties through the UI,
+// and none of that is what is under test.
+//
+// **Verified by mutation**, and each fails only its own assertions: a suggestion that
+// ignores the names already taken (the four prefill checks), a series section that never
+// appears (the two that say one does), the holder read off the oldest decided edition rather
+// than the newest, honours drawn oldest first, a recorded edition contributing no entrants,
+// and the name cell losing its padding.
+//
+// One mutation is caught somewhere else entirely and is worth knowing about: treating a cup
+// played **once** as a series ends the run in an *existing* block a thousand lines above
+// this, because every one-tournament fixture then grows a second section and
+// `.tournament-list h2` resolves to two elements. That is why the same mutation is done here
+// as "no series is ever a section" instead — no other block seeds two editions of one
+// series, so raising the threshold touches only these checks. The two directions are
+// asserted separately either way: one heading is `Series` and the other `Completed` in the
+// same run, so neither can pass by the helper simply always agreeing.
+function series() {
+  localStorage.clear();
+  const cup = (id, name, createdAt) => ({
+    format: 1,
+    id,
+    name,
+    createdAt,
+    mode: 'singles',
+    target: 26,
+    entrants: [['Rho'], ['Tau'], ['Sigma'], ['Phi']],
+  });
+  localStorage.setItem(
+    'holecorn.tournaments.v1',
+    JSON.stringify([
+      // No field at all — the shape a tournament played before the app takes. It is here
+      // because a stored series id could never have reached it: `recordedTournament` keeps
+      // no field to hang one on, so grouping by name is the only thing that can.
+      {
+        format: 1,
+        id: 'hc1',
+        name: 'Hole Corn I',
+        createdAt: Date.parse('2021-07-10'),
+        // Neither plays in IV or V, deliberately: they are then the only entrants in the
+        // series with no ties anywhere behind them, which is the row the dash is for.
+        champion: ['Omega'],
+        runnerUp: ['Iota'],
+      },
+      cup('hc4', 'Hole Corn IV', Date.parse('2024-05-02')),
+      cup('hc5', 'Hole Corn V', Date.parse('2025-06-06')),
+      // A one-off, so the section must not list it: a `Series` heading over a single
+      // edition says nothing, and it is already a row in the lists either side.
+      cup('sc1', 'Summer Cup', Date.parse('2023-08-01')),
+    ]),
+  );
+  let n = 0;
+  const tie = (tournament, a, b, winner, when) => {
+    n += 1;
+    return {
+      format: 1,
+      id: `m${n}`,
+      tournament,
+      mode: 'singles',
+      players: { a: [a, ''], b: [b, ''] },
+      rounds: [],
+      final: winner === 'a' ? { a: 26, b: 13 } : { a: 13, b: 26 },
+      winner,
+      endedAt: Date.parse(when),
+    };
+  };
+  localStorage.setItem(
+    'holecorn.matches.v1',
+    JSON.stringify([
+      // IV won by Rho, V won by Tau — two different champions, so a column that reported
+      // the same name for every edition would show.
+      tie('hc4', 'Rho', 'Tau', 'a', '2024-05-02'),
+      tie('hc4', 'Sigma', 'Phi', 'a', '2024-05-03'),
+      tie('hc4', 'Rho', 'Sigma', 'a', '2024-05-09'),
+      tie('hc5', 'Rho', 'Tau', 'b', '2025-06-06'),
+      tie('hc5', 'Sigma', 'Phi', 'b', '2025-06-07'),
+      tie('hc5', 'Tau', 'Phi', 'a', '2025-06-14'),
+      tie('sc1', 'Rho', 'Tau', 'a', '2023-08-01'),
+      tie('sc1', 'Sigma', 'Phi', 'a', '2023-08-02'),
+      tie('sc1', 'Rho', 'Sigma', 'a', '2023-08-03'),
+    ]),
+  );
+}
+
+async function seeded() {
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.evaluate(series);
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.waitForSelector('.tournament-list');
+  return page;
+}
+
+// The heading of the section a row sits in, which is the whole of "did it group".
+const sectionOf = (page, name) =>
+  page.evaluate((wanted) => {
+    for (const section of document.querySelectorAll('.tournament-list')) {
+      const rows = [...section.querySelectorAll(':scope > ul > li .tournament-name')];
+      if (rows.some((r) => r.textContent === wanted)) return section.querySelector('h2')?.textContent;
+    }
+    return null;
+  }, name);
+
+console.log('\nevery edition of a cup is grouped into one series');
+{
+  const page = await seeded();
+  check('a cup played more than once gets a section', (await sectionOf(page, 'Hole Corn')) === 'Series');
+  // The absence half, and it needs asserting separately: a filter stuck open puts a
+  // one-edition heading over every cup ever played, which looks like a feature rather
+  // than a fault. Summer Cup is still *listed* — just not as a series.
+  check(
+    'a cup played once is not one',
+    (await sectionOf(page, 'Summer Cup')) === 'Completed',
+    await sectionOf(page, 'Summer Cup'),
+  );
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('.tournament-list')]
+      .filter((s) => s.querySelector('h2')?.textContent === 'Series')
+      .flatMap((s) => [...s.querySelectorAll(':scope > ul > li .tournament-name')])
+      .map((r) => r.textContent),
+  );
+  check('and there is exactly one series here, not one per edition', rows.length === 1, JSON.stringify(rows));
+
+  // The holder is the champion of the newest *decided* edition, which is V and not IV —
+  // so reading the oldest, or reading whichever the archive happened to hold first, gives
+  // Rho and fails here.
+  const shut = await page.locator('.tournament-list').filter({ hasText: 'Series' }).locator('.tournament-row').first();
+  const holder = (await shut.locator('.series-holder').innerText()).replace(/\s+/g, ' ');
+  check('the row names who holds it', holder === 'HOLDER · Tau', holder);
+  const when = await shut.locator('.tournament-when').innerText();
+  check('and how many editions it has run to, over what span', when.startsWith('3 editions ·'), when);
+
+  await shut.click();
+  check('it opens onto the roll of honour', await settles(() => page.waitForSelector('.honours', { timeout: 3000 })));
+  // Newest first, and every edition of the series — including the one with no field,
+  // which is the retroactive half of the whole feature.
+  const honours = await page.evaluate(() =>
+    [...document.querySelectorAll('.honours li')].map((li) => [
+      li.querySelector('.honours-edition')?.textContent,
+      li.querySelector('.honours-what')?.innerText.replace(/\s+/g, ' '),
+    ]),
+  );
+  check(
+    'which is every edition, newest first',
+    JSON.stringify(honours.map((h) => h[0])) === JSON.stringify(['Hole Corn V', 'Hole Corn IV', 'Hole Corn I']),
+    JSON.stringify(honours.map((h) => h[0])),
+  );
+  check(
+    'and names both finalists of each',
+    honours[0][1].startsWith('Tau beat Phi') && honours[2][1].startsWith('Omega beat Iota'),
+    JSON.stringify(honours.map((h) => h[1])),
+  );
+
+  // The figure one bracket structurally cannot produce: Rho entered three editions across
+  // five years. Inside any one of them the number is 1.
+  const table = await page.evaluate(() =>
+    [...document.querySelectorAll('.series-stats .stats-table tbody tr')].map((tr) =>
+      [...tr.children].map((c) => c.innerText.trim()),
+    ),
+  );
+  // Two editions, one of them won, and a tie record of 2–1 spanning two years: two ties
+  // won in IV and one lost in V. Every one of those numbers is 1 or 0 inside either
+  // bracket on its own, which is the point of the panel.
+  const rho = table.find((r) => r[0] === 'Rho');
+  check(
+    'the table counts a career across the series',
+    JSON.stringify(rho) === JSON.stringify(['Rho', '2', '1', '2–1']),
+    JSON.stringify(rho),
+  );
+  // Somebody known only from an edition whose sheet is gone has no ties the archive can
+  // see, which is not the same as having played none — `0–0` would be a claim. They are
+  // in the table at all only because the champion of a recorded result is remembered.
+  const omega = table.find((r) => r[0] === 'Omega');
+  check(
+    'and does not report a missing sheet as a nil record',
+    JSON.stringify(omega) === JSON.stringify(['Omega', '1', '1', '—']),
+    JSON.stringify(omega),
+  );
+
+  // The table has to fit a phone without sideways scrolling, which is why it carries
+  // neither a `P` column nor `Finals`. Measured rather than assumed: the career table
+  // deliberately does overflow, so nothing else here would notice this one starting to.
+  const spill = await page.evaluate(() => {
+    const el = document.querySelector('.series-stats .stats-scroll');
+    return el ? el.scrollWidth - el.clientWidth : -1;
+  });
+  check('and it fits a phone with nothing scrolled off', spill === 0, `${spill}px over`);
+
+  // `.stats-table tbody th` gives its padding up to the `.player-select` button inside it,
+  // on the career table. This table has no button — there is nothing here to select — so
+  // without a rule putting the padding back the name sits hard against the cell edge.
+  // Nothing else would notice: the table still lays out, and every number in it is right.
+  const pad = await page.evaluate(() => {
+    const th = document.querySelector('.series-stats .stats-table tbody th');
+    return th ? parseFloat(getComputedStyle(th).paddingLeft) : -1;
+  });
+  check('and its names are not jammed against the cell edge', pad >= 8, `${pad}px`);
+
+  // One thing open at a time across the whole screen, which is what the prefixed key in
+  // `openId` is for — a series and a tournament sharing one piece of state.
+  await page.locator('.tournament-list').filter({ hasText: 'Completed' }).locator('.tournament-row').first().click();
+  check('opening a tournament shuts the series', (await page.locator('.honours').count()) === 0);
+  await page.close();
+}
+
+console.log('\nthe draw form offers the next edition, and offers one it will accept');
+{
+  const page = await seeded();
+  // A sixth edition already exists and is dated *before* the fifth, so the series' newest
+  // edition is still V and the obvious next name is one the form would refuse. That is not
+  // contrived: `import-legacy.mjs` dates a reconstructed tournament by its earliest tie, so
+  // a sheet transcribed years later lands wherever its ties say rather than in numerical
+  // order. **Without it this block's last assertion cannot fail** — the suggestion would
+  // never collide, so a step that ignored the names already taken would pass it.
+  await page.evaluate(() => {
+    const list = JSON.parse(localStorage.getItem('holecorn.tournaments.v1'));
+    list.push({
+      format: 1,
+      id: 'hc6',
+      name: 'Hole Corn VI',
+      createdAt: Date.parse('2020-01-01'),
+      mode: 'singles',
+      target: 26,
+      entrants: [['Rho'], ['Tau']],
+    });
+    localStorage.setItem('holecorn.tournaments.v1', JSON.stringify(list));
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.getByRole('button', { name: 'New tournament' }).click();
+  await page.waitForSelector('.draw');
+  const chips = await page.locator('.draw-next .roster-chip').allInnerTexts();
+  // VII rather than VI: V is the newest edition and it is finished, so the step starts
+  // there, and VI is taken. `Summer Cup II` is offered too — a cup played once is still a
+  // series of one to the form, even though it is not one to the section above.
+  check('the next edition is offered by name', chips.includes('Hole Corn VII'), JSON.stringify(chips));
+
+  // Reported rather than thrown, the rule every wait in this file follows. A mutation that
+  // changes which name is offered leaves this click matching nothing, and a bare `.click()`
+  // then ends the whole run with a stack trace instead of failing the two assertions under
+  // it — which is the lesson this file has already recorded three times.
+  const tapped = await settles(() =>
+    page.locator('.draw-next .roster-chip', { hasText: 'Hole Corn VII' }).click({ timeout: 4000 }),
+  );
+  check('tapping it names the tournament', tapped && (await page.locator('.draw-name input').inputValue()) === 'Hole Corn VII');
+  // The terms come with it. 26 rather than the app's default 21, so a chip that filled
+  // only the name would fail here rather than passing by coincidence.
+  check(
+    'and carries the terms the last one was played on',
+    (await page.locator('.draw-target input').inputValue()) === '26',
+    await page.locator('.draw-target input').inputValue(),
+  );
+
+  // **The assertion this block exists for.** `nextEditions` and the form's duplicate rule
+  // are each correct alone, and only their pairing can be wrong: a suggestion that landed
+  // on a name already taken would fill three boxes and then leave `Make the draw` off with
+  // a red hint, which is a button that breaks the form it is meant to fill in.
+  await page.getByRole('button', { name: 'Select all' }).click();
+  const off = await page.locator('.draw-go').isDisabled();
+  const hint = (await page.locator('.draw-hint').count()) ? await page.locator('.draw-hint').innerText() : '';
+  check('and the form accepts the name it was handed', off === false, hint);
+  await page.close();
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : '\nall tournament checks passed');
 process.exit(failures ? 1 : 0);
