@@ -43,6 +43,5 @@ retained-state recovery all worked first try. Upload is
 and note the port changes after upload — the ROM bootloader enumerates as
 cu.usbmodem<MAC> and the running sketch as cu.usbmodem101.
 
-First light on one panel the same day: the wordmark and the score layout both drew,
-so the pinmap and the FM6126A init are confirmed. Still untested: the second panel
-and the chain, the brightness buttons, and the power figures.
+Running on both panels the same day: wordmark, score layout, the full chain, and the
+brightness buttons. Still untested: the power figures, and brightness 40 at dusk.

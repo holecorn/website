@@ -38,15 +38,17 @@ dropped, so `MQTT_BUFFER` at 512 is right.
 healthy connected board says nothing for minutes. Don't read a quiet log as a dead
 one — tap RESET with the port open if you need evidence.
 
-**First light came the same day, on one panel.** The wordmark drew, letter by
-letter, and then the `full` layout with the retained score — so the pinmap, the
-FM6126A init, the DMA path, `logo.h`, the glyph tables and `render.h` are all
-confirmed against real hardware, not just against `src/panelRender.js`. Two faults
-had to be fixed together to get there and they mask each other; see
-`Things that will bite`.
+**It was working on both panels by the end of the same day.** The wordmark drew,
+letter by letter, then the `full` layout with the retained score, then the full
+128x32 across the chain, with the UP/DOWN brightness steps working. So the pinmap,
+the FM6126A init, the DMA path, the chain, `logo.h`, the glyph tables and `render.h`
+are all confirmed against real hardware rather than only against
+`src/panelRender.js`. Three faults had to be fixed to get there and two of them mask
+each other; see `Things that will bite`.
 
-**Still untested:** the second panel and the chain, the brightness buttons, the
-power figures, and whether 40 is dark enough to play under at dusk.
+**Still untested:** the power figures — every watt in `Power` remains derived — and
+whether brightness 40 is dark enough to play under at dusk, which only dusk can
+answer. The board has been run indoors only.
 
 ## Why this size
 
@@ -116,8 +118,10 @@ layout; `score` drops the names for taller digits — see Two layouts.
 
 ## Assembling it
 
-Nothing has been built, so this is the intended shape rather than a record of
-one.
+**The electrical half of this is now a record rather than a plan** — both panels,
+the chain and the controller ran on the bench on 2026-08-03, powered through the
+controller as drawn. The backer and the mount have not been built, so everything
+below about ply, screws and the seam is still intended shape.
 
 ```
   FRONT   640 x 160 mm active
