@@ -336,6 +336,13 @@ What constrains code outside those files:
   the app and the board both need them and two definitions would let them disagree.
   `sideLabel` collapsing the spaces around an ampersand *inside* a name is what makes
   reading the join exact rather than a guess.
+  - **That holds for the game-colour *path*, not for the literal.** `#eb5757` appears
+    ~35 times: changing a team colour means `scoring.js` (the palette and `newGame`'s
+    default), `Logo.jsx`'s and `Display.jsx`'s defaults, and the firmware's
+    `SPLASH_PALETTE` and `SPLASH_CONNECT` — the last mirrored in `panelRender.js`, so
+    `test:firmware` catches that one and nothing catches the rest. The reds in
+    `App.css`, `Stats.css` and `Tournament.css` are a **UI accent that shares the hex
+    by coincidence** and must not move with the team colour.
 - **The MQTT chunk is excluded from the PWA precache** (`globIgnores` in
   `vite.config.js`) — useless without a network, and it cost every install ~100kB
   gzipped.

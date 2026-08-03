@@ -1182,6 +1182,43 @@ Two things the meter cannot answer and only dusk can: whether 40 is dark enough
 to play under, which decides if `BRIGHTNESS_LEVELS` needs a step below it, and
 whether the five steps read as evenly spaced or bunch at one end.
 
+**And a third: whether the red needs correcting at all.** Indoors on 2026-08-03 the
+panel's red read washed out — pink rather than red — at every brightness step. What
+was measured, with a throwaway A/B sketch putting the four palette colours beside the
+same four with green and blue scaled: **red reads correctly with its off-channels at
+about 40% of `0x57`, so ~`0x23`.** Two dead ends were ruled out on the way, and both
+are worth knowing before re-deriving them:
+
+- **The colour path is not at fault, so don't add a gamma table.** The library already
+  runs every channel of `drawPixelRGB888` through `lumConvTab`, a 16-bit CIE1931
+  lightness curve, unless `NO_CIE1931` is defined. Computed against sRGB across the
+  whole palette, the two agree within a few percent — red's off-channel ratio is 0.099
+  on the panel against 0.115 in sRGB, so the panel is marginally *more* saturated than
+  the phone, not less. A second correction would be a double correction.
+- **A global per-channel gain cannot work, whatever the numbers.** Red needs blue cut
+  to ~40%, and blue *is* the channel blue is made of, so one gain that fixes red guts
+  the other three — confirmed by eye at step five of the sketch. Separate `kG` and `kB`
+  fail for the same reason. A saturation stretch (pulling each pixel away from grey)
+  would work on the four palette colours and wreck the greys, which is what
+  `MARKER_COLOR` and the chalked wordmark are, so it would arrive needing guards that
+  exist only to protect itself.
+
+That leaves two candidate fixes, both cheap, and **neither should be chosen from
+indoors** — a 5 mm panel judged at arm's length is the least representative condition
+there is, since the three dies in a pixel have not blended yet at that range:
+
+- **Panel only.** Fix up `state.colorA` and `colorB` in `hub75.ino` immediately after
+  parsing. That file has no JS mirror, so nothing diverges and the pixel check is
+  untouched, and applying it on the way in means `scaled()`, `chalk()` and `covered()`
+  all inherit it. Roughly ten lines, mapping the four palette values and passing
+  anything else through. Keeps the phone and tablet as designed.
+- **App-wide**, changing the team red to the measured value. Not one edit: the team red
+  lives at `src/scoring.js:52` and `:69`, `src/Logo.jsx:37`, `src/Display.jsx:194`,
+  `hub75.ino:144` and `render.h:308` — the last mirrored in `src/panelRender.js`, so
+  `npm run test:firmware` will hold you to it — plus the fixtures that assert the
+  default. The ~13 reds in `App.css`, `Stats.css` and `Tournament.css` are a **UI accent
+  red that merely shares the hex** and should not move with it.
+
 ## Names the panel cannot show
 
 The font is 5x7 ASCII. `fontIndex` maps anything outside it to `FONT_UNKNOWN`, a
