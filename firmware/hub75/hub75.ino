@@ -344,6 +344,10 @@ void setup() {
   // register init: without it, first power-up drew one green square in a corner
   // and nothing else — no splash, no layout.
   mxconfig.driver = HUB75_I2S_CFG::FM6126A;
+  // The library's default (true) garbles the right-most column, where ?panel=1
+  // shows it blank: the edge pixel samples a clock edge early and picks up the
+  // next word in the stream, which at chain 2 belongs to the other panel.
+  mxconfig.clkphase = false;
   panel = new MatrixPanel_I2S_DMA(mxconfig);
   panelBegan = panel->begin();
   panel->setBrightness8(PANEL_BRIGHTNESS);

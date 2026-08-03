@@ -22,6 +22,12 @@ way. Tap RESET with the port open when you need a boot sequence.
 
 The only reason that is allowed is the pixel check. It exists so the panel can be
 watched in a browser during a real game (`?panel=1`), which stills can't show.
+
+**It paid for itself at first light.** A one-column artefact on the hardware was
+identifiable as a *fault* rather than as how the layout looks, because `?panel=1`
+could be held next to the panel and shown to be blank there — which is what pinned
+it on `clkphase` instead of on a dead edge pixel or the ribbon. Keep it working:
+when the panel and the browser disagree, the browser is the reference.
 `test_render.cpp` writes `out/scenes.json` describing every scene it dumped, and
 `tools/test-firmware.mjs` renders each through `src/panelRender.js` and compares
 framebuffers byte for byte. **Change `render.h` and the JS fails until it matches** —

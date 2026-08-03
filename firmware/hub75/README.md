@@ -819,6 +819,13 @@ to it cannot short their rear traces the way a metal backer could.
   returns true, and nothing you draw ever reaches the shift registers. The only
   marking is an arrow between the two sockets showing data flow; there is no
   IN/OUT silkscreen.
+- **`mxconfig.clkphase = false` is required, and the symptom is one column wide.**
+  At the library's default of `true` the right-most column comes up garbled where
+  the emulator shows it blank — the edge pixel samples a clock edge early and takes
+  the next word in the stream, which at `chain = 2` is the other panel's data. Every
+  other column is correct, so this is easy to dismiss as a dead edge pixel or a
+  ribbon fault. **Don't reach for `latch_blanking` for this**; the library's own
+  comment warns that anything above 1 causes artefacts on some panels.
 - **Those two faults mask each other, which is what made first light take hours.**
   Either one alone gives a panel that looks dead, so every single-variable test
   reads as a failure while the other fault is still in place. If a panel shows
