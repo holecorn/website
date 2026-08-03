@@ -26,6 +26,15 @@ Compiled clean on 2026-08-03 — no warnings from any file here, including at
 --warnings all. 996,427 bytes of flash (47% of 2,097,152) and 81,052 bytes of
 global RAM (24% of 327,680), leaving 246,628 for locals.
 
+USE_TLS 1 also builds, checked the same day: 1,084,459 bytes of flash (51%) and
+81,588 of global RAM. The ~88 kB is the real cost of the flag; the +536 bytes of
+static RAM is not, because mbedTLS takes its handshake buffers off the heap. Not
+that the board should use it — it has no clock, so there is nothing to validate a
+certificate's dates against without SNTP succeeding first. See the mosquitto
+config in docs/OFFLINE-SCOREBOARD.md, which puts the board on plain 1883 for
+exactly that reason, and note the app's wss:// is a browser constraint rather than
+the same choice made differently.
+
 **Still never run on hardware, and nothing here exercises WiFi or MQTT.** A clean
 compile says the code is well-formed for this target; it says nothing about the
 pinmap being right, the panel driver IC, or the broker.

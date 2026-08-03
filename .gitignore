@@ -14,6 +14,8 @@ dist-ssr
 
 # Per-machine Claude Code permissions — note `*.local` above does not match it.
 # `.claude/rules/` is deliberately tracked; it is shared instruction, not config.
+# So is `.claude/settings.json`, which carries the deny rules protecting
+# firmware/hub75/secrets.h — a rule that only works on one machine protects nothing.
 .claude/settings.local.json
 
 # Downloaded for the firmware host tests (see firmware/hub75/README.md)

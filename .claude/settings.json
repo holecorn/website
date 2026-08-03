@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "deny": [
+      "Read(./firmware/hub75/secrets.h)",
+      "Bash(cat firmware/hub75/secrets.h)",
+      "Bash(cat ./firmware/hub75/secrets.h)",
+      "Bash(head firmware/hub75/secrets.h)",
+      "Bash(tail firmware/hub75/secrets.h)",
+      "Bash(less firmware/hub75/secrets.h)",
+      "Bash(more firmware/hub75/secrets.h)",
+      "Bash(open firmware/hub75/secrets.h)"
+    ]
+  },
+  "sandbox": {
+    "credentials": {
+      "files": [
+        {
+          "path": "firmware/hub75/secrets.h",
+          "mode": "deny"
+        }
+      ]
+    }
+  }
+}

@@ -75,6 +75,13 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
   beside the sketch, not in `host/`, since the sketch folder is the include path.
   **Don't add a new credential to the sketch for convenience** — the `#error` behind
   `__has_include` is what makes the absence loud, not the presence safe.
+  - **Reading `secrets.h` is denied in `.claude/settings.json`, and that is deliberate**:
+    a credential read into context is in the transcript and cannot be taken back.
+    Nothing needs it — the compiler reads the file, and no task here does. If a build
+    fails on a credential, change it in place or read `secrets.example.h` for the shape;
+    don't lift the rule. What it cannot cover is the board *printing* one: `subscribed
+    to holecorn/<GAME_CODE>/state` puts the code in any serial log, so treat a bench
+    code as disposable.
 - **`host/` holds the two host suites and the vendored `ArduinoJson.h`, and must not
   be `src/`** — Arduino recurses into `src/` and ignores every other subdirectory,
   which is the whole mechanism. Beside the sketch, `test_render.cpp` and
