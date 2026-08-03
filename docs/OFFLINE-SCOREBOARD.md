@@ -161,13 +161,14 @@ for issuance — DNS-01 validates through a TXT record.
 
 ### 5. Broker
 
-**Check `uci show mosquitto` before hand-editing anything.** The OpenWrt package
-ships a UCI wrapper — `/etc/config/mosquitto` is one of its conffiles — and when
-`use_uci` is enabled the init script *generates* the running config, so edits to
-`/etc/mosquitto/mosquitto.conf` are read by nothing and the broker keeps its old
-behaviour. Silent, and indistinguishable from a config that didn't take effect for
-some subtler reason. Either set `use_uci 0` and hand-write the file below, or express
-all of it through UCI — but know which one is in force first.
+**The file below is authoritative here, but confirm it after any reflash.** The
+OpenWrt package ships a UCI wrapper — `/etc/config/mosquitto` is one of its
+conffiles — and with `use_uci` enabled the init script *generates* the running
+config, so edits to `/etc/mosquitto/mosquitto.conf` would be read by nothing while
+the broker carried on as before: silent, and indistinguishable from a config that
+didn't take for some subtler reason. Measured on 2026-08-04, this router ships
+`use_uci '0'`, so hand-writing the file is correct and no UCI translation is needed.
+`uci show mosquitto` is the one-line check if the router is ever rebuilt.
 
 Two listeners, both bound to the LAN address so the WAN cannot reach them even
 before the firewall gets a say.
