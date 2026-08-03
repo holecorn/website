@@ -86,12 +86,11 @@ anything. Flash vanilla only if the packages fight — the specific conflict to
 watch is `mosquitto-ssl` pulling `libwebsockets-openssl` against the
 `libwebsockets-full` that a bundled web terminal may hold.
 
-**Answered on 2026-08-04: stock is enough.** The broker installed and runs, so no
-flash was needed. What is *not* established is whether the WebSockets half survived
-that conflict, because nothing has spoken WebSocket to it yet — the board uses plain
-1883. **Confirm `opkg status mosquitto-ssl` shows the SSL variant before building the
-WSS listener**, or the first thing to fail will be the certificate work, where it will
-look like a TLS problem rather than a missing feature.
+**Answered on 2026-08-04: stock is enough, and the conflict did not happen.**
+`opkg status mosquitto-ssl` reports 2.0.15-1 installed with `libwebsockets-openssl`
+among its satisfied dependencies, so WebSockets are present and no flash was needed.
+That version also matches what step 5 assumes — `per_listener_settings`, explicit
+`allow_anonymous`, and listeners that bind only where you say.
 
 If you do flash: mainline supports it as `mediatek/filogic` / `glinet_gl-mt3000`,
 upload the **sysupgrade** image through GL.iNet's own UI at `192.168.8.1`, and
@@ -161,6 +160,14 @@ Relay, an encrypted-DNS profile, or iOS asking over cellular. It is not needed
 for issuance — DNS-01 validates through a TXT record.
 
 ### 5. Broker
+
+**Check `uci show mosquitto` before hand-editing anything.** The OpenWrt package
+ships a UCI wrapper — `/etc/config/mosquitto` is one of its conffiles — and when
+`use_uci` is enabled the init script *generates* the running config, so edits to
+`/etc/mosquitto/mosquitto.conf` are read by nothing and the broker keeps its old
+behaviour. Silent, and indistinguishable from a config that didn't take effect for
+some subtler reason. Either set `use_uci 0` and hand-write the file below, or express
+all of it through UCI — but know which one is in force first.
 
 Two listeners, both bound to the LAN address so the WAN cannot reach them even
 before the firewall gets a say.
