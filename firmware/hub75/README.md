@@ -239,8 +239,19 @@ as of 2026-08-03** — 47% of flash, 24% of global RAM, no warnings even at
 `--warnings all`. It has still never run on hardware.
 
 ```bash
+cp firmware/hub75/secrets.example.h firmware/hub75/secrets.h   # once, then fill it in
 arduino-cli compile -b esp32:esp32:adafruit_matrixportal_esp32s3 firmware/hub75
 ```
+
+**`secrets.h` is gitignored, and that is the whole point of it.** The network, the
+broker and the game code used to sit in the sketch — a tracked file in a public repo,
+so filling them in and committing would have put a WiFi password in the history
+permanently, where a later commit cannot remove it. `secrets.example.h` is the tracked
+template and holds placeholders only. It owns `USE_TLS` too, because which broker
+fields exist depends on it, and it must sit beside `hub75.ino` rather than in `host/`
+because the sketch folder is what Arduino puts on the include path. A missing
+`secrets.h` is a named `#error` via `__has_include`, so a fresh clone gets one line
+telling it what to copy instead of twenty undefined identifiers.
 
 **Arduino compiles every source file in a sketch folder, and that shapes this
 directory.** Until 2026-08-03 neither the IDE nor `arduino-cli` could open it at

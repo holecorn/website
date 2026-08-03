@@ -19,6 +19,10 @@ dist-ssr
 # Downloaded for the firmware host tests (see firmware/hub75/README.md)
 firmware/hub75/host/ArduinoJson.h
 
+# The board's WiFi and broker credentials. This repo is public, so this file must
+# never be tracked — firmware/hub75/secrets.example.h is the tracked template.
+firmware/hub75/secrets.h
+
 # Renders from tools/ (see tools/README.md)
 tools/out/
 

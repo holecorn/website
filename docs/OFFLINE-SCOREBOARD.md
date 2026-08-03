@@ -259,15 +259,17 @@ the broker. Do not add port forwards.
 
 ### 10. Firmware
 
-In `firmware/hub75/hub75.ino`, with `USE_TLS` left at `0`:
+In `firmware/hub75/secrets.h` — **not** in `hub75.ino`, which no longer holds these;
+`secrets.h` is gitignored precisely so a passphrase like the one below cannot reach a
+public repo. With `USE_TLS` left at `0`:
 
 ```c
-const char* WIFI_SSID = "holecorn";
-const char* WIFI_PASS = "<passphrase>";
-const char* MQTT_HOST = "192.168.8.1";   // the IP, not the name
-const uint16_t MQTT_PORT = 1883;
-const char* MQTT_USER = "viewer";
-const char* MQTT_PASS = "<viewer pass>";
+static const char* WIFI_SSID = "holecorn";
+static const char* WIFI_PASS = "<passphrase>";
+static const char* MQTT_HOST = "192.168.8.1";   // the IP, not the name
+static const uint16_t MQTT_PORT = 1883;
+static const char* MQTT_USER = "viewer";
+static const char* MQTT_PASS = "<viewer pass>";
 ```
 
 Bring the board up against the public broker on home Wi-Fi **first**, then change

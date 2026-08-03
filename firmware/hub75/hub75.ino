@@ -13,30 +13,20 @@
 
 // ---------------------------------------------------------------- config ----
 
-const char* WIFI_SSID = "your-network";
-const char* WIFI_PASS = "";
-
-// Must match the game code in the app's External scoreboard settings.
-const char* GAME_CODE = "changeme";
-
-#define USE_TLS 0
+// The network, the broker and the game code live in secrets.h, which is gitignored.
+// This is a public repo, so a WIFI_PASS filled in here would be in the history
+// forever. Copy secrets.example.h to secrets.h and fill that in instead; it also
+// owns USE_TLS, because which broker fields exist depends on it.
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "No secrets.h. Copy firmware/hub75/secrets.example.h to secrets.h and fill it in."
+#endif
 
 #if USE_TLS
 #include <WiFiClientSecure.h>
-const char* MQTT_HOST = "your-cluster.hivemq.cloud";
-const uint16_t MQTT_PORT = 8883;
-const char* MQTT_USER = "board";
-const char* MQTT_PASS = "";
-const char* MQTT_CA_CERT = R"EOF(
------BEGIN CERTIFICATE-----
------END CERTIFICATE-----
-)EOF";
 WiFiClientSecure net;
 #else
-const char* MQTT_HOST = "broker.emqx.io";
-const uint16_t MQTT_PORT = 1883;
-const char* MQTT_USER = nullptr;
-const char* MQTT_PASS = nullptr;
 WiFiClient net;
 #endif
 

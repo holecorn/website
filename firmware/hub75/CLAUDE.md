@@ -68,6 +68,13 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
 
 - **`hub75.ino` must keep the folder's name.** Renaming either one alone gives
   "main file missing from sketch". It was `sketch.ino` until that date.
+- **Credentials live in `secrets.h`, which is gitignored, and nothing may move them
+  back.** This repo is public: a `WIFI_PASS` committed once is in the history forever
+  whatever the next commit does. `secrets.example.h` is the tracked template and owns
+  `USE_TLS` as well, because which broker fields exist depends on it. It has to sit
+  beside the sketch, not in `host/`, since the sketch folder is the include path.
+  **Don't add a new credential to the sketch for convenience** — the `#error` behind
+  `__has_include` is what makes the absence loud, not the presence safe.
 - **`host/` holds the two host suites and the vendored `ArduinoJson.h`, and must not
   be `src/`** — Arduino recurses into `src/` and ignores every other subdirectory,
   which is the whole mechanism. Beside the sketch, `test_render.cpp` and

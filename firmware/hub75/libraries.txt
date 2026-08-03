@@ -18,9 +18,13 @@ Board: "Adafruit MatrixPortal ESP32-S3" from the esp32 package by Espressif.
 FQBN: esp32:esp32:adafruit_matrixportal_esp32s3
 Core: esp32:esp32 3.3.11
 
+Credentials come from secrets.h, which is gitignored — copy secrets.example.h to it
+before the first build. A missing one is a named #error, not a pile of undefined
+identifiers.
+
 Compiled clean on 2026-08-03 — no warnings from any file here, including at
---warnings all. 996,467 bytes of flash (47% of 2,097,152) and 81,076 bytes of
-global RAM (24% of 327,680), leaving 246,604 for locals.
+--warnings all. 996,427 bytes of flash (47% of 2,097,152) and 81,052 bytes of
+global RAM (24% of 327,680), leaving 246,628 for locals.
 
 **Still never run on hardware, and nothing here exercises WiFi or MQTT.** A clean
 compile says the code is well-formed for this target; it says nothing about the
