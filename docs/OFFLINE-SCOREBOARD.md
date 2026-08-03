@@ -4,8 +4,16 @@ How to run the external scoreboard with **no internet and no third-party broker*
 a travel router carries the MQTT broker and the TLS certificate, the app stays on
 `holecorn.com`, and the whole thing works in a field with no signal.
 
-Status: **planned, not built.** The router was ordered 2026-07-29. Nothing in this
-file describes shipped behaviour except the `vite.config.js` precache change.
+Status: **half built.** As of 2026-08-04 the board runs against mosquitto on the
+router: packages installed on **stock GL.iNet firmware** with no need to flash
+vanilla, a plain 1883 listener bound to the LAN address, and the LED board joining
+the router's 2.4 GHz AP and rendering a hand-published retained state. Steps 1, 3
+and 5's plain listener are therefore proven rather than planned.
+
+**What is still only planned is everything the phone needs**: the certificate, the
+WSS listener, authentication and the ACLs, the DNS override, and renew-on-plug. So
+the app cannot use this broker yet — see step 9 — and a board pointed at the router
+is a board the app cannot drive.
 
 Substitute one value throughout: the router's LAN address, written here as
 `192.168.8.1`.
@@ -77,6 +85,13 @@ supports `opkg`, so try `opkg install mosquitto-ssl` on it before flashing
 anything. Flash vanilla only if the packages fight — the specific conflict to
 watch is `mosquitto-ssl` pulling `libwebsockets-openssl` against the
 `libwebsockets-full` that a bundled web terminal may hold.
+
+**Answered on 2026-08-04: stock is enough.** The broker installed and runs, so no
+flash was needed. What is *not* established is whether the WebSockets half survived
+that conflict, because nothing has spoken WebSocket to it yet — the board uses plain
+1883. **Confirm `opkg status mosquitto-ssl` shows the SSL variant before building the
+WSS listener**, or the first thing to fail will be the certificate work, where it will
+look like a TLS problem rather than a missing feature.
 
 If you do flash: mainline supports it as `mediatek/filogic` / `glinet_gl-mt3000`,
 upload the **sysupgrade** image through GL.iNet's own UI at `192.168.8.1`, and
@@ -161,8 +176,8 @@ allow_anonymous false
 password_file /etc/mosquitto/passwd
 acl_file /etc/mosquitto/aclfile
 
-# Browsers. 443 so the URL needs no port.
-listener 443 192.168.8.1
+# Browsers. 8884 and not 443 — see below.
+listener 8884 192.168.8.1
 protocol websockets
 certfile /etc/ssl/acme/board.holecorn.com.fullchain.crt
 keyfile  /etc/ssl/acme/board.holecorn.com.key
@@ -172,9 +187,29 @@ acl_file /etc/mosquitto/aclfile
 ```
 
 `per_listener_settings true` means the auth settings do not inherit, which is why
-they are repeated. Putting the WSS listener on 443 means nothing else can have
-it — that is fine, because the router serves no web content: the app comes from
-the phone's own service worker cache.
+they are repeated.
+
+**443 was the plan and it is not available.** This file used to claim nothing else
+could want it, "because the router serves no web content". Measured on 2026-08-04:
+stock GL.iNet firmware runs **nginx on 443**, serving its own admin console with a
+self-signed `console.gl-inet.com` certificate. So mosquitto would not have bound,
+and the symptom would have been a TLS listener silently failing to start — which
+this file already tells you to blame on key permissions, so the wrong cause was
+written down and waiting.
+
+**8884 costs a port in one URL, entered once.** The claimed benefit of 443 was that
+the broker URL needs no port, and the URL is typed into the app's settings a single
+time and shared to the tablet by QR — so this is cosmetic, and the path may need
+varying anyway. Three alternatives were considered and are worse:
+
+- **Move nginx off 443.** Fighting the vendor's web server for a cosmetic win, and
+  a firmware update puts it back.
+- **Reverse-proxy `/mqtt` through nginx** to a plain websockets listener on
+  localhost. Genuinely tempting — nginx already terminates TLS, so mosquitto would
+  need no certificate and the key-permissions trap disappears — but it moves the
+  certificate into a vendor-managed config that firmware updates overwrite.
+- **Flash vanilla OpenWrt**, which has no nginx on 443. A large change to reclaim a
+  port number, and the packages install fine on stock.
 
 The ACLs are tighter than the public broker could ever be. The publisher never
 subscribes, so it needs write only:
@@ -251,9 +286,10 @@ the broker. Do not add port forwards.
   `?display=1` URL. That second one matters: a plain Safari tab is subject to
   ITP's seven-day eviction, and an evicted cache means the tablet cannot load the
   app in a field with no signal. Installed web apps are exempt.
-- Set the broker to `wss://board.holecorn.com` with the `scorer` credentials. If
-  it will not connect, try `wss://board.holecorn.com/mqtt` — mosquitto serves the
-  WebSocket at the root, but the path is the first thing to vary.
+- Set the broker to `wss://board.holecorn.com:8884` with the `scorer` credentials.
+  If it will not connect, try `wss://board.holecorn.com:8884/mqtt` — mosquitto serves
+  the WebSocket at the root, but the path is the first thing to vary. The port is not
+  optional; 443 is nginx's, see step 5.
 - Set the display link up by QR rather than typing; `uqr` generates it on-device,
   so that works offline too.
 
