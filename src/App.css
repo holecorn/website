@@ -1123,7 +1123,15 @@
   font-size: 14px;
 }
 
-/* New-game confirmation */
+/* Red, because it throws a game away. Outlined rather than filled for the same reason
+   `.tournament-drop` is: the filled red is the confirm dialog's own button, so the one
+   that asks and the one that does don't look alike. */
+.secondary-controls .abandon-game {
+  border-color: #eb5757;
+  color: #eb5757;
+}
+
+/* Leaving-the-game confirmation */
 .modal {
   margin: auto;
   width: calc(100% - 48px);

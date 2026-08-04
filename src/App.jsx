@@ -421,6 +421,10 @@ export default function App() {
     (tier) => tier !== 'unthrown',
   );
   const winnerLabel = game.winner ? teamLabel(game, game.winner) : '';
+  // Only a game still in progress has anything to lose: a won game is over and the
+  // archive already has it. One fact, so a button reading `Abandon game` cannot be
+  // the one that goes straight through.
+  const abandoning = gameStarted(game) && !game.winner;
 
   const startNewGame = () => {
     const toSetup = () => {
@@ -429,13 +433,11 @@ export default function App() {
       setFourBagger(null);
       setScreen('setup');
     };
-    // Only a game still in progress is worth guarding. A won game has nothing
-    // left to lose: it is over, and the archive already has it.
-    if (gameStarted(game) && !game.winner) {
+    if (abandoning) {
       setConfirm({
-        title: 'Start a new game?',
-        body: 'This clears the current game.',
-        confirmLabel: 'New game',
+        title: 'Abandon this game?',
+        body: 'The scores are cleared and nothing is recorded.',
+        confirmLabel: 'Abandon game',
         onConfirm: toSetup,
       });
     } else {
@@ -786,7 +788,9 @@ export default function App() {
             Panel: {LAYOUT_LABELS[normalizeLayout(sbConfig.layout)]}
           </button>
         )}
-        <button onClick={startNewGame}>New game</button>
+        <button className={abandoning ? 'abandon-game' : undefined} onClick={startNewGame}>
+          {abandoning ? 'Abandon game' : 'New game'}
+        </button>
       </div>
       </div>
 

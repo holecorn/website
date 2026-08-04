@@ -294,7 +294,7 @@ console.log('\nthe play screen deals only with scoring');
   );
   check(
     'and the buttons that remain are all scoring or navigation',
-    controls.every((t) => /End round|bags still to place|Undo round|New game|Panel/.test(t)),
+    controls.every((t) => /End round|bags still to place|Undo round|Abandon game|New game|Panel/.test(t)),
     controls.join(' | '),
   );
   // The bag carries its meaning by shape and colour, so it has to be spoken too.

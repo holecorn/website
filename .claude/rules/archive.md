@@ -70,12 +70,24 @@ themselves, correcting the names on them, and marking a player inactive.
   can't show because there it is always just the current total. `matchRounds()`
   derives it; the row's own final score is the last round's running score, and
   `verify-stats.mjs` asserts exactly that so the two can't drift.
-- **`New game` only confirms while a game is unfinished.** It used to ask after
-  a win too, which made sense when `New game` destroyed the only trace of the
+- **Leaving the game only confirms while a game is unfinished.** It used to ask
+  after a win too, which made sense when `New game` destroyed the only trace of the
   match — the archive changed that, so the prompt was guarding something no
   longer at risk, at the moment you are most likely to want the next game. The
   residual cost: a mis-scored winning round can no longer be corrected once you
-  have moved on, so `Undo round` has to be used before `New game`.
+  have moved on, so `Undo round` has to be used first.
+  - **The button says which of the two it is**, reading `Abandon game` in red while
+    a game is under way and `New game` once there is nothing left to lose. One
+    `abandoning` const in `App.jsx` names it, colours it and decides whether it asks,
+    so the three cannot disagree — a red `Abandon game` that goes straight through
+    is the failure this shape rules out. It is outlined rather than filled for the
+    reason `.tournament-drop` is: the filled red belongs to the dialog that asks.
+    **`Abandon` is the app's word for giving up something unfinished** — the
+    tournament screen already picks between `Abandon` and `Delete` the same way, so a
+    new one of these takes that verb rather than inventing `Discard` or `Quit`.
+  - **`verify-stats.mjs` covers it as a pair, and only as a pair.** It clicks the
+    button *by name* after a win and again mid-game, so a label stuck either way
+    round fails one of the two. Nothing below `App.jsx` can see this.
 - **Deleting is one tap plus an undo, not a confirmation.** The undo bar sits
   outside the match list, because deleting the last match empties the list and
   would otherwise take the way back with it. Undo is lost on leaving the screen;

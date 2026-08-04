@@ -105,7 +105,8 @@ check('reloading a won game does not duplicate it', (await archive()).length ===
 check('end time is not moved by the reload', (await archive())[0].endedAt === again.endedAt);
 
 // The confirmation guards a game in progress, not a finished one: a won game
-// has nothing left to lose and is already archived.
+// has nothing left to lose and is already archived. The button says which it is
+// before you press it, so finding it under this name *is* the first assertion.
 await page.getByRole('button', { name: 'New game' }).click();
 check(
   'a won game starts a new one without asking',
@@ -116,8 +117,8 @@ check(
 // half-played state is what proves the prompt still guards real work.
 await page.getByRole('button', { name: 'Start', exact: true }).click();
 await playRound();
-await page.getByRole('button', { name: 'New game' }).click();
-check('a game in progress still asks first', await page.getByText('Start a new game?').isVisible());
+await page.getByRole('button', { name: 'Abandon game' }).click();
+check('a game in progress still asks first', await page.getByText('Abandon this game?').isVisible());
 await page.getByRole('button', { name: 'Cancel' }).click();
 check(
   'cancelling keeps the round already played',

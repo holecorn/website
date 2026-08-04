@@ -1272,10 +1272,11 @@ console.log('\nundoing the winning round un-archives the tie and the bracket rec
   );
   check('un-archived on the undo', (await archive(page)).length === 0);
   // Leaving the game is the only route to the bracket, and the tie is still loaded, so
-  // the game has to be put down first. The undo made it unfinished again, so this is
-  // the path that asks first — `New game` only confirms while a game is in progress.
-  await page.getByRole('button', { name: 'New game' }).click();
-  await page.locator('.modal').getByRole('button', { name: 'New game' }).click();
+  // the game has to be put down first. The undo made it unfinished again, so the button
+  // is `Abandon game` and asks — it only reads `New game`, and goes straight through,
+  // once there is nothing left to lose.
+  await page.getByRole('button', { name: 'Abandon game' }).click();
+  await page.locator('.modal').getByRole('button', { name: 'Abandon game' }).click();
   await page.waitForSelector('.setup');
   await backToBracket(page);
   check(

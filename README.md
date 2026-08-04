@@ -83,7 +83,8 @@ round, staying put on a wash.
 **The play screen only does scoring.** Names, colours, who throws first and where
 everyone stands are all fixed once you press **Start**, because finished
 matches are credited to players by name and by the board they stood at. If you
-need to change any of it, **New game** takes you back to setup — and a name you
+need to change any of it, the button at the foot of the screen takes you back to
+setup — and a name you
 only notice is wrong after the game can be put right on the stats screen, which
 moves that player's numbers with it.
 
@@ -92,10 +93,12 @@ this round, so you can read the score mid-round. **End round** stays disabled
 until every bag has been placed (a bag on the floor counts); a hint shows how
 many are still to place. Press it to commit the round and update the totals.
 **Undo round** rolls back the last committed round and restores its bags to the
-lanes so you can correct and re-commit it. **New game** returns to the setup
-screen, keeping the same teams (names and colours); if a game is still in
-progress it asks for confirmation first, but once someone has won it just goes —
-the result is already saved to your stats. The two teams can't share a colour.
+lanes so you can correct and re-commit it. The last button returns to the setup
+screen, keeping the same teams (names and colours), and says which of the two
+things it is about to do: while a game is in progress it reads **Abandon game**
+in red and asks for confirmation, and once someone has won it reads **New game**
+and just goes — the result is already saved to your stats. The two teams can't
+share a colour.
 
 The **round history** is a toggle on phones and portrait; on wide landscape
 screens (e.g. an iPad in landscape) it's shown permanently in a right-hand
