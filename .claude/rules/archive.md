@@ -381,6 +381,11 @@ themselves, correcting the names on them, and marking a player inactive.
       - **Measured, it costs one clipped label at 375px** (1 of 12 to 2) and
         nothing at 360 or 320, which already clip. `.recent-date` went 52 to 64px,
         which is what `30 Sept 25` needs — `Sept` is the widest month abbreviation.
+        **Which is why `dates.js` pins `en-GB` rather than taking the device's
+        locale**: that width is measured against this format, and en-US would draw
+        `Sep 30, 25` into a column sized for the other one. It also stopped every
+        assertion on the text passing on a UK Mac and failing on a CI runner, which
+        sets `LANG=C.UTF-8` — `src/dates.test.js` now spells the strings out.
       - **`verify-stats.mjs`'s fixture spans three years with dates of differing
         width on purpose.** With uniform dates the fixed-width assertion cannot
         fail, because a content-sized column would be uniform too — verified by

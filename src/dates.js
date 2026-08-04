@@ -8,9 +8,16 @@
 // carrying "this year", which you have to know the rule to read. It would also key the
 // rendering off Date.now(), so the same match grows a year in January and any check on the
 // text passes by season.
+// Pinned, not the device's locale. `.recent-date` is a *measured* 64px — what `30 Sept 25`
+// needs, `Sept` being the widest abbreviation en-GB has — so a phone formatting dates any
+// other way is a column sized for a format it isn't drawing. It also made every check on
+// the text depend on the machine's own locale: `Sept` on a UK Mac, `Sep` on a CI runner,
+// which sets `LANG=C.UTF-8` and so resolves to en-US.
+const LOCALE = 'en-GB';
+
 export const shortDate = (ms) =>
   ms
-    ? new Date(ms).toLocaleDateString(undefined, {
+    ? new Date(ms).toLocaleDateString(LOCALE, {
         day: 'numeric',
         month: 'short',
         year: '2-digit',
@@ -20,7 +27,7 @@ export const shortDate = (ms) =>
 // The same date without its year, which only `dateSpan` may use — never on its own, or the
 // rule above is broken. Here the year is not absent, it is at the far end of the span.
 const dayMonth = (ms) =>
-  ms ? new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+  ms ? new Date(ms).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' }) : '';
 
 const sameYear = (a, b) => new Date(a).getFullYear() === new Date(b).getFullYear();
 

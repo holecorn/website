@@ -14,6 +14,15 @@ describe('shortDate', () => {
     expect(shortDate(JAN)).toMatch(/26$/);
   });
 
+  // The literal, because the locale is pinned rather than the device's and nothing else
+  // here would notice it going back: a `Sep 14, 25` reads fine on its own and is a column
+  // measured for `30 Sept 25` drawing something else. Every assertion in this file used to
+  // pass on a UK Mac and fail on a CI runner for exactly that reason.
+  it('is written the one way, whatever the machine', () => {
+    expect(shortDate(SEP)).toBe('14 Sept 25');
+    expect(shortDate(JAN)).toBe('3 Jan 26');
+  });
+
   it('has nothing to say about no date', () => {
     expect(shortDate(null)).toBe('');
     expect(shortDate(0)).toBe('');
@@ -23,7 +32,10 @@ describe('shortDate', () => {
 describe('dateSpan', () => {
   it('writes the year once when both ends are in it', () => {
     const span = dateSpan(JUL, SEP);
-    expect(span).toBe(`${new Date(JUL).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} – ${shortDate(SEP)}`);
+    // Spelled out rather than rebuilt from `toLocaleDateString` here: formatting the
+    // expectation the same way the code does asserted only that the year was dropped, and
+    // agreed with any format at all.
+    expect(span).toBe('5 Jul – 14 Sept 25');
     // The year is on the line, just not twice.
     expect(span.match(/25/g)).toHaveLength(1);
   });
