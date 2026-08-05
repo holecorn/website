@@ -464,6 +464,16 @@ the alternatives that were rejected; this section holds what breaks when you cha
   tournament fixture card** under External scoreboard: in a knockout every side arrives
   at a tie unbeaten, so a form line inside a tournament is all wins for everyone. What
   changes tie to tie is the round, so that is what `holecorn/<code>/tie` carries.
+  - **That is about the card, not about the lineup topic beside it.** The roster the
+    tablet keeps under the card is scoped to the *series* now (see `seriesHistory`
+    below), where it is a real record rather than a column of Ws — but the panel still
+    gives the whole screen to the card, and no folding of a form line can say which
+    round it is.
+    - **The panel was offered the same figure and it was turned down**, so don't
+      re-derive it as an obvious gap: a per-side record beside each name on the fixture
+      card fits (21 characters becomes 17) and costs no duty, because it takes its width
+      out of the name. It was built and reverted on 2026-08-05 — see `docs/TOURNAMENT.md`
+      under **The form before a tie is the series'**.
 - **A cup played again each year is a *series*, and it is read off the names rather than
   stored.** `seriesKey` strips a trailing edition marker and folds the rest with `nameKey`;
   `groupBySeries` groups on that, `seriesStats` rolls a series up, and `nextEditions` offers
@@ -519,6 +529,34 @@ the alternatives that were rejected; this section holds what breaks when you cha
     the headings — measured, `overflows` 0 at 393px where the career table deliberately
     overflows by 198–235px. `seriesStats` still derives `finals` as the tie-break under
     titles: a sort key, not a column.
+  - **The pre-game form panel reads the series, and that is `seriesHistory`.** A career
+    says how somebody plays; what is argued about at a cup is who wins it, and inside one
+    knockout there is no answer — every side still standing is unbeaten, the same fact that
+    has the board send a fixture card instead of a form line. So a tie's panel counts that
+    series' ties, this edition and the ones before it.
+    - **Scoped even where the series is thin, rather than falling back to the career
+      numbers.** A basis that changes with the data is the drift with no symptom: two
+      lineups reading `12-7` and `1-0` would be counting different things with nothing on
+      screen to say which. The empty end needed nothing new — nobody with no ties behind
+      them is `played`, so the first tie of a first edition has nothing to report and the
+      panel stays away, exactly as it does for a lineup of newcomers.
+    - **The heading is the only thing that says which pool it is** (`Form in Hole Corn`),
+      because `Lineup` folds whatever it is handed and every number under it looks the
+      same either way. `aria-label` carries the same words — it overrides the `h2` inside,
+      so the two disagreeing would announce a career while drawing a cup's.
+    - **`App.jsx` hands the panel and the scoreboard publisher one `formMatches` const**,
+      so the board's copy of this panel cannot come to differ from the phone's. Two
+      expressions is what would need a check, and only `verify-form-screen.mjs` — which
+      needs a broker and is not in CI — could carry it.
+    - **`seriesViews` is shared with `seriesStats`**, so "which ties is this series made
+      of" has one answer, and both read each edition's own bracket rather than filtering
+      records on the tournament id — `tieMatches`'s rule, kept across the lineage.
+    - **`verify-tournament.mjs` is the only thing that can see it**: the derivation is pure
+      and the panel folds whatever it is given, so both are correct however `App.jsx` wires
+      them. Its fixture makes every wrong pool a different number — 2–1 for the series, 4–1
+      if another cup's ties are swept in, 7–1 over the archive. Verified by mutation, which
+      fails the record assertions and **not** the heading: the caption comes from the
+      derivation and the rows from the pool, so checking the caption proves nothing.
   - **The edition count is not a chip.** The row above says it and stays on screen while the
     row is open, so it was the same fact twice — and three chips orphan one on a phone where
     two fill the row exactly.

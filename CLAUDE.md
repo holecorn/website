@@ -311,6 +311,12 @@ What constrains code outside those files:
   `mergeTournaments` and the export envelope are untouched. It had to be derived to reach
   a recorded result, which deliberately keeps no field to tag. **A new surface that groups
   or names tournaments must read `seriesKey`**, not a rule of its own.
+- **Before a tie the pre-game form counts the series, not the career**, and `App.jsx` is
+  where that is decided: `seriesHistory` gives the pool and one `formMatches` const feeds
+  both the `Lineup` panel and the scoreboard publisher, so the phone and the board cannot
+  disagree. `Lineup` folds whatever pool it is handed and only the heading says which —
+  **anything new that reports form has to be told which pool it is drawing**, or it will
+  be the one surface still adding up a career at a cup.
 - **`.tournament-screen` must stay excluded from the wide tier's grid in `App.css`** —
   the same trap `.stats-screen` carries. Without it the bracket draws in 408px with
   340px reserved for a rail that never renders.

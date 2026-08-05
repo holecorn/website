@@ -2707,6 +2707,103 @@ console.log('\nevery edition of a cup is grouped into one series');
   await page.close();
 }
 
+console.log('\nthe form panel before a tie counts the series, not the career');
+{
+  // `seriesHistory` is pure and unit tested, and `Lineup` folds whatever pool it is handed
+  // — so both are right whichever matches `App.jsx` hands over. This is the crossing, and
+  // it is the shape of fault this whole file exists for.
+  //
+  // The fixture is built so that **every wrong pool gives a different number**, which is
+  // what makes the assertion able to fail: Rho is 2–1 across the series (two ties won in
+  // IV, one lost in V), 4–1 if the Summer Cup's ties are swept in with them, and 7–1 over
+  // the whole archive once three friendlies are counted. A record of 2–1 can only have
+  // come from the series.
+  //
+  // Verified by mutation — handing `Lineup` the archive again fails the two record
+  // assertions and **not the heading**, which is right and is why the numbers are checked
+  // rather than the caption: the name comes from the derivation and the rows from the
+  // pool, so a heading naming the cup proves nothing about what is under it.
+  //
+  // What this cannot see is the *board's* copy of the same panel, which needs a broker —
+  // see `verify-form-screen.mjs`. `App.jsx` hands both surfaces one `formMatches`, so
+  // there is nothing there to drift; splitting it into two expressions is what would need
+  // a check nothing in CI can run.
+  const page = await seeded();
+  await page.evaluate(() => {
+    const list = JSON.parse(localStorage.getItem('holecorn.tournaments.v1'));
+    // A sixth edition, drawn and unplayed, so there is a tie to pick — and no ties of its
+    // own, which is also the case that matters: the panel has to reach *back* through the
+    // series to have anything to say at all.
+    list.push({
+      format: 1,
+      id: 'hc6',
+      name: 'Hole Corn VI',
+      createdAt: Date.parse('2026-07-01'),
+      mode: 'singles',
+      target: 26,
+      entrants: [['Rho'], ['Tau'], ['Sigma'], ['Phi']],
+    });
+    localStorage.setItem('holecorn.tournaments.v1', JSON.stringify(list));
+    const matches = JSON.parse(localStorage.getItem('holecorn.matches.v1'));
+    // Friendlies, carrying no tournament at all. They are what separate the career from
+    // the series, and Rho wins all three so the two records cannot coincide.
+    for (const n of [1, 2, 3]) {
+      matches.push({
+        format: 1,
+        id: `f${n}`,
+        mode: 'singles',
+        players: { a: ['Rho', ''], b: ['Phi', ''] },
+        rounds: [],
+        final: { a: 26, b: 13 },
+        winner: 'a',
+        endedAt: Date.parse(`2026-06-0${n}`),
+      });
+    }
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify(matches));
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.locator('.tournament-list').filter({ hasText: 'In progress' }).locator('.tournament-row').first().click();
+  if (!(await settles(() => page.waitForSelector('.bracket-scroll', { timeout: 5000 })))) {
+    check('the unplayed edition opens on its bracket', false);
+  }
+  await playFirst(page);
+  const panel = await settles(() => page.waitForSelector('.lineup', { timeout: 5000 }));
+  check('the tie lands on a setup screen with a form panel', panel);
+  // `textContent`, not `innerText`: the heading is uppercased in CSS, and the rendered
+  // text would compare against a string nobody wrote.
+  const title = panel ? await page.locator('.lineup-title').textContent() : '';
+  check('which names the series it is counting', title === 'Form in Hole Corn', title);
+  const row = async (name) =>
+    page.evaluate((who) => {
+      const tr = [...document.querySelectorAll('.lineup-table tbody tr')].find(
+        (x) => x.querySelector('.lineup-name')?.textContent === who,
+      );
+      return tr ? [...tr.querySelectorAll('td')][0]?.textContent : null;
+    }, name);
+  const rho = panel ? await row('Rho') : null;
+  check('and the record is the series’, not the career', rho === '2–1', String(rho));
+  // The head-to-head line has to come from the same pool as the rows under it. Rho leads
+  // Tau 2–1 over everything and 1–1 within the series, so a line left on the archive shows
+  // here even with the table already scoped.
+  const record = panel ? (await page.locator('.lineup-record').innerText()).replace(/\s+/g, ' ') : '';
+  check('as is the head to head above it', record === 'Rho 1–1 Tau', record);
+
+  // The other direction, and it needs asserting: scoping stuck on would leave an ordinary
+  // game reading a cup's history under a heading naming a cup nobody is playing in.
+  // `Play something else` puts the same two names back into a friendly, so nothing changes
+  // but the tie-ness.
+  await page.locator('.tie-leave').click();
+  await page.waitForFunction(
+    () => document.querySelector('.lineup-title')?.textContent === 'Form',
+    null,
+    { timeout: 5000 },
+  ).catch(() => {});
+  check('and an ordinary game goes back to the whole archive', (await row('Rho')) === '7–1', String(await row('Rho')));
+  await page.close();
+}
+
 console.log('\nthe draw form offers the next edition, and offers one it will accept');
 {
   const page = await seeded();

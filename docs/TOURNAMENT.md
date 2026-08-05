@@ -553,6 +553,13 @@ and caption it. The drawing decisions — why the sides stack, why the fixture s
 characters and not 21, why there is no first-thrower mark — are in `CLAUDE.md` under **The
 tournament fixture card**, and the panel's own numbers are in `firmware/hub75/README.md`.
 
+**The lineup the tablet keeps underneath is scoped to the series now** — see **The form
+before a tie is the series'**. That does not reopen the decision above: the panel gives the
+whole screen to the fixture card either way, because a 128x32 strip has room for one, and
+what the card carries is the round, which no form line can say however it is folded. What
+changed is that the tablet's table is worth reading at a tie, where before it was the
+career numbers of two people about to play a cup.
+
 Two things fall out that are worth recording:
 
 - **The tie topic is what makes a first tournament visible at all.** The form screen is
@@ -766,17 +773,59 @@ it a suggestion could fill the form with a name the same form then refuses.
 It deliberately does **not** carry the field. Who plays changes year to year, and the roster
 chips already enter everybody the app knows in one press.
 
+### The form before a tie is the series'
+
+The payoff the section above was left open for, and now taken: a tie's Form panel counts
+that series' ties rather than all of history. `seriesHistory` returns the pool and
+`App.jsx` hands it to the panel; nothing new is stored, and `Lineup` is unchanged but for
+a heading.
+
+The case for it is the one this section opens with. A career answers "how does she play";
+standing at a tie the question is "how does she do at this", and inside one bracket that
+has no answer, because every side still standing is unbeaten. **What the scoreboard shows**
+rejected in-cup form for exactly that reason. Across editions the objection lifts, and the
+two questions the entry left open both settled the same way:
+
+- **It replaces the career numbers rather than sitting beside them.** The panel is already
+  five columns on a phone, and a second record per row is the column it can least afford.
+- **The board publishes the same pool.** It draws its own version of this panel, and two
+  answers to "how has this side gone" a metre apart is a disagreement neither surface can
+  resolve. One `formMatches` in `App.jsx` feeds both.
+
+**The LED panel was offered the same figure and turned it down**, which is worth recording
+because it is not a space problem and will otherwise read as an obvious gap. The fixture
+card has room: a per-side record beside each name fits — 21 characters becomes 17, or 15
+beside a two-digit figure — and it costs **no duty at all**, because the record takes its
+width out of the name, so a row is still at most 21 glyphs (measured: 15.0% against the
+plain card's 13.5%, and *down* 34.9% to 32.7% in an all-glyph worst case). It was built end
+to end on 2026-08-05 — payload, `render.h`, the JS mirror, the host scenes — and reverted on
+looking at it. Two facts came out of the exercise and are the reason not to rebuild it
+blind:
+
+- **There was never a spare row.** The spread card's extra height is `TIE_SPREAD_TOP` plus
+  `TIE_SPREAD_GAP` — two gaps around a fixture that already sits on the bottom row — so a
+  record drawn there is clipped. A card carrying one has to stack, whatever the names
+  measure, which means the card changes shape once a cup has history behind it.
+- **Doubles could never have it**, and that decided the shape of the whole thing: an
+  entrant is a *side*, so the figure would be a pair's, and this group pairs up by whoever
+  is around. Two sides that have never played together both read `0-0`, which is the
+  degenerate line the card exists to replace. So it would have been a singles-only line on
+  a card whose other three rows are mode-blind.
+
+The third question was not anticipated and is the one worth recording: **what a series with
+no history behind it should show.** Falling back to the career numbers when the series is
+thin was the obvious answer and is wrong — the basis would then change with the data, so
+two lineups reading `12-7` and `1-0` would be counting different things with nothing on
+screen to say which, which is precisely the failure this file exists to prevent. So it is
+scoped always, and the empty end needed no code at all: the panel already draws nobody with
+no matches behind them, so the first tie of a first edition simply has nothing to say and
+stays away. The heading (`Form in Hole Corn`) is what makes the basis readable in the case
+where it does draw.
+
 ### Explicitly not doing
 
 - **No series entity, and so no renaming, deleting or merging one.** Renaming a series is
   renaming its editions, which is a thing the app does not do to a tournament at all.
-- **No form scoped to the series on the pre-game screen.** The obvious next payoff — a tie's
-  Form panel showing the two sides across every edition rather than across all history — and
-  the reason it is not here is that it is a separate decision with its own questions: whether
-  the board publishes it, and whether it replaces career form or sits beside it. **What the
-  scoreboard shows** above rejected in-cup form as degenerate for exactly the reason this
-  section opens with; across editions that objection lifts, so this is the change that
-  argument would be revisited for.
 - **No seeding from a series' record.** The draw is random, which **Open questions** already
   settles; knowing who has won it four times does not change that.
 

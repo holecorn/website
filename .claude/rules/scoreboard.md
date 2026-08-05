@@ -401,6 +401,14 @@ the broker on the LAN.
   is what a tournament shows before a tie instead of the form screen.
   `holecorn/<code>/tie` carries the cup's name and the round while `gameStarted` is
   false, and is published **empty** at the first bag exactly as the lineup is.
+  - **The lineup the display keeps under the card is the *series'* form, not a career**,
+    because `App.jsx` hands `lineupPayload` the same pool the phone's panel folds — see
+    **The pre-game form panel reads the series** in `.claude/rules/tournament.md`. Nothing
+    on the wire changed for it: the payload is rows of names and numbers whichever matches
+    were counted, and the cup is already on screen from the tie topic. It does mean the
+    lineup topic is **absent more often at a tie** — a first edition has no ties behind it,
+    so nobody is `played` — which is the case the display's "either topic" branch below
+    already exists for.
   - **Form is not sparse inside a knockout, it is degenerate.** `reachedBy` marks a side
     `out` the moment any tie in its route has a winner that is not them, and an out side
     is seated in no further ties — so at the moment the screen is published *both* sides

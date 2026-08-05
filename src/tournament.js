@@ -796,19 +796,26 @@ export function groupBySeries(tournaments) {
   return [...groups.values()];
 }
 
+// Every edition of a series with the bracket its results make, newest first. Shared by
+// the two below, so "which ties is this series made of" has one answer — the same reason
+// `seatSides` is shared by `build` and `drawSteps`.
+//
+// They build their own brackets rather than taking the screen's, the way `tieLabels`
+// does: one per edition, which is a handful, and it keeps a series answerable from the
+// tournaments and the archive alone.
+function seriesViews(editions, matches) {
+  return (editions ?? [])
+    .map((tournament) => ({ tournament, view: bracket(tournament, matches) }))
+    .filter((x) => x.view);
+}
+
 // How a series has gone, across all of its editions. The second thing a series buys after
 // simply being grouped, and the one the single-cup Stats tab structurally cannot say — see
 // `docs/TOURNAMENT.md`: within one knockout every head-to-head is 1–0 and every entrant's
 // form is all wins, because a beaten side plays no more ties. Across editions both mean
 // something again.
-//
-// Builds its own brackets rather than taking the screen's, the way `tieLabels` does: one
-// per edition, which is a handful, and it keeps this answerable from the tournaments and
-// the archive alone.
 export function seriesStats(editions, matches = []) {
-  const views = (editions ?? [])
-    .map((tournament) => ({ tournament, view: bracket(tournament, matches) }))
-    .filter((x) => x.view);
+  const views = seriesViews(editions, matches);
   const ties = views.flatMap(({ view }) => tieMatches(view, matches));
   const thrown = new Map(sideStats(ties).map((s) => [s.key, s]));
   const acc = new Map();
@@ -872,6 +879,39 @@ export function seriesStats(editions, matches = []) {
     // recorded": one transcribed *with* its field counts everybody, and captioning it as
     // short would be the fault the caption exists to prevent, pointing the other way.
     unlisted: views.some(({ view }) => !view.fieldKnown),
+  };
+}
+
+// What the pre-game form panel reads before a tie: the series this tournament belongs to,
+// and every tie played in it — this edition and the ones before it alike.
+//
+// **A cup is its own history.** A career says how somebody plays; what is argued about at
+// a cup is who wins it, and the two are different questions — the one the panel is being
+// asked while you stand at a tie is the second. Within a single knockout it has no answer,
+// because every side still standing is unbeaten, which is the same fact that makes the
+// board send a fixture card instead of a form line and the reason `seriesStats` exists at
+// all. Across editions it does.
+//
+// **Scoped even where the series is thin**, rather than falling back to the career numbers
+// when there is little to show. A basis that changes with the data is the drift with no
+// symptom — two lineups reading `12-7` and `1-0` would be counting different things with
+// nothing on screen to say which. The empty end of that is already handled and needs
+// nothing new: nobody with no ties behind them is `played`, so the first tie of a first
+// edition has nothing to report and the panel stays away, exactly as it does for a lineup
+// of newcomers.
+//
+// The ties come off each edition's own bracket rather than from every record carrying its
+// id, the rule `tieMatches` follows: a record the bracket cannot place is not a tie of it.
+export function seriesHistory(tournaments, tournament, matches = []) {
+  const key = seriesKey(tournament?.name);
+  const group = key ? groupBySeries(tournaments).find((g) => g.key === key) : null;
+  if (!group) return null;
+  return {
+    key,
+    // The newest edition's spelling, which is `groupBySeries`'s rule — a cup renamed this
+    // year is not captioned as it was written five years ago.
+    name: group.name,
+    matches: seriesViews(group.editions, matches).flatMap((x) => tieMatches(x.view, matches)),
   };
 }
 

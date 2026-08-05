@@ -53,6 +53,7 @@ import {
   levelName,
   loadTournaments,
   saveTournament,
+  seriesHistory,
   tieFor,
   tieSetup,
 } from './tournament.js';
@@ -307,6 +308,19 @@ export default function App() {
     [liveTournament, matches],
   );
   const playingTie = useMemo(() => tieFor(liveView, game), [liveView, game]);
+  // The history the pre-game form is read against: the whole archive for an ordinary
+  // game, and this cup's series for a tie — see `seriesHistory`. Null off a tie, which
+  // is what leaves the panel and the board on the career numbers.
+  //
+  // The panel and the board are handed the *same* pool deliberately. The scoreboard has
+  // always drawn its own version of this panel from the same fold, and two answers to
+  // "how has this side gone" sitting a metre apart is the disagreement nobody can
+  // resolve from either surface.
+  const series = useMemo(
+    () => (liveTournament ? seriesHistory(tournaments, liveTournament, matches) : null),
+    [tournaments, liveTournament, matches],
+  );
+  const formMatches = series ? series.matches : matches;
   // What the board is told: the cup and the round, and no names — the two sides are
   // already in the score payload as joined labels.
   const publishedTie = useMemo(
@@ -335,7 +349,7 @@ export default function App() {
   const scoreboard = useScoreboardPublisher(
     game,
     sbConfig,
-    matches,
+    formMatches,
     publishedTie,
     drawReveal,
   );
@@ -677,7 +691,14 @@ export default function App() {
         />
         {/* Nobody's history to report, and the slots' default names have one that
             isn't theirs — the same trap `lineupPayload` guards on the board. */}
-        {!game.casual && <Lineup game={game} colors={game.colors} matches={matches} />}
+        {!game.casual && (
+          <Lineup
+            game={game}
+            colors={game.colors}
+            matches={formMatches}
+            series={series?.name}
+          />
+        )}
         <div className="setup-links">
           <button className="setup-stats" onClick={() => setScreen('tournament')}>
             Tournaments

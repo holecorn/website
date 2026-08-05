@@ -21,6 +21,7 @@ import {
   nextEditionName,
   nextEditions,
   recordedTournament,
+  seriesHistory,
   seriesKey,
   seriesStats,
   splitSeriesName,
@@ -32,6 +33,9 @@ import {
   upsertTournament,
   validTournament,
 } from './tournament.js';
+// The panel this feeds, folded here rather than in stats.test.js because what is being
+// asserted is the *pool* — that a lineage reads back as a record where one cup cannot.
+import { lineupStats } from './stats.js';
 
 // Eleven singles entrants, which is the field the paper bracket this was designed
 // against had. Greek, because the real family must not be in a public repo.
@@ -1419,6 +1423,70 @@ describe('seriesStats', () => {
 
   it('says nothing at all about a lineage that is not there', () => {
     expect(seriesStats([], [])).toMatchObject({ editions: [], rows: [], decided: 0 });
+  });
+});
+
+describe('seriesHistory', () => {
+  const six = cup('t6', 'Hole Corn VI', ['Rho', 'Tau'], 600);
+  const five = cup('t5', 'Hole Corn V', ['Rho', 'Tau'], 500);
+  const summer = cup('s1', 'Summer Cup', ['Rho', 'Tau'], 550);
+  const played = [
+    tie('t6', 'singles', ['Rho'], ['Tau'], 'a'),
+    tie('t5', 'singles', ['Rho'], ['Tau'], 'b'),
+    tie('s1', 'singles', ['Rho'], ['Tau'], 'a'),
+    // A friendly, tagged with no tournament at all.
+    { ...tie(null, 'singles', ['Rho'], ['Tau'], 'a'), tournament: undefined },
+  ];
+
+  it('gathers every tie of the lineage, this edition and the ones before it', () => {
+    const history = seriesHistory([six, five, summer], six, played);
+    expect(history.name).toBe('Hole Corn');
+    expect(history.matches.map((m) => m.tournament).sort()).toEqual(['t5', 't6']);
+  });
+
+  // The whole point of scoping to the lineage rather than to the cup in front of you:
+  // within one knockout the loser plays no more ties, so every record is 1–0.
+  it('reads back as a real record, which one edition cannot', () => {
+    const rows = lineupStats(seriesHistory([six, five], six, played).matches, {
+      mode: 'singles',
+      players: { a: ['Rho', ''], b: ['Tau', ''] },
+    });
+    expect(rows[0]).toMatchObject({ name: 'Rho', wins: 1, losses: 1, played: true });
+  });
+
+  it('leaves another cup and the friendlies out of it', () => {
+    const history = seriesHistory([six, five, summer], summer, played);
+    expect(history.matches.map((m) => m.tournament)).toEqual(['s1']);
+  });
+
+  // Thin rather than absent, and deliberately not a fallback to the career numbers: the
+  // panel's own `played` flag is what handles having nothing to say.
+  it('is empty for the first tie of a first edition', () => {
+    expect(seriesHistory([six], six, []).matches).toEqual([]);
+  });
+
+  // A record carrying the id that the bracket cannot place is not a tie of it — the rule
+  // `tieMatches` already applies within one tournament, kept across the lineage.
+  it('ignores a record tagged with the cup that no tie of it accounts for', () => {
+    const stray = tie('t6', 'singles', ['Iota'], ['Kappa'], 'a');
+    const history = seriesHistory([six, five], six, [...played, stray]);
+    expect(history.matches.map((m) => m.id)).not.toContain(stray.id);
+  });
+
+  // Retroactive by the same route the rest of the lineage is: a cup whose sheet is gone
+  // has no ties to contribute, and must not take the lineage down with it.
+  it('counts a recorded result as an edition with nothing behind it', () => {
+    const one = recordedTournament({
+      id: 't1',
+      name: 'Hole Corn I',
+      createdAt: 100,
+      champion: ['Sigma'],
+    });
+    expect(seriesHistory([six, five, one], six, played).matches).toHaveLength(2);
+  });
+
+  it('says nothing for a tournament with no name to group by', () => {
+    expect(seriesHistory([six], { ...six, name: '  ' }, played)).toBeNull();
   });
 });
 

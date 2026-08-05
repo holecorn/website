@@ -2,6 +2,11 @@
 // something to read in the downtime before a game, and it goes below Start game
 // because that button is already off the bottom of a phone's first screen.
 //
+// Which history is the caller's to decide: everything archived for an ordinary game, and
+// the ties of that series for a tournament tie — see `seriesHistory` in tournament.js for
+// why a cup is read against itself. Every number here folds whatever pool it is handed,
+// so `series` is only the heading, and it is the one thing that says which pool it was.
+//
 // The same numbers go to the external scoreboard, which draws its own version of
 // this while the lineup topic is retained — see lineupPayload in scoreboard.js.
 // Names are typed live, so the career fold is memoised on the records and only
@@ -15,7 +20,7 @@ import './Lineup.css';
 
 const pct = (n) => `${Math.round(n * 100)}%`;
 
-export default function Lineup({ game, colors, matches }) {
+export default function Lineup({ game, colors, matches, series }) {
   const rows = useMemo(() => lineupStats(matches, game), [matches, game]);
   const record = useMemo(() => sideRecord(matches, game), [matches, game]);
 
@@ -23,9 +28,18 @@ export default function Lineup({ game, colors, matches }) {
   // stays away entirely rather than showing a grid of dashes.
   if (!rows.some((p) => p.played)) return null;
 
+  const title = series ? `Form in ${series}` : 'Form';
+
   return (
-    <section className="lineup" aria-label="Form">
-      <h2 className="lineup-title">Form</h2>
+    // Labelled with the same words the heading carries: an `aria-label` overrides the
+    // h2 inside, so the two saying different things would announce the panel as career
+    // form while it draws a cup's.
+    <section className="lineup" aria-label={title}>
+      {/* Named rather than left as "Form" when the pool is a series, because every number
+          under it is then a cup record and nothing else on the panel says so. The cup's
+          own name and not the word "series": that is the app's word for the grouping, not
+          the family's for the trophy. */}
+      <h2 className="lineup-title">{title}</h2>
       {record && (
         <p className="lineup-record">
           <span style={{ color: colors.a }}>{teamLabel(game, 'a')}</span>

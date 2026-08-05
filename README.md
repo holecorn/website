@@ -284,6 +284,15 @@ newcomer. A genuinely dismal run still gets its numbers — a PPR of 0.0 means e
 bag went on the floor, and it says so. A **Guests** game has no panel, on the phone
 or on the board: there are no names to look anybody up by.
 
+**Before a tournament tie the panel counts the cup instead**, and says so: the heading
+reads *Form in Hole Corn* and every number under it is that series' — every edition of
+it, this year's and the ones before. That is the question you are actually asking at a
+cup, and one bracket cannot answer it: inside a single knockout everybody still in has
+won every tie they have played. Early on there may be very little to show, and the panel
+stays away entirely until somebody in the tie has played in the cup before — the first
+tie of a first edition has nothing to say, so it says nothing rather than quietly
+counting Sunday afternoons instead.
+
 If you have the external scoreboard running, it shows this too — see below.
 
 ### Keeping the history
@@ -554,7 +563,8 @@ how many editions, how many titles, and their tie record across all the years.
 Those last two are the point of it. Inside a single knockout everybody who is still
 in has won every tie they have played and no two people meet twice, so form and
 head-to-heads say nothing. Across editions they do, and *how many has she won* has no
-single-cup answer at all.
+single-cup answer at all. It's the same reason the **Form** panel before a tie counts
+the series rather than everything you've ever played.
 
 When you draw a new one, the form offers the next edition by name — **Hole Corn VII**
 — along with the mode and target the last one used. Tap it and the name is filled in
@@ -697,9 +707,10 @@ Who throws first isn't marked here — there's a single pixel between the rows a
 in it reads as an underline on the name. The score screen marks it a few seconds later.
 
 The tablet display keeps its form table and puts the cup and the round above it, since
-it has the room the LED panel doesn't. It's also the one place a *first* tournament shows
-anything: with nobody having played before there's no form to publish, so the display
-names the two sides instead.
+it has the room the LED panel doesn't. That table is the *series'* form, the same numbers
+the setup screen shows for the tie. It's also the one place a *first* tournament shows
+anything: with no ties behind the cup there's no form to publish, so the display names
+the two sides instead.
 
 ### The wordmark at switch-on
 
