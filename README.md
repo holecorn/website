@@ -418,16 +418,18 @@ the app.
 
 ### Sample history for testing
 
-`tools/fixtures/sample-archive.json` is a made-up history — three years, 141
-matches, singles and doubles, all four colours, three tournaments — to
-**Import JSON** when you want the stats screens populated without playing a
-hundred games. It mixes both kinds of record, so the result-only behaviour above
-is visible in it.
+`tools/fixtures/sample-archive.json` is a made-up history — three years, 156
+matches, singles and doubles, all four colours, nine tournaments and somebody who
+has stopped playing — to **Import JSON** when you want the stats screens populated
+without playing a hundred games. It mixes both kinds of record, so the result-only
+behaviour above is visible in it, and the cup runs to six editions so the series
+panel has years to add up.
 
 There is a second, deliberately unreasonable one for finding where the layout
-stops coping: `node tools/make-stress-archive.mjs` writes `tools/out/` with ~900
-matches, 78 players and six tournaments including a 64-entrant bracket. It isn't
-checked in — it runs to megabytes — so generate it when you want it.
+stops coping: `node tools/make-stress-archive.mjs` writes `tools/out/` with ~970
+matches, 77 players and 17 tournaments including a 64-entrant bracket and a cup
+played nine times. It isn't checked in — it runs to megabytes — so generate it
+when you want it.
 
 Regenerate with `node tools/make-sample-archive.mjs`. It's a fixture, not real
 history: importing it into a browser you actually score in will mix it into your

@@ -295,10 +295,22 @@ themselves, correcting the names on them, and marking a player inactive.
   - **The skill spread is narrow on purpose.** Under cancellation the losing side
     scores nothing in a round it doesn't win, so a wide spread shuts people out at
     a rate nobody would recognise — measured, Neil on 0.34 against 0.14 skunked
-    **11 of 78** played games. It is 6 of 124 now.
+    **11 of 78** played games. It is 5 of 105 now.
   - **`Upsilon` stops at the cutover**, which is what gives the career table a row
     that is all record and no rates. Without it nothing in the fixture shows the
-    dashes, and they are the thing most likely to regress.
+    dashes, and they are the thing most likely to regress. He is also the one
+    person marked **inactive**, for the same reason: somebody who has stopped is
+    who that feature is about, and the mark goes through `markInactive` rather than
+    being written out, because a stamp behind the person's last match hides nobody
+    and nothing on any screen would look different.
+  - **The cup has six editions, and that is the only way to have a series to look
+    at** — `seriesKey` reads the names, so a fixture with one cup exercises none of
+    it. They deliberately span every shape: two transcribed results (one listing its
+    field, one remembering only the winner, so `fieldKnown` is covered both ways), a
+    transcribed *sheet* whose ties carry no round detail, two played in the app, and
+    one still running. A one-off cup and a second, finished series sit beside them —
+    the first is what says the Series section draws only where a name has been used
+    twice, and the second is the only thing `nextEditions` will offer a name for.
   - **`src/archive.test.js` holds the committed file to `validRecord`**, because
     the generator only validates at the moment it writes and `mergeMatches` drops
     a bad record *silently* — the fixture would half-import with nothing to say so.

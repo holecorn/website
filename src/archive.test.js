@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { newGame, setBag, endRound } from './scoring.js';
-import { bracket, validTournament } from './tournament.js';
+import { bracket, groupBySeries, nextEditions, validTournament } from './tournament.js';
+import { inactiveKeys } from './inactive.js';
 import {
   RECORD_FORMAT,
   matchRecord,
@@ -376,6 +377,10 @@ describe('the sample archive fixture, tournaments', () => {
     ),
   );
   const views = file.tournaments.map((t) => ({ t, view: bracket(t, file.matches) }));
+  // A transcribed result has no bracket behind it at all, so every assertion about
+  // shapes and ties is about the drawn ones. Split here rather than guarded in each.
+  const drawn = views.filter((x) => !x.view.recorded);
+  const recorded = views.filter((x) => x.view.recorded);
 
   it('carries some, and every one of them is usable', () => {
     expect(file.tournaments.length).toBeGreaterThan(0);
@@ -386,11 +391,34 @@ describe('the sample archive fixture, tournaments', () => {
   it('has every tie matched to a record in the same file', () => {
     // The failure this exists for: a tie whose two sides no record holds is a bracket
     // that can never be finished, and nothing about either half on its own says so.
-    for (const { t, view } of views) {
+    for (const { t, view } of drawn) {
       const played = view.ties.filter((x) => x.match).length;
       expect(played, t.name).toBe(view.played);
       expect(view.played, t.name).toBeGreaterThan(0);
     }
+  });
+
+  it('has a result with a field remembered and one with only the trophy', () => {
+    // The two are captioned differently — a series says it is counting only who is
+    // remembered — so a fixture with one of them shows half of it. `fieldKnown` is what
+    // tells them apart, and it is derived, so the file itself can only be checked by the
+    // `field` that produced it.
+    expect(recorded.some((x) => x.view.fieldKnown)).toBe(true);
+    expect(recorded.some((x) => !x.view.fieldKnown)).toBe(true);
+    const listed = recorded.find((x) => x.view.fieldKnown);
+    expect(listed.t.field.length).toBeGreaterThan(2);
+    expect(listed.view.entrants.length).toBe(listed.t.field.length);
+  });
+
+  it('has a bracket whose ties carry no round detail', () => {
+    // A transcribed sheet: the shape that drops the rate columns from a tournament's
+    // Stats tab, which is the one place a whole cup of them is the normal case.
+    const ties = (view) =>
+      view.ties.map((x) => file.matches.find((m) => m.id === x.match)).filter(Boolean);
+    const transcribed = (x) =>
+      x.view.played > 0 && ties(x.view).every((m) => m.rounds.length === 0);
+    expect(drawn.some(transcribed)).toBe(true);
+    expect(drawn.some((x) => ties(x.view).some((m) => m.rounds.length > 0))).toBe(true);
   });
 
   it('has both a finished tournament and one still running', () => {
@@ -403,7 +431,7 @@ describe('the sample archive fixture, tournaments', () => {
   it('has a field with preliminaries and one without', () => {
     // The two shapes behave differently everywhere — a power of two has no deepest
     // ragged column — so a fixture with only one of them exercises half the layout.
-    const rounds = views.map((x) => x.view.shape);
+    const rounds = drawn.map((x) => x.view.shape);
     expect(rounds.some((s) => s.rounds > Math.log2(s.size))).toBe(true);
     expect(rounds.some((s) => s.rounds === Math.log2(s.size))).toBe(true);
   });
@@ -412,5 +440,28 @@ describe('the sample archive fixture, tournaments', () => {
     const pairs = file.tournaments.find((t) => t.mode === 'doubles');
     expect(pairs).toBeDefined();
     expect(pairs.entrants.every((e) => e.length === 2 && e.every(Boolean))).toBe(true);
+  });
+
+  it('has a cup played more than once, and one played once', () => {
+    // A series is read off the names and stored nowhere, so it is the one thing in the
+    // fixture a rename could quietly take apart — and the Series section draws only where
+    // a name has been used twice, so both sides of that are worth having.
+    const series = groupBySeries(file.tournaments);
+    expect(series.some((g) => g.editions.length > 1)).toBe(true);
+    expect(series.some((g) => g.editions.length === 1)).toBe(true);
+  });
+
+  it('offers a next edition, which needs a finished series', () => {
+    // `nextEditions` only offers where the newest edition is done, so a fixture whose
+    // every series is still running exercises none of the draw form's prefill.
+    expect(nextEditions(file.tournaments, file.matches).length).toBeGreaterThan(0);
+  });
+
+  it('marks somebody inactive, and they read as inactive against these matches', () => {
+    // The mark is a stamp, and being inactive is derived from it against the archive — so
+    // a stamp sitting behind the person's last match is a mark that hides nobody, with
+    // nothing on any screen to say so.
+    expect(Object.keys(file.inactive)).not.toEqual([]);
+    expect([...inactiveKeys(file.inactive, file.matches)]).toEqual(Object.keys(file.inactive));
   });
 });

@@ -22,6 +22,20 @@
 //     a tie can carry, in the narrowest column.
 //   * One left part way through with a great many ties playable at once, which is what
 //     the "Ready to play" list has to survive.
+//   * **Nine editions of one cup**, which is the only thing that makes the Series section
+//     draw at all — every other tournament here is a series of one. The field changes
+//     every year, so the across-the-years table is far longer than any single edition,
+//     and the roll of honour is nine lines. Two of the editions are transcribed results
+//     rather than brackets, one of them listing a field of 40 — the widest "Took part"
+//     row there is — and one remembering nobody but the winner, which is what captions
+//     the table as counting only who is known. The newest is still being played, so it
+//     contributes entrants and ties and no honours.
+//   * A second series at the draw form's own 32-character cap, so the next-edition chip
+//     is the widest one that can be offered, and four other finished cups besides — the
+//     suggestion row caps at three and a fixture that never reaches it cannot show that.
+//   * A fifth of the roster marked inactive, chosen as whoever has not played for
+//     longest, so the name fields offer a filtered list and the career table has a good
+//     many dimmed rows.
 //   * ~70 players, so the career table is long and the rivals list has depth.
 //   * Names at the app's 16-character cap, two-character names, names sharing initials,
 //     one accented (non-ASCII is what pushes the scoreboard payload to its widest), and
@@ -40,7 +54,15 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { nameKey } from '../src/scoring.js';
 import { archiveFile, validRecord } from '../src/archive.js';
-import { bracket, validTournament } from '../src/tournament.js';
+import { markInactive } from '../src/inactive.js';
+import { rosterFor } from '../src/stats.js';
+import {
+  bracket,
+  groupBySeries,
+  nextEditions,
+  recordedTournament,
+  validTournament,
+} from '../src/tournament.js';
 import { DAY, at, colours, idFor, iso, pick, playMatch, playTournament, rng } from './lib/fixture.mjs';
 
 const OUT = new URL('out/stress-archive.json', import.meta.url).pathname;
@@ -133,7 +155,82 @@ const singles = (names) => names.map((n) => [n]);
 const pairs = (names) =>
   Array.from({ length: Math.floor(names.length / 2) }, (_, i) => [names[i * 2], names[i * 2 + 1]]);
 
+// Nine editions of one cup, played every August. Every other tournament here is a series
+// of one, so this is the only thing that makes the Series section draw — and it is the
+// hardest version of it: the field shifts by four names a year, so nine editions of eight
+// entrants make a table with far more rows than any single edition has entrants.
+const SERIES = 'Nine Editions';
+const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+const edition = (n) => `${SERIES} ${NUMERALS[n]}`;
+const august = (n) => at(`${2018 + n}-08-11`, 18);
+
+// The two oldest are transcribed results rather than brackets, which is where that shape
+// really turns up: the editions with no sheet left are the early ones. `field` is a set
+// rather than a seating — nothing is ever drawn from it — so a recorded edition still
+// counts everybody towards the series without describing a bracket that was never kept.
+const RECORDED = [
+  recordedTournament({
+    id: idFor('stress-series-1'),
+    name: edition(0),
+    createdAt: august(0),
+    // No runner-up and no field, so `fieldKnown` is false and the series table says it is
+    // counting only who is remembered.
+    champion: [ROSTER[3]],
+  }),
+  recordedTournament({
+    id: idFor('stress-series-2'),
+    name: edition(1),
+    createdAt: august(1),
+    champion: [ROSTER[5]],
+    runnerUp: [ROSTER[9]],
+    // Forty, which is the widest Took part row there is — and wide enough to reach the
+    // name containing " & ", which reads as a pair if a label is built by joining names.
+    field: singles(ROSTER.slice(0, 40)),
+  }),
+];
+
 const CUPS = [
+  ...Array.from({ length: 6 }, (_, i) => ({
+    slug: `stress-series-${i + 3}`,
+    name: edition(i + 2),
+    mode: 'singles',
+    target: 21,
+    from: august(i + 2),
+    entrants: singles(ROSTER.slice(i * 4, i * 4 + 8)),
+  })),
+  {
+    slug: 'stress-series-9',
+    name: edition(8),
+    mode: 'singles',
+    target: 21,
+    from: august(8),
+    // The newest edition is still being played, so the series contributes its entrants and
+    // its ties and no honours — and `Draw` offers no next edition for a series in progress,
+    // which is what the two below are here to cover instead.
+    stopAfter: 3,
+    // Reaches the two names sharing an initial and the one with " & " in it, so a bracket
+    // box holds both of the labels that are hard to draw.
+    entrants: singles(ROSTER.slice(24, 32)),
+  },
+  {
+    slug: 'stress-trophy-1',
+    // 28 characters, so the next edition of it is `... III` at exactly 32 — the draw form's
+    // own `maxLength`, and the widest chip the suggestion row can offer. The chip fills the
+    // name field, so a suggestion the form would refuse is the failure this stresses.
+    name: 'Epsilon Zeta Memorial Trophy',
+    mode: 'singles',
+    target: 21,
+    from: at('2025-02-15', 18),
+    entrants: singles(ROSTER.slice(8, 12)),
+  },
+  {
+    slug: 'stress-trophy-2',
+    name: 'Epsilon Zeta Memorial Trophy II',
+    mode: 'singles',
+    target: 21,
+    from: at('2026-02-14', 18),
+    entrants: singles(ROSTER.slice(10, 14)),
+  },
   {
     slug: 'stress-64',
     name: 'Sixty-Four',
@@ -197,7 +294,7 @@ const CUPS = [
   },
 ];
 
-const tournaments = [];
+const tournaments = [...RECORDED];
 const tourneyTies = [];
 for (const cup of CUPS) {
   const { tournament, ties } = playTournament(r, skillFor, { ...cup, id: idFor(cup.slug) });
@@ -250,10 +347,34 @@ for (const record of records) {
   }
 }
 
+// A fifth of the roster has stopped coming, taken as whoever has gone longest without a
+// game rather than at random — a mark on somebody who played last week is a state the app
+// can reach but nobody would set, and the point of the pile is the filtered name list and
+// the dimmed rows underneath it. Through `markInactive`, so the stamp lands past their
+// last match the way the button's does.
+const lastSeen = new Map();
+for (const match of records) {
+  for (const team of ['a', 'b']) {
+    for (const name of rosterFor(match, team)) {
+      if (match.endedAt > (lastSeen.get(name)?.at ?? 0)) lastSeen.set(name, { at: match.endedAt });
+    }
+  }
+}
+const departed = [...lastSeen.entries()]
+  .sort((x, y) => x[1].at - y[1].at)
+  .slice(0, Math.round(lastSeen.size / 5))
+  .map(([name]) => name);
+const inactive = departed.reduce(
+  (marks, name) => markInactive(marks, name, records, at('2026-07-01', 12)),
+  {},
+);
+
 mkdirSync(new URL('out/', import.meta.url).pathname, { recursive: true });
 const json = `{\n"format": ${archiveFile([], []).format},\n"tournaments": [\n${tournaments
   .map((x) => JSON.stringify(x))
-  .join(',\n')}\n],\n"matches": [\n${records.map((m) => JSON.stringify(m)).join(',\n')}\n]\n}\n`;
+  .join(',\n')}\n],\n"inactive": ${JSON.stringify(inactive)},\n"matches": [\n${records
+  .map((m) => JSON.stringify(m))
+  .join(',\n')}\n]\n}\n`;
 writeFileSync(OUT, json);
 
 const people = new Set(
@@ -266,12 +387,26 @@ console.log(
 );
 for (const t of tournaments) {
   const view = bracket(t, records);
+  const who = view.champion
+    ? `won by ${view.champion.names.filter(Boolean).join(' & ')}`
+    : 'in progress';
   console.log(
-    `  ${t.name}: ${t.entrants.length} entrants, ${view.shape.rounds} rounds, ` +
-      `${view.played}/${view.total} ties, ${view.playable.length} playable, ` +
-      (view.champion ? `won by ${view.champion.names.filter(Boolean).join(' & ')}` : 'in progress'),
+    view.recorded
+      ? `  ${t.name}: ${view.entrants.length} entrants known` +
+          `${view.fieldKnown ? '' : ' (finalists only)'}, no sheet, ${who}`
+      : `  ${t.name}: ${t.entrants.length} entrants, ${view.shape.rounds} rounds, ` +
+          `${view.played}/${view.total} ties, ${view.playable.length} playable, ${who}`,
   );
 }
+for (const group of groupBySeries(tournaments).filter((g) => g.editions.length > 1)) {
+  console.log(`  series ${group.name}: ${group.editions.length} editions`);
+}
+console.log(
+  `  next editions offered: ${nextEditions(tournaments, records)
+    .map((x) => `${x.name} (${x.name.length})`)
+    .join(', ')}`,
+);
+console.log(`  ${departed.length} of ${lastSeen.size} players marked inactive`);
 // localStorage is a real limit rather than a hypothetical one: `saveArchive` drops the
 // oldest match and retries when a write fails, so a fixture near the budget is exactly
 // where that behaviour becomes visible. Roughly 5MB per origin, counted as characters.

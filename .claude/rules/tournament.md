@@ -529,6 +529,13 @@ the alternatives that were rejected; this section holds what breaks when you cha
     the headings — measured, `overflows` 0 at 393px where the career table deliberately
     overflows by 198–235px. `seriesStats` still derives `finals` as the tie-break under
     titles: a sort key, not a column.
+    - **That 0 is for ordinary names, and the entrant column is what spends it.**
+      Measured on the stress fixture, whose entrants sit at the app's 16-character cap:
+      **30px over at 393px and 63px at 360px**, with `W–L` the column that goes off the
+      edge. The sample is 0 at 393 and 7px at 360. It scrolls rather than clipping, and
+      the name cell is not sticky here — so the trade is a wider name for a `W–L` that
+      has to be scrolled to, which is the career table's bargain and is not worth making
+      for a table this narrow. Don't read the 0 as headroom.
   - **The pre-game form panel reads the series, and that is `seriesHistory`.** A career
     says how somebody plays; what is argued about at a cup is who wins it, and inside one
     knockout there is no answer — every side still standing is unbeaten, the same fact that

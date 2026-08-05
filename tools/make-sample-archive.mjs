@@ -13,13 +13,22 @@
 // fixture cannot quietly disagree with the rules it is meant to exercise. The
 // legacy half goes through tools/import-legacy.mjs for the same reason.
 //
+// The cup runs to six editions, which is the one part of this that is not simply
+// "some history": a series is derived from the names, so the only way to have one to
+// look at is to name the tournaments as the group does. Its oldest editions are the
+// shapes only a series turns up — a result with a field somebody wrote down, a result
+// with nobody but the winner remembered, and a sheet transcribed tie by tie with no
+// round detail behind any of it — beside two played in the app and one still running.
+//
 // Deterministic: a seeded PRNG and fixed dates, so re-running produces no diff.
 // Nothing here calls Date.now() or Math.random().
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { nameKey } from '../src/scoring.js';
 import { archiveFile, validRecord } from '../src/archive.js';
-import { bracket, validTournament } from '../src/tournament.js';
+import { markInactive } from '../src/inactive.js';
+import { finalScore } from '../src/stats.js';
+import { bracket, groupBySeries, validTournament } from '../src/tournament.js';
 import { parseGames } from './import-legacy.mjs';
 import {
   DAY,
@@ -147,7 +156,46 @@ for (const t of legacyDays) {
   }
 }
 
+// The editions of the cup that predate the app, written into the same file the
+// friendlies are — which is how they would really arrive, and what makes the fixture
+// exercise the transcription rules rather than only the shapes they produce.
+//
+//   I   — the trophy and nothing else, so `fieldKnown` is false and the series table
+//         says it is counting only who is remembered.
+//   II  — the field somebody wrote down as well, so the row lists who took part and the
+//         same table counts everybody who entered that year.
+//   III — a sheet that survived, so it has ties and no round detail: the shape that
+//         drops the rate columns from a tournament's Stats tab and leaves the margins
+//         as the only thing it can say about how the games went.
+//
+// III is **played through the real bracket and then written back out as lines**, so
+// import-legacy.mjs reconstructs the draw from the results the way it would from a real
+// sheet. The reconstruction is a rule rather than a rendering, and a fixture that wrote
+// the draw down would be asserting nothing about it.
+const sheet = playTournamentWith(r, skillFor, {
+  id: idFor('holecorn-cup-iii'),
+  name: 'Hole Corn III',
+  mode: 'singles',
+  target: 21,
+  from: at('2023-09-06', 18),
+  // Everybody who was around that summer, Upsilon included — the series table is where
+  // somebody who entered and won nothing has to appear at all.
+  entrants: [NEIL, 'Rho', 'Sigma', 'Tau', 'Phi', 'Upsilon'].map((n) => [n]),
+}).ties;
+
+legacyLines.push(
+  'tournament Hole Corn I  won 2021-08-28 by Rho',
+  'tournament Hole Corn II  won 2022-09-03 by Tau beating Rho' +
+    '  from Neil, Rho, Sigma, Tau, Phi, Upsilon',
+  'tournament Hole Corn III',
+  ...sheet.map((tie) => {
+    const score = finalScore(tie);
+    return `${iso(tie.startedAt)}  ${tie.players.a[0]} v ${tie.players.b[0]}  ${score.a}-${score.b}`;
+  }),
+);
+
 const parsed = parseGames(legacyLines.join('\n'));
+for (const warning of parsed.warnings) console.error(`legacy: ${warning}`);
 for (const problem of parsed.problems) console.error(`legacy: ${problem}`);
 if (parsed.problems.length) process.exit(1);
 
@@ -178,10 +226,28 @@ for (const t of modernDays) {
   }
 }
 
-// Three, so there is one of each thing to look at: a clean power of two with no
+// The cups played in the app. One of each thing to look at: a clean power of two with no
 // preliminaries, an uneven field that has them, and one still running — which is what
 // puts a bracket on the setup screen's button and leaves ties to play.
+//
+// Three of them are further editions of Hole Corn, so that series spans every shape a
+// tournament has; the other two are here for what a *second* series is worth. A cup
+// played once is a series of one, so `Boxing Day Cup` is what says the Series section
+// draws only where a name has been used twice — and the Shield is the pair that has
+// been, with its newest edition finished, which is the only thing `Draw` offers a next
+// edition for. Its first edition carries no numeral, the common shape where nobody knew
+// there would be a second.
 const CUPS = [
+  {
+    id: idFor('holecorn-boxing-day'),
+    name: 'Boxing Day Cup',
+    mode: 'singles',
+    // Short games in the cold, which is also the fixture's only cup played to anything
+    // but 21 — the target is fixed by the draw, so the tie's own screen has to say it.
+    target: 15,
+    from: at('2024-12-26', 14),
+    entrants: [NEIL, 'Rho', 'Sigma', 'Chi', 'Eta'].map((n) => [n]),
+  },
   {
     id: idFor('holecorn-cup-iv'),
     name: 'Hole Corn IV',
@@ -206,6 +272,24 @@ const CUPS = [
     ),
   },
   {
+    id: idFor('holecorn-shield-i'),
+    name: 'Seafront Shield',
+    mode: 'singles',
+    target: 21,
+    from: at('2025-08-16', 17),
+    entrants: [NEIL, 'Rho', 'Sigma', 'Tau'].map((n) => [n]),
+  },
+  {
+    id: idFor('holecorn-shield-ii'),
+    name: 'Seafront Shield II',
+    mode: 'singles',
+    target: 21,
+    from: at('2026-05-09', 17),
+    // Not the same four, because who turns up changes — which is what gives a series
+    // table rows with different numbers of editions entered.
+    entrants: [NEIL, 'Rho', 'Phi', 'Chi'].map((n) => [n]),
+  },
+  {
     id: idFor('holecorn-cup-vi'),
     name: 'Hole Corn VI',
     mode: 'singles',
@@ -213,14 +297,17 @@ const CUPS = [
     from: at('2026-06-20', 18),
     // Left part way through on purpose, so the fixture has a live bracket with ties
     // waiting rather than only finished ones.
-    stopAfter: 5,
+    stopAfter: 3,
     entrants: [NEIL, 'Rho', 'Sigma', 'Tau', 'Phi', 'Chi', 'Eta', 'Psi', 'Omega', 'Omicron'].map(
       (n) => [n],
     ),
   },
 ];
 
-const tournaments = [];
+// The transcribed editions first, so the list is not in the order this script happens to
+// build it — the screen sorts on `createdAt` anyway, but a file that reads chronologically
+// is easier to check by eye.
+const tournaments = [...parsed.tournaments];
 const tourneyTies = [];
 for (const cup of CUPS) {
   const { tournament, ties } = playTournamentWith(r, skillFor, cup);
@@ -246,17 +333,26 @@ for (const record of records) {
   }
 }
 
+// Upsilon stopped coming at the cutover, which is already what gives the career table a
+// row of dashes — so he is also the person the fixture marks as having left. Through
+// `markInactive` rather than written out, because the mark is stamped past the person's
+// last match as well as by the clock and a hand-written stamp could sit behind it, where
+// nothing on any screen would look any different.
+const inactive = markInactive({}, 'Upsilon', records, at('2024-09-15', 12));
+
 mkdirSync(new URL('fixtures/', import.meta.url).pathname, { recursive: true });
 // The export envelope rather than a bare list, because a file carrying the ties but not
 // the brackets imports without complaint and leaves every tournament pointing at
 // nothing. One record per line: pretty-printing puts every bag on its own line and makes
 // the diff unreadable, and a single line makes it unreviewable.
-const file = archiveFile(records, tournaments);
+const file = archiveFile(records, tournaments, inactive);
 writeFileSync(
   OUT,
   `{\n"format": ${file.format},\n"tournaments": [\n${tournaments
     .map((x) => JSON.stringify(x))
-    .join(',\n')}\n],\n"matches": [\n${records.map((m) => JSON.stringify(m)).join(',\n')}\n]\n}\n`,
+    .join(',\n')}\n],\n"inactive": ${JSON.stringify(inactive)},\n"matches": [\n${records
+    .map((m) => JSON.stringify(m))
+    .join(',\n')}\n]\n}\n`,
 );
 
 const people = new Set(
@@ -270,8 +366,19 @@ console.log(
 );
 for (const t of tournaments) {
   const view = bracket(t, records);
+  const who = view.champion
+    ? `won by ${view.champion.names.filter(Boolean).join(' & ')}`
+    : 'in progress';
   console.log(
-    `  ${t.name}: ${t.entrants.length} entrants, ${view.played}/${view.total} ties, ` +
-      (view.champion ? `won by ${view.champion.names.filter(Boolean).join(' & ')}` : 'in progress'),
+    view.recorded
+      ? `  ${t.name}: ${view.entrants.length} entrants known` +
+          `${view.fieldKnown ? '' : ' (finalists only)'}, no sheet, ${who}`
+      : `  ${t.name}: ${t.entrants.length} entrants, ${view.played}/${view.total} ties, ${who}`,
   );
 }
+// Said separately because a series is derived from the names, so it is the one thing here
+// that a rename in the fixture could silently take apart.
+for (const group of groupBySeries(tournaments).filter((g) => g.editions.length > 1)) {
+  console.log(`  series ${group.name}: ${group.editions.map((t) => t.name).join(', ')}`);
+}
+console.log(`  inactive: ${Object.keys(inactive).join(', ') || 'nobody'}`);

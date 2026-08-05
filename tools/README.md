@@ -31,18 +31,34 @@ transcribed ones through `import-legacy.mjs`, so a fixture can't disagree with
 the rules it exists to exercise. Seeded and dated absolutely, so re-running
 produces no diff; the dates will age, and `FIRST`/`LAST` are where to bump them.
 `src/archive.test.js` holds the committed file to `validRecord`, because
-`mergeMatches` drops a bad record silently. It also carries three tournaments —
-one finished doubles, one finished singles with preliminaries, one still running —
-played tie by tie through the real `bracket()`, so the draw and the results it is
-derived from cannot disagree.
+`mergeMatches` drops a bad record silently.
+
+It also carries nine tournaments, which is what it takes to have one of each shape
+to look at. Six are editions of Hole Corn, because a series is read off the names
+and there is no other way to have one: two of those are results transcribed with no
+sheet behind them (one listing its field, one remembering only the winner), one is a
+sheet whose ties survived with no round detail, two were played in the app, and the
+newest is still running. The other three are a one-off cup — a series of one, so the
+Series section does not draw for it — and the two editions of a second series, whose
+newest is finished, which is the only thing `Draw` offers a next edition for. The
+played ones go tie by tie through the real `bracket()`, so a draw and the results it
+is derived from cannot disagree, and the transcribed ones go through
+`import-legacy.mjs` so the reconstruction is exercised rather than written down.
+One player is marked inactive, so the name fields offer a filtered list.
 
 `make-stress-archive.mjs` writes `out/stress-archive.json`, which is the same idea
-taken to an unreasonable extreme: ~900 matches, ~9,700 rounds, 78 players and six
+taken to an unreasonable extreme: ~970 matches, ~10,700 rounds, 77 players and 17
 tournaments including a 64-entrant bracket (six rounds, "Round of 64" headings),
 the worst possible ragged shape at 31 entrants, 32 doubles pairs, and one left part
-way through with 18 ties playable at once. Names sit at the app's 16-character cap,
-in Greek script, and one contains " & " so `winVerb` reads a singles player as a
-pair. **Not checked in** — it runs to megabytes and `out/` is gitignored, so
+way through with 18 ties playable at once. Nine of them are editions of one cup, so
+the Series section has a roll of honour nine lines long and a table of 40 entrants —
+two of those editions are transcribed results, one listing a field of 40 and one
+remembering only the winner. A second series is named at the draw form's 32-character
+cap, so the next-edition chip is the widest one that can be offered and the row is
+capped at three. A fifth of the roster is marked inactive. Names sit at the app's
+16-character cap, in Greek script, and one contains " & " so `winVerb` reads a
+singles player as a pair. **Not checked in** — it runs to megabytes and `out/` is
+gitignored, so
 generate it when you want it. It reports its own size against the 5MB localStorage
 budget, which is a limit the app really hits: `saveArchive` drops the oldest match
 and retries on a failed write.
