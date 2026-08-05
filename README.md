@@ -379,17 +379,27 @@ ordinary game left under the header by mistake shows up as an entrant count that
 can't be a knockout, and is reported.
 
 A tournament whose sheet is gone can still be recorded as its result. It carries
-the date and the winner, and the runner-up if that's remembered:
+the date and the winner, the runner-up if that's remembered, and — after `from`
+— everybody who took part, separated by commas with a doubles pair joined by
+`&`:
 
 ```
 tournament Hole Corn I   won 2019-08-30 by Rho
 tournament Hole Corn II  won 2020-08-29 by Rho beating Tau
+tournament Hole Corn III won 2021-09-04 by Rho beating Tau from Neil, Rho, Sigma, Tau
 ```
 
 These sit under **Completed** with the year's winner named. There is no bracket
 behind them and nothing in anybody's record counts towards them — the ties
 themselves are lost. Nothing else can produce one of these; a tournament played
 in the app always has its ties.
+
+The field is worth listing where anybody remembers it: opening the row names
+everyone who was there, and a series counts them as having entered that year
+rather than only its two finalists — so somebody who played four cups and won
+none appears at all. Listing it is optional and the winner doesn't have to be in
+the list, though you'll get a warning if they aren't, since that's usually a
+misspelling.
 
 Re-importing is safe: tournaments are keyed by name and matches by content, so
 running the file again adds nothing. Ties are the one thing that will overwrite

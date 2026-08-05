@@ -192,7 +192,15 @@ export function drawSteps(tournament) {
 // `createdAt` is the day it was won rather than the day it was drawn, because that is the
 // one date such a tournament has and it is what both lists sort on. The row says `Won` for
 // it rather than `Drawn`, so nothing on screen claims a draw that was never taken.
-export function recordedTournament({ id, name, createdAt, champion, runnerUp }) {
+//
+// `field` is who took part, where somebody remembers — and it is **a set, not a seating**,
+// which is the whole reason it is not called `entrants`. `entrants` is the draw: its order
+// *is* the pairings, so a bracket is built from it. Nothing is ever built from this. It
+// exists because the two names on the trophy are not the whole of who was there, and a
+// player who entered four cups and won none would otherwise appear in no edition at all.
+// Absent rather than empty when nobody remembers, the convention `runnerUp` follows.
+export function recordedTournament({ id, name, createdAt, champion, runnerUp, field }) {
+  const took = (field ?? []).map(asSide).filter((s) => s.key !== NO_SIDE);
   return {
     format: TOURNAMENT_FORMAT,
     id,
@@ -202,6 +210,7 @@ export function recordedTournament({ id, name, createdAt, champion, runnerUp }) 
     // Absent rather than null when it is not known, the way a record leaves out `winner`
     // while a game is live — the readers all take a missing key as "not known".
     ...(runnerUp ? { runnerUp: asSide(runnerUp).names } : {}),
+    ...(took.length > 0 ? { field: took.map((s) => s.names) } : {}),
   };
 }
 
@@ -313,18 +322,35 @@ function resolve(node, matches, tournamentId, level, half, out) {
 // a record with no rounds carries `final`: it is the one thing about such a tournament that
 // has nowhere else to live.
 //
-// **Only where there is no draw**, which is stricter than "no ties played". A field with
-// no draw behind it would be shuffled into pairings nobody played and then captioned with
+// **Only where there is no draw**, which is stricter than "no ties played". `entrants` with
+// no draw behind them would be shuffled into pairings nobody played and then captioned with
 // the real winner — a bracket that is wrong in a way only the people who were there could
-// see. So a result is recorded *instead of* a field, not alongside one; a tournament
-// carrying both is an ordinary bracket and this is ignored.
+// see. So a result is recorded *instead of* a draw, not alongside one; a tournament carrying
+// both is an ordinary bracket and this is ignored.
+//
+// **`field` is the exception, and it is one because it is a set rather than a seating** —
+// nothing is seated from it and no tie comes out of it. `entrants` comes back as everyone
+// *known* to have been in it: that field where there is one, and the two names on the trophy
+// either way. Unioned rather than trusted, so a field transcribed without the winner in it
+// still describes the whole tournament — and `listed` says which of the two it is, because
+// "the field was two people" and "only the finalists are remembered" are different facts and
+// the screen says so.
 function storedResult(tournament) {
   const side = (names) => {
     const s = names ? asSide(names) : null;
     return s && s.key !== NO_SIDE ? s : null;
   };
   const champion = side(tournament?.champion);
-  return champion ? { champion, runnerUp: side(tournament.runnerUp) } : null;
+  if (!champion) return null;
+  const runnerUp = side(tournament.runnerUp);
+  const field = (Array.isArray(tournament.field) ? tournament.field : [])
+    .map(asSide)
+    .filter((s) => s.key !== NO_SIDE);
+  const entrants = [];
+  for (const s of [...field, champion, runnerUp].filter(Boolean)) {
+    if (!entrants.some((e) => e.key === s.key)) entrants.push(s);
+  }
+  return { champion, runnerUp, entrants, listed: field.length > 0 };
 }
 
 // Everything the screens need, derived from the stored draw plus the archive.
@@ -338,15 +364,21 @@ export function bracket(tournament, matches = []) {
     if (!result) return null;
     return {
       shape: null,
-      entrants: [],
+      // Everyone known to have been in it, which for a recorded result is the field where
+      // one was transcribed and the finalists where it was not. **Not a seating**, unlike
+      // every other bracket's — `recorded` is what says so, and it is also what stops
+      // anything drawing a bracket from these.
+      entrants: result.entrants,
       ties: [],
       rounds: [],
       playable: [],
-      ...result,
+      champion: result.champion,
+      runnerUp: result.runnerUp,
       played: 0,
       total: 0,
       done: true,
       recorded: true,
+      fieldKnown: result.listed,
     };
   }
   const shape = bracketShape(sides.length);
@@ -377,6 +409,9 @@ export function bracket(tournament, matches = []) {
     total: sides.length - 1,
     done: Boolean(champion),
     recorded: false,
+    // A draw names everybody by definition, so the only bracket that can be missing its
+    // field is one that never had a draw.
+    fieldKnown: true,
   };
 }
 
@@ -788,11 +823,12 @@ export function seriesStats(editions, matches = []) {
   };
 
   for (const { view } of views) {
-    // Who is known to have been in this edition. A recorded result kept no field — see
-    // `recordedTournament`, which throws it away deliberately — so the two names on the
-    // trophy are all such an edition can contribute, and the screen says so.
-    const inIt = view.recorded ? [view.champion, view.runnerUp].filter(Boolean) : view.entrants;
-    for (const side of inIt) at(side).entered += 1;
+    // Who is known to have been in this edition — `view.entrants` for a bracket and for a
+    // recorded result alike, since `storedResult` already falls back to the finalists where
+    // no field was transcribed. `fieldKnown` is what tells a complete count from that
+    // fallback, and the screen captions the difference rather than reporting a short count
+    // as a fact.
+    for (const side of view.entrants) at(side).entered += 1;
     // **Off the decided final, not off who is standing in one.** `champion` and `runnerUp`
     // exist only once the final has a winner, so an edition still being played contributes
     // its entrants and its ties and no honours — which is right: reaching a final you have
@@ -831,9 +867,11 @@ export function seriesStats(editions, matches = []) {
     // How many different names are on the trophy, which is the one figure that is about
     // the series rather than about any edition of it.
     champions: new Set(views.map(({ view }) => view.champion?.key).filter(Boolean)).size,
-    // Whether any edition is a bare result, so the screen can caption what the table is
-    // therefore missing rather than reporting a short count as a fact.
-    recorded: views.some(({ view }) => view.recorded),
+    // Whether any edition's field is unknown, so the screen can caption what the table is
+    // therefore missing rather than reporting a short count as a fact. Not "is any edition
+    // recorded": one transcribed *with* its field counts everybody, and captioning it as
+    // short would be the fault the caption exists to prevent, pointing the other way.
+    unlisted: views.some(({ view }) => !view.fieldKnown),
   };
 }
 
@@ -872,7 +910,7 @@ export function nextEditions(tournaments, matches = []) {
     .slice(0, MAX_SUGGESTIONS);
 }
 
-function hasField(t) {
+function hasDraw(t) {
   return Boolean(
     Array.isArray(t?.entrants) &&
       t.entrants.length >= MIN_ENTRANTS &&
@@ -893,7 +931,7 @@ export function validTournament(t) {
       typeof t === 'object' &&
       typeof t.id === 'string' &&
       t.id &&
-      (hasField(t) || storedResult(t)),
+      (hasDraw(t) || storedResult(t)),
   );
 }
 
@@ -911,17 +949,23 @@ export function removeTournament(list, id) {
 // the same draw and there is nothing an incoming copy could be more right about.
 // Deleting still does not propagate, the same known limit the archive has.
 //
-// **A draw is the one thing that can be more right**, because a stored result is what you
-// keep when there is no draw — so an incoming field replaces a local result-only copy and
-// never the other way round. Without that the upgrade path is silent rather than merely
-// manual: a tournament's id is its name, so a sheet turning up years later and being
-// transcribed produces the same id, the local result-only copy holds, and the ties import
-// tagged with an id whose tournament has no bracket to place them in.
+// **Knowing more is the one thing that can be more right**, so an incoming copy replaces a
+// local one only by ranking above it: a draw beats a transcribed field beats the trophy
+// alone. Without that the upgrade path is silent rather than merely manual — a tournament's
+// id is its name, so a sheet turning up years later produces the same id, the local
+// result-only copy holds, and the ties import tagged with an id whose tournament has no
+// bracket to place them in. Remembering who took part arrives by the same route and would
+// be swallowed the same way.
+function known(t) {
+  if (hasDraw(t)) return 2;
+  return storedResult(t)?.listed ? 1 : 0;
+}
+
 export function mergeTournaments(list, incoming) {
   if (!Array.isArray(incoming)) return list;
   return incoming.filter(validTournament).reduce((acc, t) => {
     const mine = acc.find((x) => x.id === t.id);
-    if (mine && !(hasField(t) && !hasField(mine))) return acc;
+    if (mine && known(t) <= known(mine)) return acc;
     return upsertTournament(acc, t);
   }, list);
 }

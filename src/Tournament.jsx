@@ -1085,10 +1085,28 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
             /* Nothing to draw behind a recorded result — no bracket, no ties, and so no
                rates or routes either. The row still opens, because `Delete` has to live
                somewhere and a file is the only way one of these arrives. */
-            <p className="recorded-note">
-              The sheet for this one is gone, so only the result is kept. There are no ties
-              behind it, and nothing in anybody’s record counts towards it.
-            </p>
+            <>
+              <p className="recorded-note">
+                The sheet for this one is gone, so{' '}
+                {view.fieldKnown ? 'who took part and how it ended are' : 'only the result is'}{' '}
+                kept. There are no ties behind it, and nothing in anybody’s record counts
+                towards it.
+              </p>
+              {/* Who was there, where somebody remembered — the one thing about such a
+                  tournament that is not the result, and the reason `field` is stored at
+                  all. Names only: there is nothing behind any of them to open, so they
+                  are deliberately not the roster's chips, which are a tap affordance. */}
+              {view.fieldKnown && (
+                <p className="recorded-field">
+                  <span className="result-cap">Took part</span>
+                  {view.entrants.map((side) => (
+                    <span className="recorded-who" key={side.key}>
+                      {sideNames(side)}
+                    </span>
+                  ))}
+                </p>
+              )}
+            </>
           ) : (
             <>
               <div className="tournament-head">
@@ -1350,10 +1368,13 @@ function SeriesPanel({ stats, matches }) {
             </tbody>
           </table>
         </div>
-        {stats.recorded && (
+        {/* Only where an edition's field is genuinely unknown. One transcribed with the
+            names of everybody who entered counts them all, and saying otherwise would be
+            the same fault this caption exists to prevent, pointing the other way. */}
+        {stats.unlisted && (
           <p className="tournament-note">
-            An edition whose sheet is gone kept no field, so only its winner and runner-up
-            are counted in it.
+            An edition whose sheet is gone counts only the people it recorded — its winner
+            and runner-up, where nobody remembered the rest of the field.
           </p>
         )}
       </section>

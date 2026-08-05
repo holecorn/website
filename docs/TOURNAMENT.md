@@ -332,16 +332,35 @@ Decision above specified:
 - **The tournament-scoped stats of decision 9 are a tab inside the open row**, with the
   bracket first, rather than a scope selector on the stats screen. See **Where the stats
   went** below for the option that lost and why.
-- **A stored champion is read where there is no *field*, not merely no ties.** Decision 12's
-  rule would admit a tournament holding both a field and a champion, and that state is worse
-  than either half of it: the field would be shuffled into a draw, drawn as pairings nobody
-  played, and captioned with the real winner — wrong in the one way only the people who were
-  there could see. So a recorded result carries no entrants at all, and a tournament with a
-  field is simply a bracket. **The field is thrown away even where it is remembered**, which
-  is the cost: Hole Corn I's eleven names are not kept anywhere. Keeping them as a second
-  list beside `entrants` was considered and not built, because `entrants` means the draw
-  everywhere else and a second meaning for the same names is the drift this file exists to
-  prevent.
+- **A stored champion is read where there is no draw, not merely no ties.** Decision 12's
+  rule would admit a tournament holding both a draw and a champion, and that state is worse
+  than either half of it: the entrants would be shuffled into pairings nobody played and
+  captioned with the real winner — wrong in the one way only the people who were there could
+  see. So a recorded result carries no `entrants` at all, and a tournament with them is
+  simply a bracket.
+- **Who took part is kept beside the result, in `field`, and that reverses an earlier
+  decision here.** The first version threw the names away even where they were remembered,
+  because `entrants` means the draw everywhere else and a second meaning for the same names
+  is the drift this file exists to prevent. What that cost only became visible with the
+  series panel: an edition whose sheet is gone contributed its two finalists and nobody
+  else, so a player who entered four cups and won none appeared in no table anywhere, and
+  every `entered` in the series was short by however many went out early.
+  - **The distinction that makes it safe is that `field` is a *set* and `entrants` is a
+    *seating*.** A bracket is built from array order — that is the whole of `seatSides` —
+    and nothing is ever built from this one. `bracket()` reads it only where there is no
+    draw, `recorded` stays true, and no tie, round or pairing comes out of it. A tournament
+    carrying both is still simply the bracket, exactly as above.
+  - **The view unions it with the two names on the trophy** rather than trusting it whole,
+    so a field transcribed without the winner still describes the tournament. `fieldKnown`
+    says which of the two the screen is looking at, because "the field was two people" and
+    "only the finalists are remembered" are different facts and the panel captions one of
+    them.
+  - **`mergeTournaments` had to learn it**, for the reason an incoming *draw* beats a local
+    result-only copy: remembering the field arrives by the same route — a corrected file,
+    re-imported — and local-wins would have swallowed it silently. The rule is now a rank,
+    a draw over a field over the trophy alone, rather than a single exception.
+  - **Nothing else moved.** `newTournament`, `validTournament`, the storage shape and the
+    export envelope are untouched, and a tournament without the key reads exactly as it did.
 - **Decision 11's tagging is done by `tools/import-legacy.mjs`, and it reconstructs the
   draw rather than asking for it.** The decision assumed the ties were already in the
   archive and only the tournament was missing, which is true — but `bracket()` seats

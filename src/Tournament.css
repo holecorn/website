@@ -268,6 +268,27 @@
   line-height: 1.4;
 }
 
+/* Who took part, under that sentence. A wrapping row of plain names rather than
+   `.roster-chip`s: a chip in this app is something you tap, and there is nothing behind
+   any of these to open. `baseline` so the caption sits on the same line as the first row
+   of names whatever the two font sizes are. */
+.recorded-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+/* A separator rather than the gap alone: at 8px two short names read as one run, and a
+   doubles pair is already `Rho & Tau`, so the eye needs telling where one entrant ends. */
+.recorded-who:not(:last-child)::after {
+  content: '·';
+  margin-left: 8px;
+  color: var(--muted);
+}
+
 /* The bracket is drawn as a tree, columns running deepest-first to the final on the
    right — the BBC's knockout layout rather than the paper sheet's mirrored one, which
    is both simpler and half the width.

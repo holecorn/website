@@ -2409,6 +2409,11 @@ console.log('\na tournament whose sheet is gone');
     (await page.locator('.recorded-note').count()) === 1 &&
       (await row('.recorded-note')).includes('only the result'),
   );
+  // The other half of the block below: with nobody remembered but the two finalists there
+  // is no field to list, and `view.entrants` holds them both — so a list gated on the
+  // entrants rather than on `fieldKnown` would draw `Took part · Rho · Tau` here, which
+  // reads as the whole of who was there and is a claim nothing in the file made.
+  check('and lists no field, because none was recorded', (await page.locator('.recorded-field').count()) === 0);
   // Delete has to be reachable, which is the whole reason the row still opens — and the
   // ordinary dialog would promise that its played ties stay in the archive, which is
   // false here because there are none.
@@ -2417,6 +2422,63 @@ console.log('\na tournament whose sheet is gone');
   check('the dialog does not promise ties it has not got', !said.includes('tie'), said);
   await page.locator('.confirm-danger').click();
   check('and it goes', (await page.locator('.tournament-row').count()) === 0);
+  await page.close();
+}
+
+console.log('\na sheet that is gone but a field that is remembered');
+{
+  // The same shape with `field` filled in, which is the only thing about such a tournament
+  // that is not the result. Its own page and its own fixture rather than a second row in
+  // the block above, which queries `.tournament-row` and `.recorded-note` unscoped — the
+  // strict-mode trap this file has already been bitten by twice.
+  //
+  // `storedResult` and `fieldKnown` are unit tested, so what is left for a browser is the
+  // crossing: the row draws `view.entrants` rather than the two names it already has in
+  // hand. Verified by mutation — listing `[champion, runnerUp]` instead loses Neil and
+  // Sigma, and gating the list on `recorded` instead of `fieldKnown` fails the absence
+  // assertion in the block above.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      'holecorn.tournaments.v1',
+      JSON.stringify([
+        {
+          format: 1,
+          id: 'hc2',
+          name: 'Hole Corn II',
+          createdAt: new Date(2020, 7, 29, 12).getTime(),
+          champion: ['Rho'],
+          runnerUp: ['Tau'],
+          // Two who reached the final and two who did not, which is the whole point: the
+          // pair with nothing on the trophy are the ones a result-only tournament loses.
+          field: [['Neil'], ['Rho'], ['Sigma'], ['Tau']],
+        },
+      ]),
+    );
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  check('it is listed', await settles(() => page.waitForSelector('.tournament-row')));
+  await page.locator('.tournament-row').click();
+  check('opening it still draws no bracket', (await page.locator('.bracket').count()) === 0);
+  const took = await page.locator('.recorded-who').allInnerTexts();
+  check(
+    'everyone who took part is named, not only the two on the trophy',
+    took.join(' ') === 'Neil Rho Sigma Tau',
+    took.join(' | '),
+  );
+  check(
+    'and the note says so rather than claiming the result is all there is',
+    (await page.locator('.recorded-note').innerText()).includes('who took part'),
+    await page.locator('.recorded-note').innerText(),
+  );
   await page.close();
 }
 
@@ -2609,6 +2671,14 @@ console.log('\nevery edition of a cup is grouped into one series');
     'and does not report a missing sheet as a nil record',
     JSON.stringify(omega) === JSON.stringify(['Omega', '1', '1', '—']),
     JSON.stringify(omega),
+  );
+  // Hole Corn I here remembers neither its field nor anything but its two finalists, so
+  // every `entered` in the table is short by however many entered it and lost early. The
+  // caption is what stops that reading as a fact; scoped, because an open tournament row
+  // carries a `.tournament-note` of its own.
+  check(
+    'and captions a count it knows is short',
+    (await page.locator('.series-stats .tournament-note').count()) === 1,
   );
 
   // The table has to fit a phone without sideways scrolling, which is why it carries

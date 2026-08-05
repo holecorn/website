@@ -585,7 +585,48 @@ describe('a recorded result', () => {
     expect(view.runnerUp.names).toEqual(['Tau']);
     // Present and empty rather than absent, so nothing reading a bracket needs a guard
     // of its own. `total` in particular would be -1 from an empty field.
-    expect(view).toMatchObject({ ties: [], rounds: [], entrants: [], played: 0, total: 0 });
+    expect(view).toMatchObject({ ties: [], rounds: [], played: 0, total: 0 });
+  });
+
+  // Who took part, where somebody remembers — the whole of the field and not only the two
+  // names on the trophy. It is a *set* and never a seating: `recorded` stays true and no
+  // bracket is built from it, which is the line `entrants` would otherwise blur.
+  it('names everybody it is told took part', () => {
+    const withField = recordedTournament({
+      ...holecornI,
+      field: [['Sigma'], ['Rho'], ['Phi'], ['Tau']],
+    });
+    const view = bracket(withField, []);
+    expect(view.entrants.map((e) => e.names[0])).toEqual(['Sigma', 'Rho', 'Phi', 'Tau']);
+    expect(view.fieldKnown).toBe(true);
+    expect(view).toMatchObject({ recorded: true, ties: [], played: 0, total: 0 });
+  });
+
+  // A field transcribed without the winner in it still describes the whole tournament, so
+  // the two are unioned rather than the field being trusted whole. Order holds otherwise:
+  // the file's, then whoever it left out.
+  it('adds the finalists to a field that forgot them', () => {
+    const withField = recordedTournament({ ...holecornI, field: [['Sigma'], ['Phi']] });
+    expect(bracket(withField, []).entrants.map((e) => e.names[0])).toEqual([
+      'Sigma',
+      'Phi',
+      'Rho',
+      'Tau',
+    ]);
+  });
+
+  it('takes the same person once, however the field was written', () => {
+    const twice = recordedTournament({ ...holecornI, field: [['Rho'], ['rho'], ['Tau']] });
+    expect(bracket(twice, []).entrants.map((e) => e.names[0])).toEqual(['Rho', 'Tau']);
+  });
+
+  // The finalists are all such an edition can contribute, and `fieldKnown` is what tells
+  // that from a field of two — the screen says different things about them.
+  it('falls back to the finalists, and says that is what it has done', () => {
+    const view = bracket(holecornI, []);
+    expect(view.entrants.map((e) => e.names[0])).toEqual(['Rho', 'Tau']);
+    expect(view.fieldKnown).toBe(false);
+    expect('field' in holecornI).toBe(false);
   });
 
   it('keeps the runner-up optional, because losing a final is the half people forget', () => {
@@ -622,6 +663,19 @@ describe('a recorded result', () => {
     const drawn = { ...tournamentOf([['Rho'], ['Tau']]), id: 'hc1', name: 'Hole Corn I' };
     expect(bracket(mergeTournaments([holecornI], [drawn])[0], []).recorded).toBe(false);
     expect(bracket(mergeTournaments([drawn], [holecornI])[0], []).recorded).toBe(false);
+  });
+
+  // Remembering who took part arrives by the same route as a sheet does — a corrected file,
+  // re-imported — so it has to beat the local copy the same way, or adding the names does
+  // nothing at all and says nothing about having done nothing.
+  it('gives way to a copy that remembers the field, and only that way round', () => {
+    const withField = recordedTournament({ ...holecornI, field: [['Sigma'], ['Phi']] });
+    expect(bracket(mergeTournaments([holecornI], [withField])[0], []).fieldKnown).toBe(true);
+    expect(bracket(mergeTournaments([withField], [holecornI])[0], []).fieldKnown).toBe(true);
+    // And a draw still outranks both, which is the whole of what a field is not.
+    const drawn = { ...tournamentOf([['Rho'], ['Tau']]), id: 'hc1', name: 'Hole Corn I' };
+    expect(bracket(mergeTournaments([withField], [drawn])[0], []).recorded).toBe(false);
+    expect(bracket(mergeTournaments([drawn], [withField])[0], []).recorded).toBe(false);
   });
 
   // The rule decision 12 in docs/TOURNAMENT.md sets: a stored result may never contradict
@@ -1321,7 +1375,8 @@ describe('seriesStats', () => {
   });
 
   // The retroactive half, and the one a stored series id could not have: a recorded result
-  // kept no field, so there is nothing on it to have tagged.
+  // carries nothing but its result and whoever it remembers, so there is nothing on it to
+  // have tagged. Here it remembers nobody, which is the shape the finalists stand in for.
   it('counts a recorded result, whose sheet is gone', () => {
     const one = recordedTournament({
       id: 't1',
@@ -1333,8 +1388,27 @@ describe('seriesStats', () => {
     const stats = seriesStats([six, five, one], played);
     expect(row(stats, 'Sigma')).toMatchObject({ entered: 1, titles: 1, finals: 1, played: false });
     expect(row(stats, 'Rho')).toMatchObject({ entered: 3, titles: 1, finals: 3 });
-    expect(stats.recorded).toBe(true);
+    expect(stats.unlisted).toBe(true);
     expect(stats.champions).toBe(3);
+  });
+
+  // The point of storing the field: an entrant who won nothing appears in the series at
+  // all, and everybody's `entered` counts the edition rather than skipping it. Without it
+  // Phi is in no table anywhere, having played four cups.
+  it('counts everybody a recorded edition remembers, not only its finalists', () => {
+    const one = recordedTournament({
+      id: 't1',
+      name: 'Hole Corn I',
+      createdAt: 100,
+      champion: ['Sigma'],
+      runnerUp: ['Rho'],
+      field: [['Sigma'], ['Rho'], ['Phi']],
+    });
+    const stats = seriesStats([six, five, one], played);
+    expect(row(stats, 'Phi')).toMatchObject({ entered: 1, titles: 0, finals: 0, played: false });
+    expect(row(stats, 'Rho')).toMatchObject({ entered: 3, titles: 1, finals: 3 });
+    // Nothing is short, so the caption that says something is must not be drawn.
+    expect(stats.unlisted).toBe(false);
   });
 
   it('leads with the most decorated', () => {

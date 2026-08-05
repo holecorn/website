@@ -199,10 +199,23 @@ the alternatives that were rejected; this section holds what breaks when you cha
     could see. So a stored champion is read when `entrants` cannot make a bracket, and a
     tournament carrying both is simply the bracket. `tournament.test.js` pins that direction
     as well as the other.
-  - **So the field is deliberately thrown away** where the draw is unknown, even when it is
-    remembered. Keeping it as a second list — a `field` that is not `entrants` — was
-    considered and not built: `entrants` means the draw everywhere else, and a second
-    meaning for the same names is what the note above is about.
+  - **It may also carry `field`, who took part — and `field` is a *set* where `entrants` is
+    a *seating*.** That distinction is the whole of why the two can coexist: array order
+    *is* the pairings for `entrants` (see `seatSides`), and nothing is ever built from
+    `field`. `bracket()` reads it only where there is no draw, through `storedResult`, and
+    `recorded` stays true — so it produces no tie, no round and no bracket. **Don't seat it,
+    and don't fold it into `entrants` on a tournament that has a draw.**
+    - **The view unions it with the champion and runner-up**, so a field transcribed without
+      the winner still describes the whole tournament, and `fieldKnown` says whether the
+      entrants are a real field or that fallback. The series panel captions the difference,
+      which is why the flag exists rather than a length check.
+    - **`mergeTournaments` ranks completeness now** — a draw over a field over the trophy
+      alone — rather than carrying one exception. Without that, adding the names to a legacy
+      file and re-importing does nothing *and says nothing*, the same silent-hold the draw
+      exception was written for.
+    - It was left out first and the cost only showed in the series panel: an edition kept
+      its two finalists and nobody else, so somebody who entered four cups and won none was
+      in no table anywhere. `docs/TOURNAMENT.md` holds the reversal.
   - **`validTournament` had to learn the shape**, because `mergeTournaments` drops what it
     refuses **silently** — the half-import trap `validRecord` and the sample archive already
     carry notes about. A champion-only tournament imported before that change simply never
@@ -258,8 +271,9 @@ the alternatives that were rejected; this section holds what breaks when you cha
   - **`mergeTournaments` keeps the local copy, the opposite of `mergeMatches`.** A tournament
     is fixed the moment it is drawn, so two copies of one id are the same draw and an incoming
     one cannot be more right. `mergeMatches` needs `updatedAt` because records get edited.
-    **One exception: an incoming draw replaces a local result-only copy**, because a stored
-    result is what you keep when there is no draw — see the recorded-result bullet above.
+    **The exception is knowing more**: incoming wins only where it ranks above the local
+    copy — a draw over a transcribed field over the trophy alone — because each of those is
+    what you keep when the one above it is unavailable. See the recorded-result bullet above.
   - **A deleted tournament is resurrected by a re-import, and it comes back *finished*.**
     Deletion propagates nowhere in this model — the archive's known limit — but here it is
     more surprising than for a match: deleting a bracket deliberately leaves its ties in the
@@ -479,10 +493,12 @@ the alternatives that were rejected; this section holds what breaks when you cha
   - **`seriesStats` counts honours off `champion`/`runnerUp`, which exist only once a final
     has a winner** — so an edition still being played contributes its entrants and its ties
     and no titles. Reaching a final you have not lost yet is not a result.
-  - **A recorded edition contributes its two finalists and nobody else**, because it kept no
-    field. So `entered` is who is *known* to have been in it, and the panel captions that
-    rather than reporting the short count as a fact. Such an entrant's `W–L` is a dash and
-    not `0–0`, the `played` flag `lineupStats` already draws a first-timer with.
+  - **A recorded edition contributes whoever it remembers** — its `field` where one was
+    transcribed, and its two finalists where none was. So `entered` is who is *known* to
+    have been in it, and the caption is gated on `unlisted` rather than on `recorded`: an
+    edition that does list its field counts everybody, and captioning it as short would be
+    the same fault pointing the other way. Such an entrant's `W–L` is still a dash and not
+    `0–0`, the `played` flag `lineupStats` already draws a first-timer with.
   - **`SeriesRow` has its own `.series-holder` and `.series-count`, sharing the tournament
     row's *rules* rather than its class names.** They are different facts — how many
     editions, and who holds the cup — and the names are **queried**: `verify-tournament.mjs`

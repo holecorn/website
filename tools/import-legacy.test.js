@@ -197,4 +197,55 @@ describe('a tournament whose sheet is gone', () => {
       /is not a date/,
     );
   });
+
+  // The field, where somebody remembers it: entrants split on commas and a pair on `&`,
+  // which is the opposite order from a side and has to be, since a side's own separator
+  // is the comma the entrants are split by.
+  it('takes the field where it was written down', () => {
+    const { tournaments, problems, warnings } = games(
+      'tournament Hole Corn I  won 2019-08-30 by Rho beating Tau from Neil, Rho, Sigma, Tau',
+    );
+    expect(problems).toEqual([]);
+    expect(warnings).toEqual([]);
+    const view = bracket(tournaments[0], []);
+    expect(view.entrants.map((e) => e.names[0])).toEqual(['Neil', 'Rho', 'Sigma', 'Tau']);
+    expect(view.fieldKnown).toBe(true);
+    // Still a result and not a draw: nothing about listing who was there makes a bracket.
+    expect(view.recorded).toBe(true);
+    expect(view.ties).toEqual([]);
+  });
+
+  it('reads a field of pairs', () => {
+    const { tournaments } = games(
+      'tournament Pairs Cup  won 2021-09-04 by Rho & Tau from Rho & Tau, Sigma & Phi',
+    );
+    expect(bracket(tournaments[0], []).entrants.map((e) => e.names)).toEqual([
+      ['Rho', 'Tau'],
+      ['Sigma', 'Phi'],
+    ]);
+  });
+
+  // Unioned rather than refused, so the tournament still imports — but a misspelling here
+  // is a person who never won anything appearing beside one who did, so it is said.
+  it('warns where the winner is not among the field listed', () => {
+    const { tournaments, problems, warnings } = games(
+      'tournament Hole Corn I  won 2019-08-30 by Rho beating Tau from Neil, Rhoo, Tau',
+    );
+    expect(problems).toEqual([]);
+    expect(warnings.join(' ')).toMatch(/the winner is not in the field listed/);
+    expect(bracket(tournaments[0], []).entrants).toHaveLength(4);
+  });
+
+  it('leaves a header with no field saying so', () => {
+    const { tournaments } = games('tournament Hole Corn I  won 2019-08-30 by Rho beating Tau');
+    expect('field' in tournaments[0]).toBe(false);
+    expect(bracket(tournaments[0], []).fieldKnown).toBe(false);
+  });
+
+  // The name is lazy and the result optional, so a cup actually called this keeps its
+  // name rather than being read as a field nobody won.
+  it('does not read a field out of a name', () => {
+    const { tournaments } = games('tournament Corn from the Hole', '2024-09-01  Rho v Tau  21-13');
+    expect(tournaments[0].name).toBe('Corn from the Hole');
+  });
 });

@@ -57,15 +57,20 @@ const LINE =
 //
 // A tournament whose sheet is gone carries its result on the header line instead and
 // opens no section at all — see `recordedTournament`. The runner-up is optional because
-// it is the half people forget:
+// it is the half people forget, and so is the field, because it is the half nobody wrote
+// down. Entrants are separated by commas and a doubles pair by `&`, the way a side is
+// written everywhere else in the file:
 //
 //   tournament Hole Corn I   won 2019-08-30 by Rho
 //   tournament Hole Corn II  won 2020-08-29 by Rho beating Tau
+//   tournament Hole Corn III won 2021-09-04 by Rho beating Tau from Neil, Rho, Sigma, Tau
 //
 // The name is lazy so that the optional result is preferred over swallowing it, which is
-// what makes a header with no `won` take the whole line as the name.
+// what makes a header with no `won` take the whole line as the name. `from` nests inside
+// the result for the same reason it reads that way: a tournament with no winner recorded
+// has no field to list either, because there is then nothing to hang it on.
 const HEADER =
-  /^tournament\s+(.+?)(?:\s+won\s+(\d{4})-(\d{2})-(\d{2})\s+by\s+(.+?)(?:\s+beating\s+(.+?))?)?$/;
+  /^tournament\s+(.+?)(?:\s+won\s+(\d{4})-(\d{2})-(\d{2})\s+by\s+(.+?)(?:\s+beating\s+(.+?))?(?:\s+from\s+(.+?))?)?$/;
 const FRIENDLIES = /^friendlies$/;
 
 // The app caps a typed name here, and the board's own limit is smaller still.
@@ -383,8 +388,8 @@ function tournamentId(name) {
 
 // A `tournament` header, which either opens a section of ties or is a whole recorded
 // result on its own. Returns the section to file the lines below it under, or null.
-function openTournament(head, where, tournaments, named, problems) {
-  const [, name, y, mo, d, champion, runnerUp] = head;
+function openTournament(head, where, tournaments, named, problems, warnings) {
+  const [, name, y, mo, d, champion, runnerUp, field] = head;
   // The id is the name, so a second header of the same name is a second section of one
   // tournament — and only the first would keep its ties. Refused rather than merged: the
   // file is the thing to correct, and a section split in two is a transcription slip.
@@ -400,6 +405,20 @@ function openTournament(head, where, tournaments, named, problems) {
     return null;
   }
   const side = (text) => text.split(/\s*[&,]\s*/).map((n) => n.trim()).filter(Boolean);
+  // Commas separate entrants here where they separate partners in a side, so the two
+  // splits are done in that order rather than by one pass over both characters.
+  const entered = field
+    ? field.split(',').map((entry) => splitSide(entry, where, problems, warnings))
+    : [];
+  // The winner not being among them is a transcription slip rather than a shape the app
+  // has to carry: `storedResult` unions them anyway, so the count still comes out right —
+  // but a misspelling would put the same person in the table twice, once with no honours.
+  const listed = new Set(entered.map(sideKeyOf));
+  for (const [who, names] of [['winner', champion], ['runner-up', runnerUp]]) {
+    if (names && entered.length > 0 && !listed.has(sideKeyOf(side(names)))) {
+      warnings.push(`${where}: the ${who} is not in the field listed`);
+    }
+  }
   tournaments.push(
     recordedTournament({
       id: tournamentId(name),
@@ -407,6 +426,7 @@ function openTournament(head, where, tournaments, named, problems) {
       createdAt: date.getTime(),
       champion: side(champion),
       runnerUp: runnerUp ? side(runnerUp) : null,
+      field: entered,
     }),
   );
   return null;
@@ -436,7 +456,7 @@ export function parseGames(text) {
     }
     const head = HEADER.exec(line);
     if (head) {
-      section = openTournament(head, where, tournaments, named, problems);
+      section = openTournament(head, where, tournaments, named, problems, warnings);
       if (section) sections.push(section);
       return;
     }
@@ -496,7 +516,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       t.entrants
         ? `${t.name}: ${t.entrants.length} entrants, ${t.entrants.length - 1} ties, ` +
             `won by ${bracket(t, records).champion.names.filter(Boolean).join(' & ')}`
-        : `${t.name}: result only, won by ${t.champion.filter(Boolean).join(' & ')}`,
+        : `${t.name}: ${t.field ? `${t.field.length} entrants, no ties` : 'result only'}, ` +
+          `won by ${t.champion.filter(Boolean).join(' & ')}`,
     );
   }
   // The envelope, always — a bare array of matches imports without complaint and leaves
