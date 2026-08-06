@@ -44,6 +44,12 @@ export function rosterFor(match, team) {
 // default second player is the obvious case — and that must not count as two
 // people playing two matches. A blank slot is not a person, so it is dropped
 // rather than collected under an empty heading.
+//
+// Coerced the way `nameKey` coerces, and that pairing is the point: a slot
+// holding a number or an object yields a *truthy* key, so it passes the guard
+// above and a bare `.trim()` then throws — blanking every screen that folds the
+// archive, the setup one included. `validRecord` refuses such a record now, but
+// this is the read side and it has to hold for a save that predates that.
 function participants(match, team) {
   const seen = new Set();
   const out = [];
@@ -51,7 +57,7 @@ function participants(match, team) {
     const key = nameKey(name);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, name: name.trim() });
+    out.push({ key, name: String(name ?? '').trim() });
   }
   return out;
 }
@@ -202,11 +208,12 @@ export function playerStats(matches) {
       const key = nameKey(name);
       if (!key) return null;
       const found = acc.get(key);
+      const shown = String(name ?? '').trim();
       if (found) {
-        found.name = name.trim();
+        found.name = shown;
         return found;
       }
-      const made = blank(name.trim());
+      const made = blank(shown);
       acc.set(key, made);
       return made;
     };

@@ -322,6 +322,23 @@ describe('playerStats — identity', () => {
     const m = singles('Neil', '   ', [[[H, H, H, H], [F, F, F, F]]]);
     expect(playerStats([m]).map((p) => p.name)).toEqual(['Neil']);
   });
+
+  // A slot holding something that isn't a string keys *truthily* through
+  // `nameKey`, so it survives the blank guard and used to reach a bare `.trim()`
+  // — which threw, and took down every screen that folds the archive, the setup
+  // one included, on every load until the record was deleted from devtools.
+  // `validRecord` refuses one now; these are records already stored.
+  it.each([[{}], [7], [true], [['a', 'b']], [null]])(
+    'reads a record whose name slot holds %s rather than throwing',
+    (odd) => {
+      const m = singles('Neil', 'Sigma', [[[H, H, H, H], [F, F, F, F]]]);
+      m.players.b[0] = odd;
+      expect(() => playerStats([m])).not.toThrow();
+      expect(() => lineupStats([m], { ...newGame(21), mode: 'singles', players: m.players }))
+        .not.toThrow();
+      expect(find(playerStats([m]), 'Neil').matches).toBe(1);
+    },
+  );
 });
 
 // The claim the stats screen's editing rests on: nothing in `rounds` names

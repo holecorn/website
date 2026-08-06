@@ -126,6 +126,21 @@ describe('validRecord', () => {
       false,
     );
   });
+
+  // The elements, not just the arrays: `nameKey` coerces, so a slot holding a
+  // number or an object keys truthily and blanks every screen that folds the
+  // archive. One such record from an import is unrecoverable without devtools,
+  // because the stats screen that could delete it is the first thing to die.
+  it('rejects a name slot that is not a string', () => {
+    for (const odd of [{}, 7, true, ['a', 'b'], null, undefined]) {
+      expect(validRecord({ ...good, players: { a: [odd, ''], b: ['Sigma', ''] } })).toBe(false);
+      expect(validRecord({ ...good, players: { a: ['Neil', ''], b: [odd, ''] } })).toBe(false);
+    }
+  });
+
+  it('still accepts the empty slot a singles record carries', () => {
+    expect(validRecord({ ...good, players: { a: ['Neil', ''], b: ['Sigma', ''] } })).toBe(true);
+  });
 });
 
 describe('setMatchPlayers', () => {
