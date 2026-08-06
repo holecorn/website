@@ -123,13 +123,17 @@ export function loadInactive() {
   }
 }
 
-// No drop-the-oldest retry, unlike `saveArchive`: this is a handful of keys against a
-// match's rounds, so a write that fails has not run out of room for *this*.
+// What is in storage now, and whether this write got through — the shape
+// `saveArchive` and `saveTournaments` return. It used to swallow the error and
+// hand the marks back regardless, so the caller set React state from a write that
+// never happened and the person stayed hidden until the next reload brought them
+// back. Nothing deletes to make room: this is a handful of keys against a match's
+// rounds, so a write that fails has not run out of room for *this*.
 export function saveInactive(marks) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(marks));
+    return { saved: true, stored: marks };
   } catch {
-    // an unwritable localStorage must not break the screen that called this
+    return { saved: false, stored: loadInactive() };
   }
-  return marks;
 }

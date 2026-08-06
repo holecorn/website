@@ -48,8 +48,8 @@
 //     there are plenty of skunks and blowouts for the summary chips and streaks.
 //
 // It also reports its own size against the localStorage budget, because that is a real
-// limit the app hits rather than a hypothetical one: `saveArchive` drops the oldest match
-// and retries when a write fails.
+// limit rather than a hypothetical one: past it `saveArchive` refuses the write and says
+// so, and this is the fixture that gets near enough to see it.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { nameKey } from '../src/scoring.js';
@@ -407,9 +407,9 @@ console.log(
     .join(', ')}`,
 );
 console.log(`  ${departed.length} of ${lastSeen.size} players marked inactive`);
-// localStorage is a real limit rather than a hypothetical one: `saveArchive` drops the
-// oldest match and retries when a write fails, so a fixture near the budget is exactly
-// where that behaviour becomes visible. Roughly 5MB per origin, counted as characters.
+// localStorage is a real limit rather than a hypothetical one: past it `saveArchive`
+// refuses the write and reports it, so a fixture near the budget is exactly where that
+// behaviour becomes visible. Roughly 5MB per origin, counted as characters.
 const mb = json.length / 1_048_576;
 console.log(
   `\n${mb.toFixed(2)} MB of JSON — about ${Math.round((mb / 5) * 100)}% of a 5MB ` +

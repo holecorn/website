@@ -131,18 +131,26 @@ export function loadArchive() {
   }
 }
 
-// There is no quota API worth trusting, so a failed write is the only signal
-// that the archive is full. Dropping the oldest match and retrying keeps the
-// recent history rather than silently losing the game just played — which is
-// what a plain try/catch would do, and it would do it every match from then on.
+// What is in storage now, and whether this write got through — the shape
+// `saveTournaments` and `saveInactive` return, so a caller settles all three the
+// same way.
+//
+// **It no longer deletes to make room, and the reversal is the point.** The retry
+// this replaces dropped `records[0]` and called that "the oldest": that is
+// *insertion* order, and `mergeMatches` appends, so after an import it destroyed
+// this season's games and kept the 2015 ones — the exact opposite of its own
+// comment, silently, with the import notice counting the survivors and reporting
+// "Added 1 match" against 49 destroyed. Measured, the archive fills at ~3,400
+// matches, about 34 years at 100 games a year, so natural play never reaches this
+// and an oversized import is the only realistic trigger — where deleting local
+// history to fit somebody else's file is the wrong answer under any ordering.
+// Saying it didn't fit is the whole fix; export and delete are already there.
 export function saveArchive(records) {
-  for (let keep = records; ; keep = keep.slice(1)) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(keep));
-      return keep;
-    } catch {
-      if (keep.length === 0) return [];
-    }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    return { saved: true, stored: records };
+  } catch {
+    return { saved: false, stored: loadArchive() };
   }
 }
 

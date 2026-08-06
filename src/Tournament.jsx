@@ -715,7 +715,7 @@ function Roster({ knownNames, taken, onToggle, onAll }) {
   );
 }
 
-function Draw({ knownNames, usedNames, suggestions, onDrawn, onCancel }) {
+function Draw({ knownNames, usedNames, suggestions, failed = false, onDrawn, onCancel }) {
   const [name, setName] = useState('');
   const [mode, setMode] = useState('singles');
   const [target, setTarget] = useState(DEFAULT_TARGET);
@@ -949,6 +949,15 @@ function Draw({ knownNames, usedNames, suggestions, onDrawn, onCancel }) {
             entrants.length - 1
           } ${plural(entrants.length - 1, 'tie', 'ties')}.`}
       </p>
+      {/* The form stays open with the field intact, because the draw never happened:
+          the alternative is the ceremony announcing a random and final draw for a cup
+          that is gone on the next load. */}
+      {failed && (
+        <p className="draw-hint" role="alert">
+          There&rsquo;s no room on this phone to store the draw. Export from Stats and
+          delete some matches, then try again.
+        </p>
+      )}
       <button
         className="draw-go"
         disabled={unnamed || duplicate || faults.length > 0 || !enough}
@@ -1572,6 +1581,9 @@ export default function Tournament({
   // `Ceremony` so the screen can show one thing at a time: the draw form, the ceremony,
   // or the lists.
   const [ceremony, setCeremony] = useState(null);
+  // Whether the last draw could not be stored. Held here rather than in `Draw` because
+  // only this level calls `onCreate` and so learns the answer.
+  const [drawFailed, setDrawFailed] = useState(false);
   // One tournament open at a time, the `openId` idiom the stats screen's match list uses.
   // Nothing is open on arrival: a bracket is up to 63 ties, and the row already says how far
   // it has got, so the list is what you want to land on. Drawing a new one opens it, because
@@ -1668,11 +1680,22 @@ export default function Tournament({
           knownNames={knownNames}
           usedNames={tournaments.map((t) => t.name)}
           suggestions={suggestions}
-          onCancel={() => setDrawing(false)}
+          failed={drawFailed}
+          onCancel={() => {
+            setDrawFailed(false);
+            setDrawing(false);
+          }}
           onDrawn={(t) => {
             // Saved whole before a single name is revealed, which is what makes the
-            // ceremony a view over stored data rather than a second way to build one.
-            onCreate(t);
+            // ceremony a view over stored data rather than a second way to build one —
+            // and is why a write that failed has to stop here. `onCreate` used to
+            // report success whatever happened, so the ceremony played out, the bracket
+            // came up playable, and the cup had never been stored.
+            if (!onCreate(t)) {
+              setDrawFailed(true);
+              return;
+            }
+            setDrawFailed(false);
             setCeremony(t);
             setDrawing(false);
           }}

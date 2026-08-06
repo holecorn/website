@@ -2864,6 +2864,58 @@ console.log('\nthe draw form offers the next edition, and offers one it will acc
   await page.close();
 }
 
+// A draw that cannot be stored must not be announced. `saveTournaments` used to catch
+// the quota error and hand the list straight back, and `App.jsx` set React state from
+// it — so the ceremony played out, the bracket came up playable, and the cup had never
+// existed. Reload and it was gone, with nothing having said so. Nothing below `App.jsx`
+// can see this: `saveTournaments` and the screen are each correct on their own.
+{
+  console.log('\na draw that cannot be stored is refused, not announced');
+  const stuck = await browser.newContext();
+  await stuck.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function blocked(key, value) {
+      if (key === 'holecorn.tournaments.v1') throw new DOMException('quota', 'QuotaExceededError');
+      return setItem.call(this, key, value);
+    };
+  });
+  const page = await stuck.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.goto(URL);
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.getByRole('button', { name: 'New tournament' }).click();
+  await page.locator('.draw-name input').fill('Quota Cup');
+  for (let i = 0; i < 4; i += 1) {
+    await page.getByRole('button', { name: 'Add new entrant' }).click();
+  }
+  for (const [i, n] of ['Rho', 'Tau', 'Sigma', 'Phi'].entries()) {
+    await page.locator('.entrant-name').nth(i).fill(n);
+  }
+  await page.locator('.draw-go').click();
+  await page.waitForTimeout(300);
+
+  check('no ceremony is played out for a draw that was not saved', (await page.locator('.ceremony').count()) === 0);
+  check('and no bracket is drawn', (await page.locator('.bracket-scroll').count()) === 0);
+  check(
+    'the form stays open with the field intact',
+    (await page.locator('.draw').count()) === 1 &&
+      (await page.locator('.entrant-name').nth(0).inputValue()) === 'Rho',
+  );
+  check(
+    'and says why',
+    (await page.locator('.draw-hint').count()) > 0 &&
+      (await page.locator('.draw-hint').innerText()).includes('no room'),
+    (await page.locator('.draw-hint').count()) ? await page.locator('.draw-hint').innerText() : 'no hint',
+  );
+  const stored = await page.evaluate(() => localStorage.getItem('holecorn.tournaments.v1'));
+  check('and nothing was stored', stored === null || JSON.parse(stored).length === 0, String(stored));
+  await stuck.close();
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : '\nall tournament checks passed');
 process.exit(failures ? 1 : 0);

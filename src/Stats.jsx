@@ -59,6 +59,12 @@ const tournamentCount = (n) => `${n} ${plural(n, 'tournament', 'tournaments')}`;
 // margin that has to be eyeballed against it.
 const DOT = ' · ';
 
+// Said whenever a write on this screen is refused. Every one of them now sets state
+// from what storage actually holds and reports the refusal, rather than handing back
+// the list it was given — which looked like it had worked until the next reload.
+const FULL =
+  'There’s no room on this phone, so that didn’t save. Export below, then delete some matches.';
+
 // Wipe the history and start again. **Development only** — `import.meta.env.DEV` is a
 // compile-time constant, so Vite eliminates the whole branch and the built app cannot
 // contain this control. That is the point: the archive is the one thing in here with no
@@ -163,21 +169,30 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // sits outside the match list so deleting the last one doesn't take the way
   // back with it.
   const deleteMatch = (record) => {
-    setMatches(dropMatch(record.id));
+    const write = dropMatch(record.id);
+    setMatches(write.stored);
+    if (!write.saved) {
+      setNotice(FULL);
+      return;
+    }
     setDeleted(record);
     setNotice(null);
     if (openId === record.id) setOpenId(null);
   };
 
   const undoDelete = () => {
-    setMatches(restoreMatch(deleted));
+    const write = restoreMatch(deleted);
+    setMatches(write.stored);
+    if (!write.saved) return setNotice(FULL);
     setDeleted(null);
   };
 
   // A name that was wrong for one game only — a typo caught after Start game, or
   // the wrong person credited for a doubles end. Confined to that record.
   const saveNames = (id, players) => {
-    setMatches(saveMatchPlayers(id, players, Date.now()));
+    const write = saveMatchPlayers(id, players, Date.now());
+    setMatches(write.stored);
+    if (!write.saved) return setNotice(FULL);
     setEditing(null);
     setNotice(null);
   };
@@ -189,11 +204,13 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // `merges` comes from the dialog, which has already had to answer that to word
   // itself: two spellings of "this name already has a career" is drift with no symptom.
   const renamePlayer = (from, to, merges) => {
-    setMatches(savePlayerRename(from, to, Date.now()));
+    const write = savePlayerRename(from, to, Date.now());
+    setMatches(write.stored);
+    if (!write.saved) return setNotice(FULL);
     // The mark is keyed by name, so it has to move with the person or it goes on
     // hiding a name nobody answers to. Whether this is a merge decides whose state
     // survives — see `renameMark`.
-    setInactive(saveInactive(renameMark(inactive, from, to, merges)));
+    setInactive(saveInactive(renameMark(inactive, from, to, merges)).stored);
     onRenamePlayer?.(from, to);
     setRenaming(null);
     setNotice(null);
@@ -205,14 +222,13 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // Their matches and every number on this screen are untouched either way; all this
   // decides is whether the lineup fields and the tournament draw go on offering them.
   const setPlaying = (player, playing) => {
-    setInactive(
-      saveInactive(
-        playing
-          ? markActive(inactive, player.name)
-          : markInactive(inactive, player.name, matches, Date.now()),
-      ),
+    const write = saveInactive(
+      playing
+        ? markActive(inactive, player.name)
+        : markInactive(inactive, player.name, matches, Date.now()),
     );
-    setNotice(null);
+    setInactive(write.stored);
+    setNotice(write.saved ? null : FULL);
   };
 
   const exportMatches = () => {
@@ -245,22 +261,32 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
       if (!data) throw new Error('not an export');
       // Tournaments first: a tie that lands before its bracket does is a match
       // pointing at nothing, and the stats screen would draw it as an ordinary game.
-      const mergedTournaments = saveTournaments(
-        mergeTournaments(loadTournaments(), data.tournaments),
-      );
-      setTournaments(mergedTournaments);
+      const tw = saveTournaments(mergeTournaments(loadTournaments(), data.tournaments));
+      setTournaments(tw.stored);
       // Not counted in the notice below, unlike the other two: a mark is about
       // somebody the archive already knows, so it adds nothing to find and the
       // Players table says who is out.
-      setInactive(saveInactive(mergeInactive(loadInactive(), data.inactive)));
-      const merged = saveArchive(mergeMatches(loadArchive(), data.matches));
-      const added = merged.length - matches.length;
+      const iw = saveInactive(mergeInactive(loadInactive(), data.inactive));
+      setInactive(iw.stored);
+      const mw = saveArchive(mergeMatches(loadArchive(), data.matches));
+      setMatches(mw.stored);
+      // Counted against what storage actually holds, not against the merge that was
+      // attempted — which is what made this notice actively wrong when the archive was
+      // full: `saveArchive` pruned to fit and `added` was computed over the survivors,
+      // so an import that destroyed 49 matches reported "Added 1 match." Nothing prunes
+      // now, so the two agree except when a write is refused outright.
+      const added = mw.stored.length - matches.length;
       // Counted as well as the matches, because a bracket can arrive without one. A
       // tournament deleted here is resurrected by a re-import — the ties were never
       // deleted, so it comes back with its results intact — and reporting only the
       // archive said "nothing new" at the moment a whole bracket reappeared.
-      const addedTournaments = mergedTournaments.length - tournaments.length;
-      setMatches(merged);
+      const addedTournaments = tw.stored.length - tournaments.length;
+      if (!mw.saved || !tw.saved || !iw.saved) {
+        setNotice(
+          'There’s no room on this phone for that file. Nothing was lost — export below, delete some matches, and try again.',
+        );
+        return;
+      }
       setNotice(
         added === 0 && addedTournaments === 0
           ? "Nothing new — it's all already here."

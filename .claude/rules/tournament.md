@@ -287,8 +287,16 @@ the alternatives that were rejected; this section holds what breaks when you cha
     to the archive, and reporting only the archive said "Nothing new" at the exact moment a
     whole bracket reappeared — the one thing that changed being the one thing unmentioned.
     Both merges are individually right, so only `verify-stats.mjs` can see it.
-  - **`saveTournaments` has no drop-the-oldest retry**, unlike `saveArchive`: losing a bracket
-    to make room would take its ties' meaning with it while leaving the ties in the archive.
+  - **Nothing deletes to make room** — not here, and not in `saveArchive` either: losing a
+    bracket would take its ties' meaning with it while leaving the ties in the archive.
+- **`saveTournaments` returns `{ saved, stored }`, and the draw ceremony depends on it.**
+  It used to catch the quota error and hand the list straight back, and `App.jsx` set
+  React state from it — so a draw announced as random and final played out, the bracket
+  came up playable, and the cup had never been stored. Gone on the next reload, with
+  nothing having said so. **`onCreate` and `onDrop` therefore return whether the write got
+  through**, and `Tournament` keeps the draw form open with the field intact rather than
+  starting the ceremony. Nothing below `App.jsx` can see any of that:
+  `verify-tournament.mjs`'s last block is the only cover.
 - **Deleting a tournament asks, where deleting a match offers an undo.** Deliberately
   opposite: a match is deleted often enough that a confirm is in the way, a tournament about
   once a year, its button sits under the bracket you were reading, and there is a fact an undo

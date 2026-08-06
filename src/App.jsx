@@ -285,13 +285,21 @@ export default function App() {
     if (game.winner) {
       if (archivedId.current !== game.id) {
         // Set from what was just written rather than re-read, so the form panel
-        // and the board have the match the moment it is filed.
-        setMatches(archiveMatch(game, Date.now()));
-        archivedId.current = game.id;
+        // and the board have the match the moment it is filed. `stored` is what
+        // storage actually holds, so a write that failed leaves the panel and the
+        // board reporting the history that is really there.
+        const write = archiveMatch(game, Date.now());
+        setMatches(write.stored);
+        // Only latched on a write that got through, so the match is still filed on
+        // the next load — the retry path this effect archives on mount for.
+        if (write.saved) archivedId.current = game.id;
+        else setSaveFailed(true);
       }
     } else if (archivedId.current === game.id) {
-      setMatches(dropMatch(game.id));
-      archivedId.current = null;
+      const write = dropMatch(game.id);
+      setMatches(write.stored);
+      if (write.saved) archivedId.current = null;
+      else setSaveFailed(true);
     }
   }, [game]);
 
@@ -510,14 +518,25 @@ export default function App() {
   }, [matches, hidden]);
 
   if (screen === 'tournament') {
+    // `onCreate` and `onDrop` report whether the write got through, because the screen
+    // sets state from the result: a bracket drawn from a write that failed reads as
+    // random and final, is playable, and is gone on the next load.
     return (
       <Tournament
         tournaments={tournaments}
         matches={matches}
         knownNames={knownNames}
         onBack={() => setScreen('setup')}
-        onCreate={(t) => setTournaments(saveTournament(t))}
-        onDrop={(t) => setTournaments(dropTournament(t.id))}
+        onCreate={(t) => {
+          const write = saveTournament(t);
+          setTournaments(write.stored);
+          return write.saved;
+        }}
+        onDrop={(t) => {
+          const write = dropTournament(t.id);
+          setTournaments(write.stored);
+          return write.saved;
+        }}
         onReveal={setDrawReveal}
         onPlayTie={(t, tie) => {
           dispatch({ type: 'playTie', setup: tieSetup(t, tie) });

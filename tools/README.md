@@ -60,8 +60,8 @@ capped at three. A fifth of the roster is marked inactive. Names sit at the app'
 singles player as a pair. **Not checked in** — it runs to megabytes and `out/` is
 gitignored, so
 generate it when you want it. It reports its own size against the 5MB localStorage
-budget, which is a limit the app really hits: `saveArchive` drops the oldest match
-and retries on a failed write.
+budget, which is a limit the app really hits: past it `saveArchive` refuses the write
+and reports it rather than deleting history to make room.
 
 Both fixture generators share `lib/fixture.mjs`, which is where the seeded PRNG and
 the play-it-through-the-real-functions machinery lives. The sample must regenerate

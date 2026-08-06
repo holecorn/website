@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { newGame, setBag, endRound } from './scoring.js';
 import { bracket, groupBySeries, nextEditions, validTournament } from './tournament.js';
@@ -11,6 +11,7 @@ import {
   renamePlayer,
   setMatchPlayers,
   validRecord,
+  saveArchive,
   mergeMatches,
   unexportedCount,
   newestEnd,
@@ -140,6 +141,45 @@ describe('validRecord', () => {
 
   it('still accepts the empty slot a singles record carries', () => {
     expect(validRecord({ ...good, players: { a: ['Neil', ''], b: ['Sigma', ''] } })).toBe(true);
+  });
+});
+
+// The one storage wrapper worth a unit test, because what it does on a *failed* write
+// is a rule rather than plumbing. It used to prune and retry until the write fit, and
+// call the survivors "the recent history" — but `slice(1)` is insertion order and
+// `mergeMatches` appends, so an import that overflowed destroyed this season's games and
+// kept the oldest ones. Silently: the caller set state from the pruned list, so nothing
+// on screen ever hinted at it.
+describe('saveArchive on a storage that refuses the write', () => {
+  const held = [matchRecord(wonGame('m1'), 900), matchRecord(wonGame('m2'), 950)];
+  afterEach(() => {
+    delete globalThis.localStorage;
+  });
+
+  const storage = (accept) => {
+    let raw = JSON.stringify(held);
+    globalThis.localStorage = {
+      getItem: () => raw,
+      setItem: (_key, value) => {
+        if (!accept) throw new DOMException('quota', 'QuotaExceededError');
+        raw = value;
+      },
+    };
+  };
+
+  it('keeps every record rather than deleting to make room', () => {
+    storage(false);
+    const write = saveArchive([...held, matchRecord(wonGame('m3'), 990)]);
+    expect(write.saved).toBe(false);
+    // What storage really holds, so the caller's state cannot claim the write landed.
+    expect(write.stored.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  it('reports a write that got through, with what is now stored', () => {
+    storage(true);
+    const write = saveArchive([...held, matchRecord(wonGame('m3'), 990)]);
+    expect(write.saved).toBe(true);
+    expect(write.stored.map((m) => m.id)).toEqual(['m1', 'm2', 'm3']);
   });
 });
 

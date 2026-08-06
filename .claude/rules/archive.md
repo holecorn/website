@@ -118,9 +118,26 @@ themselves, correcting the names on them, and marking a player inactive.
   `newGame()`, because the setup screen can sit open indefinitely and that time
   isn't part of the match.
 - **The archive has its own localStorage key** so `New game` can't clear it, the
-  same reasoning as the scoreboard settings. A failed write drops the oldest
-  match and retries rather than giving up: a plain try/catch would silently lose
-  the game just played, and then every game after it.
+  same reasoning as the scoreboard settings.
+- **`saveArchive` never deletes to make room, and it reports a refused write** —
+  `{ saved, stored }`, the shape `saveTournaments` and `saveInactive` return, where
+  `stored` is what storage actually holds so a caller cannot set state from a write
+  that did not land.
+  - **It used to prune and retry**, dropping `records[0]` and calling that the oldest.
+    That is *insertion* order and `mergeMatches` appends, so after an import it
+    destroyed this season's games and kept the 2015 ones — the exact opposite of its
+    own comment. Silently, since in-memory and stored state stayed in step, and the
+    import notice counted the survivors: measured, importing 50 into a near-full 200
+    destroyed 49 and reported **"Added 1 match."**
+  - **Sorting the prune by `endedAt` was the smaller fix and is still wrong.**
+    Measured, Chrome gives this origin 5,242,880 characters and a real match with
+    rounds is 1,546, so the archive fills at ~3,400 matches — about 34 years at 100
+    games a year. Natural play never reaches it; an oversized import does, in one tap,
+    and there deleting local history to fit somebody else's file is the wrong answer
+    under any ordering. Saying it didn't fit is the whole feature.
+  - **So every caller settles the write.** `App.jsx`'s archive effect only latches
+    `archivedId` on `saved`, which keeps the file-it-on-the-next-load retry path;
+    `Stats.jsx` routes every refusal through its `notice`.
 - **The summary chips take a singular label at exactly one**, and both word forms are
   spelled out rather than derived: "wash" and "match" take `es` while "round" takes `s`,
   so a suffix rule gets one of them wrong. Zero stays plural, as English has it. **The two

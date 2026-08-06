@@ -1019,16 +1019,23 @@ export function loadTournaments() {
   }
 }
 
-// No drop-the-oldest retry, unlike `saveArchive`: a tournament is a few hundred bytes
-// against a match's rounds, and losing an old bracket to make room for a new one
-// would take its ties' meaning with it while leaving them in the archive.
+// What is in storage now, and whether this write got through — the shape
+// `saveArchive` and `saveInactive` return.
+//
+// It used to catch the quota error and hand the list back regardless, and the
+// caller set React state from it: a draw made, announced as random and final, and
+// playable on screen, that had never been stored. Reload and the cup was never
+// there. Nothing deletes to make room here — a tournament is a few hundred bytes
+// against a match's rounds, so a write that fails has not run out of room for
+// *this*, and losing an old bracket would take its ties' meaning with it while
+// leaving them in the archive.
 export function saveTournaments(list) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    return { saved: true, stored: list };
   } catch {
-    return list;
+    return { saved: false, stored: loadTournaments() };
   }
-  return list;
 }
 
 export function saveTournament(t) {
