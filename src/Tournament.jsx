@@ -190,9 +190,11 @@ function Bracket({ view, route, onClearRoute, onPlay }) {
   // Which round is in view, and **the scroll position is its only writer**. The name in
   // the bar labels the column you are looking at, so a finger has to move it as well as
   // an arrow.
-  // The deepest round that still has a playable tie, or the outermost if none has. With the
-  // ready list gone this is what stops a live tie being two pages away on a phone; late in a
-  // tournament it is the final, which is exactly where you want to be.
+  // The *outermost* round that still has a playable tie, or the outermost of all if none
+  // has. `view.rounds` runs outermost-first, so this is the earliest round with something
+  // left in it — which is the order ties get played in. With the ready list gone it is what
+  // stops a live tie being two pages away on a phone, and late in a tournament every
+  // earlier round is done, so it lands on the final.
   const startAt = useMemo(() => {
     const i = view.rounds.findIndex((r) => r.ties.some((x) => x.playable));
     return i < 0 ? 0 : i;

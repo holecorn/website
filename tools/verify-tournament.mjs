@@ -1481,9 +1481,14 @@ console.log('\nthe bracket box is the Play button, and it opens where the ties a
 
 console.log('\nand it opens on the round the live ties are in, not the outermost');
 {
-  // A fresh tournament's live ties are in the outermost round, so a fresh one cannot tell
-  // this apart from opening at zero — verified by mutation, pinning `startAt` to 0 passed.
-  // The sample fixture's Hole Corn VI is 5 of 9 played, so its live ties are a round in.
+  // While *any* live tie is in the outermost round, opening at the outermost column with
+  // no scroll is the right answer — so every assertion here reads the same whether
+  // `startAt` works or is pinned to 0, and the block proves nothing. That is not
+  // hypothetical: it used to lean on the sample fixture's Hole Corn VI being 5 of 9
+  // played, `stopAfter` in make-sample-archive.mjs moved to 3, a preliminary went live
+  // again, and the block started failing while a pinned `startAt` produced byte-identical
+  // output. So it now clears the outermost round itself rather than inheriting a premise
+  // from a number it does not own.
   const page = await browser.newPage({ viewport: PHONE });
   page.on('pageerror', (e) => {
     console.log('  PAGE ERROR', e.message);
@@ -1506,6 +1511,30 @@ console.log('\nand it opens on the round the live ties are in, not the outermost
   // What is under test is where it opens *to*, not whether it opens.
   await page.locator('.tournament-row').first().click();
   await page.waitForSelector('.bracket-scroll');
+
+  // Play out whatever is still live in the outermost round. `data-level` counts outwards,
+  // so the largest is the round the bracket would open at anyway — clearing it is what
+  // makes the assertions below able to fail. Reported rather than thrown, the rule every
+  // wait in this file follows.
+  const outermost = () =>
+    page.evaluate(() => {
+      const live = [...document.querySelectorAll('button.tie')].map((e) => Number(e.dataset.level));
+      return live.length > 0 ? Math.max(...live) : 0;
+    });
+  const clearing = await outermost();
+  for (let guard = 0; (await outermost()) === clearing && guard < 4; guard += 1) {
+    await page.locator(`button.tie[data-level="${clearing}"]`).first().click();
+    await page.waitForSelector('.setup');
+    await winIt(page);
+    await page.getByRole('button', { name: 'New game' }).click();
+    await page.waitForSelector('.setup');
+    await backToBracket(page);
+  }
+  check(
+    'the outermost round is clear, so the assertions below can fail',
+    (await outermost()) < clearing,
+    `still live at L${await outermost()}`,
+  );
   await page.waitForTimeout(300);
   const opened = await page.evaluate(() => {
     const s = document.querySelector('.bracket-scroll');
