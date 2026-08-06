@@ -116,16 +116,27 @@ Also note `act` skips `actions/checkout` by default, so its green tick means
 nothing — pass `--no-skip-checkout` to actually exercise it, and expect it to fail
 on any commit you haven't pushed, because it fetches the SHA from the remote.
 
-**The container's locale data is not the runner's, so seven date checks fail there
-and none of them is real.** `dropRepeatedYear` in `src/dates.test.js` gets `Sep`
-where CLDR gives `Sept`, and the six `every row says when the tournament happened`
-checks in `verify-tournament.mjs` come out US-ordered (`Jul 28, 26` rather than
-`28 Jul 26`) because `en-GB` resolves to a fallback. The real runner has the full
-data and passes all seven — confirmed against a green deploy. **Do not "fix" them
-to match `act`**, and note that the first one aborts `npm test` before the browser
-checks run at all, so a layout change needs that assertion relaxed locally for the
-run to reach the part you wanted. This is the one thing `act` cannot answer for
-this repo; everything font-related it answers well.
+**Seven date checks used to fail in the container and no longer do**, so `act` now
+answers the locale question as well as the font one. `dropRepeatedYear` in
+`src/dates.test.js` got `Sep` where CLDR gives `Sept`, and the six `every row says
+when the tournament happened` checks in `verify-tournament.mjs` came out US-ordered
+(`Jul 28, 26` rather than `28 Jul 26`), because `en-GB` fell back — and the first of
+those aborted `npm test` before the browser checks ran at all, so a layout change
+needed that assertion relaxed locally to reach the part you wanted. Neither is true
+now: measured over two runs on 2026-08-06, `catthehacker/ubuntu:act-latest` on Node
+24.18.1 gives `30 Sept 26` and resolves `en-GB` properly, and the job is green to
+the artifact step.
+
+**If they come back, don't "fix" them to match `act`.** The real runner has always
+passed all seven, confirmed against a green deploy. One line says which it is:
+
+```bash
+docker run --rm --platform linux/arm64 catthehacker/ubuntu:act-latest \
+  node -e "console.log(new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(new Date()))"
+```
+
+`Sept` means the container is fine and a date failure is real; `Sep` means it is the
+fallback again.
 
 ## What runs automatically
 
