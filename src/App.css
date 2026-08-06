@@ -31,6 +31,21 @@
   color: #eb5757;
 }
 
+/* Styled on :not(:empty) rather than hidden with display:none, which would take
+   the live region out of the accessibility tree while it is quiet and leave the
+   warning announced no more reliably than one inserted with its content. Empty it
+   is an inline span on the line the footer text already occupies, so it costs
+   nothing. */
+.save-warning {
+  color: #f2c94c;
+  font-weight: 700;
+}
+
+.save-warning:not(:empty) {
+  display: block;
+  padding-bottom: 8px;
+}
+
 /* Setup screen */
 .setup {
   gap: 20px;

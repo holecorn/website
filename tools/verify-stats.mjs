@@ -1431,6 +1431,62 @@ if (rendered) {
   );
 }
 
+// A localStorage that reads but will not write — Safari's "Block All Cookies", or
+// a quota the archive has already filled. The persist effect is the only unguarded
+// write there was, and an uncaught throw in a passive effect unmounts the React
+// root: the failure is a permanently blank page, on this load and every one after.
+// Nothing below App.jsx can see it, and no unit test runs an effect.
+//
+// Checked before anything is clicked, for the reason the insecure block above is:
+// waiting on a button that will never appear times out the run instead of naming
+// the fault.
+{
+  const full = await browser.newContext();
+  await full.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function blocked(key, value) {
+      if (key === 'holecorn.game.v3') throw new DOMException('quota', 'QuotaExceededError');
+      return setItem.call(this, key, value);
+    };
+  });
+  const stuck = await full.newPage();
+  const boom = [];
+  stuck.on('pageerror', (e) => boom.push(e.message));
+  await stuck.goto(URL);
+  await stuck.waitForTimeout(400);
+
+  const alive = (await stuck.locator('.app').count()) > 0;
+  check('the app renders when the game cannot be saved', alive, boom.join(' | '));
+  check('no uncaught error from the failed write', boom.length === 0, boom.join(' | '));
+
+  if (alive) {
+    check(
+      'and says so, rather than losing the game silently',
+      await stuck.locator('.save-warning').first().isVisible(),
+      await stuck.locator('.save-warning').first().innerText(),
+    );
+    // The round that would have blanked the screen: the write fires on every
+    // committed round, so this is where a full storage bites mid-game.
+    await stuck.getByRole('button', { name: 'Start', exact: true }).click();
+    for (const [team, tier] of [[0, 'bag hole'], [1, 'bag floor']]) {
+      const lanes = stuck.locator('.team-lanes').nth(team).locator('.lane');
+      for (let i = 0; i < 4; i++) {
+        await lanes.nth(i).getByLabel(tier, { exact: true }).click();
+      }
+    }
+    await stuck.getByRole('button', { name: 'End round' }).click();
+    await stuck.waitForTimeout(200);
+    check(
+      'and survives the round it would have died on',
+      (await stuck.locator('.team-lanes').count()) === 2 && boom.length === 0,
+      boom.join(' | '),
+    );
+    const logged = (await stuck.locator('.logged').innerText()).replace(/\s/g, '');
+    check('and the round was still scored', logged === '12–0', logged);
+  }
+  await full.close();
+}
+
 await browser.close();
 if (failures) {
   console.error(`\n${failures} stats check(s) failed`);

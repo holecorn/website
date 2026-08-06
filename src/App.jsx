@@ -241,6 +241,8 @@ export default function App() {
   const [targetStr, setTargetStr] = useState(String(game.target));
   const [sbConfig, setSbConfig] = useState(loadScoreboardConfig);
   const [persisted, setPersisted] = useState(null);
+  // Whether the last attempt to save the game got through. See the effect below.
+  const [saveFailed, setSaveFailed] = useState(false);
   // Held here rather than only inside Stats, because the pre-game form panel and
   // the scoreboard publisher both read it and both live above that screen.
   const [matches, setMatches] = useState(loadArchive);
@@ -254,8 +256,22 @@ export default function App() {
   const prevRoundCount = useRef(game.rounds.length);
   const archivedId = useRef(null);
 
+  // Guarded like every other write in the app, and for a sharper reason than the
+  // rest: an uncaught throw in a passive effect unmounts the React root, and
+  // nothing renders `<App/>` inside a boundary — so a blocked or full
+  // localStorage was a permanently blank page rather than a game that doesn't
+  // persist. Storage blocked outright (Safari's "Block All Cookies") blanks it on
+  // the first load; a full one blanks it at **End round**, taking the round with it.
+  //
+  // Said out loud rather than swallowed: the game itself is fine, it is all in
+  // memory, but a reload will lose it and that has no other symptom.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
+      setSaveFailed(false);
+    } catch {
+      setSaveFailed(true);
+    }
   }, [game]);
 
   // A match joins the archive the moment it is won, and leaves again if the
@@ -707,7 +723,7 @@ export default function App() {
             Stats
           </button>
         </div>
-        <Footer />
+        <Footer saveFailed={saveFailed} />
       </div>
     );
   }
@@ -852,7 +868,7 @@ export default function App() {
       </aside>
       </div>
 
-      <Footer />
+      <Footer saveFailed={saveFailed} />
 
       <dialog
         ref={confirmDialog}
@@ -1079,9 +1095,16 @@ function TossForFirst({ game, dispatch }) {
   );
 }
 
-function Footer() {
+// Both game screens draw it, which is why the unsaved warning lives here rather
+// than being written twice. Always in the DOM as a live region: one inserted
+// along with its content is announced unreliably, the same reason `.toss-result`
+// is always mounted.
+function Footer({ saveFailed = false }) {
   return (
     <footer className="footer">
+      <span className="save-warning" role="status">
+        {saveFailed && 'This phone won’t save — nothing new will survive a reload.'}
+      </span>
       Made with <span className="footer-heart">♥</span>
     </footer>
   );
