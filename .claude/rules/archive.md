@@ -522,6 +522,25 @@ themselves, correcting the names on them, and marking a player inactive.
   safe, not the current call site.
 - **A rename also has to carry the inactive mark**, which is keyed by name — see
   **Marking a player inactive** for why a merge is the case that decides it.
+- **And the tournament draw, through `saveEntrantRename`.** A name is stored in exactly
+  three places — match records, `entrants`/`champion`/`runnerUp`/`field`, and the
+  inactive mark — and a rename that reaches two of them is worse than one that reaches
+  none. `bracket()` seats sides from `entrants` and finds each tie by `sideKeyOf`, so the
+  moment the archive's spelling moves and the draw's does not, every tie that person
+  played stops resolving. Measured on a three-tie cup: `champion: Rho` became `null`,
+  `3 of 3` became `1 of 3`, a finished cup reappeared under **In progress**,
+  `nextEditions` stopped offering the next name, and the already-played final became
+  playable again — replaying it resurrects the dead spelling and leaves two records for
+  one tie. `renameEntrant` is the sweep; `.claude/rules/tournament.md` holds why the
+  draw cannot simply be derived from the records instead.
+  - **`verify-tournament.mjs` is the only thing that can see the wiring.** Both halves
+    are pure and unit tested; only the handler in `Stats.jsx` joins them. Verified by
+    mutation — dropping the `saveEntrantRename` call fails exactly three assertions in
+    that block and nothing else.
+  - **A merge inside one cup is the case this makes worse, and it is left alone.** Two
+    entrants folding onto one name collapses two seats to one key and that bracket stops
+    reading — but it needs two people in one draw to be the same person, which is a draw
+    that was already wrong, and the bracket is derived, so renaming back restores it.
 - **Renaming onto an existing name is a merge and needs no code**, because
   name-folding already is the identity. What it needs is *saying*: the dialog names
   whose history is about to absorb which, and how many matches, since this screen

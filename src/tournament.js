@@ -975,6 +975,49 @@ export function validTournament(t) {
   );
 }
 
+// Rename one person everywhere a tournament names them: the draw, the champion, the
+// runner-up, and a transcribed field. Folded by `nameKey`, the identity rule
+// `renamePlayer` rewrites the archive by, so the two move together.
+//
+// **The sweep is required, not tidiness.** `bracket()` seats sides from `entrants` and
+// matches each tie by `sideKeyOf`, so the moment the archive's spelling moves and the
+// draw's does not, ties stop resolving: measured on a three-tie cup, the champion went
+// `Rho` to `null`, `3 of 3` played to `1 of 3`, a finished cup reappeared under **In
+// progress**, `nextEditions` stopped offering the next name, and the already-played
+// final became playable again — replaying it resurrects the dead spelling and leaves two
+// records for one tie.
+//
+// **A rename that merges two entrants of the same cup is left to do so**, the way it
+// merges two careers, and it is the one case this makes worse rather than better: the two
+// seats collapse to one key and that bracket stops reading. It needs two people in one
+// draw to be the same person, which is a draw that was already wrong, and the bracket is
+// derived — renaming back restores it.
+export function renameEntrant(list, from, to) {
+  const key = nameKey(from);
+  const name = String(to ?? '').trim();
+  if (!key || !name) return list;
+  const swap = (names) => (names ?? []).map((n) => (nameKey(n) === key ? name : n));
+  const hits = (names) => (names ?? []).some((n) => nameKey(n) === key);
+  return list.map((t) => {
+    const touched =
+      (t.entrants ?? []).some(hits) ||
+      (t.field ?? []).some(hits) ||
+      hits(t.champion) ||
+      hits(t.runnerUp);
+    if (!touched) return t;
+    return {
+      ...t,
+      // Each key rewritten only where it exists, so a drawn tournament keeps having no
+      // `champion` and a recorded one keeps having no `entrants` — the readers all take
+      // a missing key as "not known", and adding an empty one would be a different shape.
+      ...(t.entrants ? { entrants: t.entrants.map(swap) } : {}),
+      ...(t.field ? { field: t.field.map(swap) } : {}),
+      ...(t.champion ? { champion: swap(t.champion) } : {}),
+      ...(t.runnerUp ? { runnerUp: swap(t.runnerUp) } : {}),
+    };
+  });
+}
+
 export function upsertTournament(list, t) {
   const i = list.findIndex((x) => x.id === t.id);
   return i === -1 ? [...list, t] : list.map((x, n) => (n === i ? t : x));
@@ -1044,4 +1087,11 @@ export function saveTournament(t) {
 
 export function dropTournament(id) {
   return saveTournaments(removeTournament(loadTournaments(), id));
+}
+
+// The tournament half of a career rename. Called from the same handler as
+// `savePlayerRename`, because a spelling that moves in one and not the other un-plays
+// every tie that person appeared in — see `renameEntrant`.
+export function saveEntrantRename(from, to) {
+  return saveTournaments(renameEntrant(loadTournaments(), from, to));
 }

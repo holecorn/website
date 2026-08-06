@@ -19,6 +19,7 @@ import {
   loadTournaments,
   tieLabels,
   mergeTournaments,
+  saveEntrantRename,
   saveTournaments,
 } from './tournament.js';
 import {
@@ -207,6 +208,10 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
     const write = savePlayerRename(from, to, Date.now());
     setMatches(write.stored);
     if (!write.saved) return setNotice(FULL);
+    // The draw names people too, and `bracket()` matches a tie by `sideKeyOf` — so a
+    // spelling that moves in the archive and not in `entrants`/`champion`/`runnerUp`
+    // un-plays every tie this person appeared in, silently. See `renameEntrant`.
+    setTournaments(saveEntrantRename(from, to).stored);
     // The mark is keyed by name, so it has to move with the person or it goes on
     // hiding a name nobody answers to. Whether this is a merge decides whose state
     // survives — see `renameMark`.

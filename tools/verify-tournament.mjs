@@ -2864,6 +2864,56 @@ console.log('\nthe draw form offers the next edition, and offers one it will acc
   await page.close();
 }
 
+// A career rename has to reach the draw as well as the archive. `renameEntrant` and
+// `renamePlayer` are each pure and unit tested; only `Stats.jsx`'s handler joins them
+// up, and with either half missing the bracket stops finding the ties that person
+// played — a finished cup reappears as in progress with a null champion, and the tie
+// it has already lost becomes playable again.
+{
+  console.log('\na career rename carries the draw with it');
+  const page = await open(['Rho', 'Tau', 'Sigma', 'Phi']);
+  // Three ties: two semi-finals and the final. `New game` is what gets off the won play
+  // screen and back to setup, from where the Tournaments button exists.
+  for (let i = 0; i < 3; i += 1) {
+    if (i > 0) await backToBracket(page);
+    await playFirst(page);
+    await winIt(page);
+    await page.getByRole('button', { name: 'New game' }).click();
+    await page.waitForSelector('.setup');
+  }
+  await backToBracket(page);
+
+  const wonBy = await page.locator('.champion-who').first().innerText().catch(() => '');
+  check('the cup finishes with a champion', /Rho|Tau|Sigma|Phi/.test(wonBy), wonBy || '(none)');
+  const champion = (wonBy.match(/Rho|Tau|Sigma|Phi/) ?? [''])[0];
+  const before = await playable(page);
+  check('and nothing is left to play', before === 0, `${before} playable`);
+
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.getByRole('button', { name: 'Stats', exact: true }).click();
+  await page
+    .locator('.stats-table tbody tr', { hasText: champion })
+    .locator('.player-select')
+    .click();
+  await page.getByRole('button', { name: `Rename ${champion}`, exact: true }).click();
+  await page.locator('.rename-input').fill(`${champion} P`);
+  await page.locator('.modal').getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await backToBracket(page);
+
+  const after = await page.locator('.champion-who').first().innerText().catch(() => '');
+  check('the cup is still finished afterwards', after.includes(`${champion} P`), after || '(none)');
+  check('and no tie has come back to life', (await playable(page)) === 0, `${await playable(page)} playable`);
+  check(
+    'the draw itself carries the new spelling',
+    await page.evaluate((name) => {
+      const list = JSON.parse(localStorage.getItem('holecorn.tournaments.v1') || '[]');
+      return list.every((t) => !JSON.stringify(t.entrants).includes(`"${name}"`));
+    }, champion),
+  );
+  await page.close();
+}
+
 // A draw that cannot be stored must not be announced. `saveTournaments` used to catch
 // the quota error and hand the list straight back, and `App.jsx` set React state from
 // it — so the ceremony played out, the bracket came up playable, and the cup had never

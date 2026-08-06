@@ -571,6 +571,10 @@ export default function App() {
           // written by the time this runs.
           dispatch({ type: 'renamePlayer', from, to });
           setMatches(loadArchive());
+          // The draw is swept too, so a tie set up on the setup screen behind this one
+          // would otherwise come back to a banner naming a round the bracket no longer
+          // resolves — the same staleness, one derivation further along.
+          setTournaments(loadTournaments());
         }}
       />
     );

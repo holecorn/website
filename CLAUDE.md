@@ -282,6 +282,12 @@ What constrains code outside those files:
 - **Rewriting a record's `players` array *is* the reattribution** — no name index, no
   ids, no alias map. A career rename also reaches the live lineup through a
   `renamePlayer` dispatch in `App.jsx`; a per-match fix deliberately must not.
+- **A career rename must sweep the tournament draw as well as the archive**, through
+  `saveEntrantRename`. `bracket()` seats sides from `entrants` and finds a tie by
+  `sideKeyOf`, so a spelling that moves in one and not the other un-plays every tie that
+  person played: the cup returns to In progress with a null champion and its final
+  offered again. **A name is stored in exactly three places** — match records, the draw,
+  and the inactive mark — and a rename has to reach all three.
 - **Marking a player inactive stores *when* they were marked, not that they are**, and
   the filter is one line in `App.jsx`'s `knownNames`. **A new surface that offers names
   must read `knownNames`**, or it will be the one list still naming people who left.

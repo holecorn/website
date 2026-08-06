@@ -21,6 +21,7 @@ import {
   nextEditionName,
   nextEditions,
   recordedTournament,
+  renameEntrant,
   seriesHistory,
   seriesKey,
   seriesStats,
@@ -813,6 +814,89 @@ describe('upsertTournament and removeTournament', () => {
   it('removes by id', () => {
     expect(removeTournament([a], 't1')).toEqual([]);
     expect(removeTournament([a], 'nope')).toEqual([a]);
+  });
+});
+
+// A career rename rewrites the archive's `players` arrays. Nothing used to rewrite the
+// draw, so the spellings parted company and `bracket()` — which seats sides from
+// `entrants` and finds a tie by `sideKeyOf` — stopped resolving every tie that person
+// played. Silently: a finished cup simply reappeared as in progress.
+describe('renameEntrant', () => {
+  const four = tournamentOf(['Rho', 'Tau', 'Sigma', 'Phi']);
+
+  const playToTheEnd = (t) => {
+    let played = beat([], t, 'Rho');
+    played = beat(played, t, 'Sigma');
+    return beat(played, t, 'Rho');
+  };
+
+  it('keeps a finished cup finished when the champion is renamed', () => {
+    const played = playToTheEnd(four);
+    const before = bracket(four, played);
+    expect(before.done).toBe(true);
+    expect(before.champion.names).toEqual(['Rho']);
+
+    const renamed = played.map((m) => ({
+      ...m,
+      players: {
+        a: m.players.a.map((n) => (n === 'Rho' ? 'Rho P' : n)),
+        b: m.players.b.map((n) => (n === 'Rho' ? 'Rho P' : n)),
+      },
+    }));
+    const [swept] = renameEntrant([four], 'Rho', 'Rho P');
+    const after = bracket(swept, renamed);
+    expect(after.done).toBe(true);
+    expect(after.champion.names).toEqual(['Rho P']);
+    expect(after.playable).toHaveLength(0);
+    expect(after.ties.filter((x) => x.match)).toHaveLength(before.ties.filter((x) => x.match).length);
+  });
+
+  it('folds case and padding the way the archive rename does', () => {
+    const [swept] = renameEntrant([four], ' rho ', 'Rho P');
+    expect(swept.entrants.flat()).toContain('Rho P');
+  });
+
+  it('rewrites one half of a doubles pair and leaves the partner', () => {
+    const pairs = tournamentOf(
+      [['Rho', 'Tau'], ['Sigma', 'Phi'], ['Chi', 'Psi'], ['Omega', 'Iota']],
+      'doubles',
+    );
+    const [swept] = renameEntrant([pairs], 'Tau', 'Tau Q');
+    expect(swept.entrants).toContainEqual(['Rho', 'Tau Q']);
+  });
+
+  it('sweeps a recorded result — champion, runner-up and the field', () => {
+    const recorded = recordedTournament({
+      id: 't9',
+      name: 'Hole Corn I',
+      createdAt: 5,
+      champion: ['Rho'],
+      runnerUp: ['Tau'],
+      field: [['Rho'], ['Tau'], ['Sigma']],
+    });
+    const [swept] = renameEntrant([recorded], 'Rho', 'Rho P');
+    expect(swept.champion).toEqual(['Rho P']);
+    expect(swept.field).toContainEqual(['Rho P']);
+    expect(swept.runnerUp).toEqual(['Tau']);
+  });
+
+  it('adds no key a tournament did not have', () => {
+    const [swept] = renameEntrant([four], 'Rho', 'Rho P');
+    expect('champion' in swept).toBe(false);
+    expect('field' in swept).toBe(false);
+    expect('runnerUp' in swept).toBe(false);
+  });
+
+  it('leaves a tournament the name is not in untouched, object identity included', () => {
+    const other = tournamentOf(['Chi', 'Psi', 'Omega', 'Iota']);
+    const out = renameEntrant([four, other], 'Chi', 'Chi Z');
+    expect(out[0]).toBe(four);
+    expect(out[1]).not.toBe(other);
+  });
+
+  it('does nothing without both names', () => {
+    expect(renameEntrant([four], '', 'Rho P')).toEqual([four]);
+    expect(renameEntrant([four], 'Rho', '  ')).toEqual([four]);
   });
 });
 
