@@ -703,10 +703,23 @@ offered when a lineup or a tournament field is filled in.
   - **Not counted in the import notice**, unlike matches and tournaments: a mark is
     about somebody the archive already knows, so it adds nothing to go and find.
 - **The Players table dims the row; it does not tag it.** The name column is sticky and
-  the only cell always on screen — measured at 81px, with names already scrolling
-  inside it past about 12 characters — so a word in there is width the table cannot
-  spare. What dimming cannot do is say *what* is special, the fault the shaded nemesis
-  row had, so the panel below says it in words and the row carries it for a reader.
+  the only cell always on screen — pinned at 96px, with names scrolling inside it past
+  about 14 characters — so a word in there is width the table cannot spare. What dimming
+  cannot do is say *what* is special, the fault the shaded nemesis row had, so the panel
+  below says it in words and the row carries it for a reader.
+  - **The column is pinned rather than content-sized, and `--name-col` is why.** The
+    scroller carries `scroll-snap-type: x proximity` with `scroll-padding-left` set to
+    the same custom property, so a resting scroll position is always a column boundary.
+    Without it the opaque sticky cell paints over the *left* of whatever column is
+    part-scrolled, and a truncated figure is still a valid one: measured at 390px, the
+    Hole column read `1%, 8%, 4%, 7%` where the real numbers were `31%, 28%, 34%, 27%` —
+    the difference between the best and the worst in the group, with nothing saying the
+    value was wrong. An auto width cannot be matched by a CSS length, which is the whole
+    reason for the pin; the two must stay one number. `verify-stats.mjs` asserts both
+    that no cell straddles the sticky edge after a drag and that the padding equals the
+    column, and the first fails on the mutation that drops the snap.
+    - **The tournament screen's two tables get it for free**, because they reuse
+      `.stats-scroll` and `.stats-table`.
   - **Never fade the `th` itself.** It is the sticky cell, so it carries an opaque
     background, and fading that lets the columns scrolling underneath show through the
     name. `.player-select` inside it fades instead, and `verify-stats.mjs` asserts both

@@ -62,11 +62,30 @@
 
 /* Nine columns will not fit a phone, and dropping columns loses the
    comparison the table exists for, so it scrolls sideways instead. */
+/* The name column's width, used twice and declared once: the column is pinned to it and
+   the scroll snaps to it, and the two have to be the same number or a rested column is
+   still part-way under the sticky cell. */
 .stats-scroll {
+  --name-col: 96px;
   overflow-x: auto;
+  /* A resting scroll position is always a column boundary, which is what stops the
+     opaque sticky column turning a number into a different valid one. Half-scrolled,
+     the Hole column read 1%, 8%, 4% — every one a plausible hole percentage, where the
+     true figures were 31%, 28% and 34%, and nothing said the value was wrong. It is
+     `proximity` rather than `mandatory` because the columns are 40–73px wide, so every
+     resting place is near a boundary and mandatory only costs the freedom to stop
+     between two of them. */
+  scroll-snap-type: x proximity;
+  scroll-padding-left: var(--name-col);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
+}
+
+/* One snap point per column, taken off the header rather than off every cell: the body
+   rows would give eleven coincident targets per column for nothing. */
+.stats-table thead th + th {
+  scroll-snap-align: start;
 }
 
 .stats-table {
@@ -93,11 +112,18 @@
 }
 
 /* The name column stays put while the rest scrolls, so a column read at the
-   far right still has a player attached to it. */
+   far right still has a player attached to it.
+   **Pinned rather than content-sized**, because `scroll-padding-left` above has to equal
+   it exactly and an auto width is a function of the longest name and the runner's font.
+   96px against the 81px the sample happened to give it, so it is also 15px less likely
+   to clip. */
 .stats-table tbody th,
 .stats-table thead th:first-child {
   position: sticky;
   left: 0;
+  width: var(--name-col);
+  min-width: var(--name-col);
+  max-width: var(--name-col);
   z-index: 1;
   background: var(--panel);
   box-shadow: 1px 0 0 var(--border);

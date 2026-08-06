@@ -895,6 +895,66 @@ check(
   await wide.close();
 }
 
+// The career table on a phone, where it scrolls sideways by design and the name column
+// is sticky and opaque. At any resting offset that is not a column boundary the sticky
+// cell paints over the *left* of the next column — so `31%` renders as `1%` and `28%` as
+// `8%`, every fragment a plausible hole percentage with nothing saying the value is
+// wrong. Scroll snapping is what makes a resting position always a boundary, and only a
+// browser can see it: the numbers themselves are right throughout.
+{
+  const snapCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const snapPage = await snapCtx.newPage();
+  await snapPage.goto(URL);
+  await snapPage.evaluate((records) => {
+    localStorage.clear();
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify(records));
+  }, [won]);
+  await snapPage.reload();
+  await snapPage.getByRole('button', { name: 'Stats' }).click();
+  await snapPage.waitForSelector('.stats-table');
+
+  const scrolls = await snapPage.evaluate(async () => {
+    const s = document.querySelector('.stats-scroll');
+    const out = [];
+    for (const by of [30, 55, 90, 120, 175, 210]) {
+      s.scrollLeft = 0;
+      await new Promise((r) => setTimeout(r, 60));
+      s.scrollBy({ left: by, behavior: 'instant' });
+      await new Promise((r) => setTimeout(r, 400));
+      const edge = document.querySelector('.stats-table tbody th').getBoundingClientRect().right;
+      const cut = [...document.querySelectorAll('.stats-table tbody td')].filter((c) => {
+        const r = c.getBoundingClientRect();
+        return r.left < edge - 0.5 && r.right > edge + 0.5;
+      });
+      out.push({ by, at: Math.round(s.scrollLeft), cut: cut.length });
+    }
+    return out;
+  });
+  check(
+    'the table really does scroll sideways on a phone',
+    scrolls.some((x) => x.at > 0),
+    JSON.stringify(scrolls),
+  );
+  check(
+    'and no column is left half under the sticky name after a drag',
+    scrolls.every((x) => x.cut === 0),
+    scrolls.map((x) => `${x.by}->${x.at}:${x.cut}`).join(' '),
+  );
+  // The pin and the snap padding are one number declared once; if they drift, a rested
+  // column sits part-way under the name again and the check above is the only symptom.
+  const pinned = await snapPage.evaluate(() => {
+    const s = document.querySelector('.stats-scroll');
+    return {
+      pad: getComputedStyle(s).scrollPaddingLeft,
+      col: `${Math.round(
+        document.querySelector('.stats-table tbody th').getBoundingClientRect().width,
+      )}px`,
+    };
+  });
+  check('the snap padding equals the pinned name column', pinned.pad === pinned.col, JSON.stringify(pinned));
+  await snapCtx.close();
+}
+
 // Chip labels at exactly one. Two seeds, because no single match yields both `1 round`
 // and `1 wash` — a wash needs a second round to have anything to wash against.
 {
