@@ -386,6 +386,65 @@ check(
     !(await page.getByRole('button', { name: /Wipe local history/ }).count()),
 );
 check('export is offered', await page.getByRole('button', { name: 'Export as JSON' }).isEnabled());
+
+// Import is a file input inside its label, so how it is hidden decides whether it exists
+// at all for anything but a finger. Under `display: none` it reached the accessibility
+// tree as a bare `text: Import JSON` and `Export as JSON` was the last tab stop on the
+// page — measured, Tab from it left the document. So these assert the control rather than
+// the word, which is what the `getByText` check they replace was doing.
+const importLabel = page.locator('.file-button');
+check(
+  'import is a named control, not loose text',
+  (await page.getByRole('button', { name: 'Import JSON' }).count()) === 1,
+);
+await page.getByRole('button', { name: 'Export as JSON' }).focus();
+await page.keyboard.press('Tab');
+check(
+  'and the next tab stop after export',
+  await page.evaluate(() => document.activeElement?.type === 'file'),
+  await page.evaluate(() => document.activeElement?.tagName ?? 'none'),
+);
+// The ring has to be on the label: the input itself is clipped to 1px, so its own ring is
+// invisible and a keyboard user would be on a control with nothing to say so.
+check(
+  'the focus ring lands on the visible label',
+  (await importLabel.evaluate((el) => getComputedStyle(el).outlineStyle)) !== 'none',
+);
+// Reachable is not the same as usable — the picker has to actually open without a pointer.
+// Bounded and swallowed, because a hidden input simply never opens one, and an unbounded
+// wait there ends the whole run in a stack trace instead of naming the fault. Bounded
+// *loosely*: at 3s this failed in the CI container and nowhere else, so it was measuring
+// the runner rather than the app.
+const opensPicker = async (activate) => {
+  try {
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 15_000 }),
+      activate(),
+    ]);
+    // Dismissed with no file, which `importMatches` returns early on. An unanswered
+    // chooser would still be open for the next interaction.
+    await chooser.setFiles([]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+check(
+  'and Enter opens the picker',
+  await opensPicker(() => page.keyboard.press('Enter')),
+);
+// `:focus-within` would light the ring for a tap too, and the input keeps focus after one,
+// so the ring would sit there until something else took it. That is what `:has(:focus-
+// visible)` buys, and without this it reads as complication and gets tidied back.
+await page.evaluate(() => document.activeElement?.blur());
+const tapped = await opensPicker(() => importLabel.click({ position: { x: 40, y: 20 } }));
+check(
+  'but a tap leaves no ring behind',
+  tapped &&
+    (await importLabel.evaluate((el) => getComputedStyle(el).outlineStyle)) === 'none' &&
+    (await page.evaluate(() => document.activeElement?.type === 'file')),
+);
+
 const [download] = await Promise.all([
   page.waitForEvent('download'),
   page.getByRole('button', { name: 'Export as JSON' }).click(),
@@ -414,7 +473,10 @@ await fresh.evaluate(() => localStorage.clear());
 await fresh.reload();
 await fresh.getByRole('button', { name: 'Stats' }).click();
 check('a fresh device starts empty', await fresh.getByText('No finished matches yet').isVisible());
-check('import is offered with nothing to show', await fresh.getByText('Import JSON').isVisible());
+check(
+  'import is offered with nothing to show',
+  await fresh.getByRole('button', { name: 'Import JSON' }).isVisible(),
+);
 
 await fresh.locator('.file-button input').setInputFiles(dump);
 await fresh.waitForSelector('.stats-table');

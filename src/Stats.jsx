@@ -611,7 +611,12 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
             </button>
             <label className="file-button">
               Import JSON
-              <input type="file" accept="application/json,.json" onChange={importMatches} />
+              <input
+                className="visually-hidden"
+                type="file"
+                accept="application/json,.json"
+                onChange={importMatches}
+              />
             </label>
           </div>
           {notice && <p className="durability-notice">{notice}</p>}

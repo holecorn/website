@@ -74,6 +74,26 @@ true of a rate keyed on `played` rather than on the round count. The skunk
 assertion needs the real match to be **24–12 rather than a skunk itself**, or the
 chip reads 1 whether the guard is there or not.
 
+It covers **whether the import control exists for anything but a finger**, which is a
+gap of a different shape: nothing was wired wrongly, the control was styled out of
+existence. A `display: none` file input has no box, cannot take focus and reaches the
+accessibility tree as loose text, so the app's only route off a device was pointer-only —
+and the check that was supposed to cover it asserted `getByText('Import JSON')`, which was
+true the whole time because the *label* was always drawn. **A check on the words is not a
+check on the control.** Five mutations, each killed by the assertions aimed at it:
+restoring `display: none` fails six, including the upgraded `import is offered`; dropping
+the ring rule fails only `the focus ring lands on the visible label`; `:focus-within` for
+`:has(:focus-visible)` fails only `but a tap leaves no ring behind`; `tabIndex={-1}` fails
+the tab stop, the ring and the picker; and removing the label's text fails the two
+name-based ones.
+  - **The picker waits are bounded loosely and swallowed, and both halves are
+    load-bearing.** A hidden input never opens a chooser, so an unbounded wait ends the
+    run in a stack trace two blocks early instead of naming the fault — this file's
+    standing lesson. But bounded at 3s it failed **in the CI container and nowhere
+    else**, passing in headed Chrome and in bundled headless Chromium locally, so it was
+    measuring the runner. 15s bounds a mutation without measuring the machine, and `act`
+    is what found this — a local pass said nothing.
+
 The same is true of the guest-game guard, and both ways round of getting it wrong
 are silent: either a stranger is folded into somebody's career, or every real match
 quietly stops being filed. So that block plays a casual game to a win and then

@@ -564,8 +564,14 @@
   cursor: pointer;
 }
 
-.file-button input {
-  display: none;
+/* The input is clipped by `.visually-hidden` rather than hidden, because `display: none`
+   took it out of the tab order and the accessibility tree both — leaving import
+   pointer-only on the app's one route off a device. The label has to wear the focus ring,
+   since a ring drawn on a 1px clipped box is no ring, and `:has(:focus-visible)` rather
+   than `:focus-within` so a pointer press doesn't leave one behind. */
+.file-button:has(:focus-visible) {
+  outline: auto;
+  outline-color: -webkit-focus-ring-color;
 }
 
 /* Responsive and preference tiers last, after the base rules above. */

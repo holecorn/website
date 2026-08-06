@@ -488,6 +488,27 @@ themselves, correcting the names on them, and marking a player inactive.
   file appears. The unexported count is measured against the newest exported
   `endedAt`, not a match count, so pruning the oldest can't make it go
   backwards.
+  - **Which is why the import input is *clipped*, not hidden.** It is a file input
+    inside its label, and under `display: none` it had no box, could not take focus
+    even programmatically, and reached the accessibility tree as a bare
+    `text: Import JSON` — no role, no name. Measured, `Export as JSON` was the last
+    tab stop on the page: Tab from it left the document. So the only route off a
+    device was pointer-only, on the screen whose whole subject is not losing the
+    history. `.visually-hidden` is the fix, and the same clip serves everywhere else
+    in the app.
+  - **The label wears the focus ring, and `:has(:focus-visible)` is not fussiness.**
+    The input is clipped to 1px, so a ring on it is invisible — a keyboard user would
+    be standing on a control with nothing saying so. `:focus-within` would light it
+    for a tap too, and a file input keeps focus after one, so the ring would sit
+    there afterwards. `outline-color: -webkit-focus-ring-color` follows `outline: auto`
+    only to match the Export button beside it: measured, the bare `auto` resolved to
+    `currentColor` and drew a 3px white ring next to Chrome's thin blue one. A browser
+    that doesn't know the keyword drops that line and keeps the ring.
+  - **`getByText` is what let this ship.** The check asserted the *words* Import JSON
+    were visible, which they were throughout — the label was always drawn. Every
+    assertion here is on the control instead: its role and name, that it is the next
+    tab stop after Export, that the ring lands on the label, and that Enter actually
+    opens the picker.
 
 ## Editing names
 
