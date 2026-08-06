@@ -170,6 +170,11 @@ function reducer(game, action) {
       const swap = (names) => names.map((n) => (nameKey(n) === key ? to : n));
       return { ...game, players: { a: swap(game.players.a), b: swap(game.players.b) } };
     }
+    // What another tab has made of the same game. The caller has already put it
+    // through `loadGame`, so an adopted game gets exactly the merge and migration a
+    // reload would: adopting *is* the reload, without reloading.
+    case 'adopt':
+      return action.game;
     case 'setColor':
       return { ...game, colors: { ...game.colors, [action.team]: action.value } };
     case 'setMode':
@@ -255,6 +260,9 @@ export default function App() {
   const confirmDialog = useRef(null);
   const prevRoundCount = useRef(game.rounds.length);
   const archivedId = useRef(null);
+  // What this tab believes storage holds for the game. Both effects below maintain
+  // it, and between them it is what keeps two tabs from writing at each other.
+  const savedRaw = useRef(null);
 
   // Guarded like every other write in the app, and for a sharper reason than the
   // rest: an uncaught throw in a passive effect unmounts the React root, and
@@ -266,13 +274,60 @@ export default function App() {
   // Said out loud rather than swallowed: the game itself is fine, it is all in
   // memory, but a reload will lose it and that has no other symptom.
   useEffect(() => {
+    const raw = JSON.stringify(game);
+    // Already what this tab put there — writing it again would only wake the other
+    // tabs' listeners below, and they would write it straight back.
+    if (raw === savedRaw.current) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
+      localStorage.setItem(STORAGE_KEY, raw);
+      savedRaw.current = raw;
       setSaveFailed(false);
     } catch {
       setSaveFailed(true);
     }
   }, [game]);
+
+  // One game, one origin, and a second tab holding its own copy of it. Without this the
+  // *stale* copy wins, because it writes last: measured, a tab left on setup from last
+  // week plus one keystroke in a name field overwrote three committed rounds with zero,
+  // and the tab actually being played reloaded to an empty setup screen. A second tab is
+  // ordinary here — iOS Safari keeps them for months and `?display=1` shares the origin.
+  //
+  // So a tab that did not do the writing re-reads rather than holding on. `storage` is
+  // the live signal; `visibilitychange` covers the tab that was frozen or in the
+  // back/forward cache while the writes happened and so was never sent them.
+  //
+  // The screen follows unconditionally, including off `stats`, to keep the invariant the
+  // rest of the file leans on: setup means a game that has not started. Lose it and the
+  // setup name fields, which dispatch the unguarded `rename`, re-credit committed rounds.
+  useEffect(() => {
+    const adopt = () => {
+      let raw = null;
+      try {
+        raw = localStorage.getItem(STORAGE_KEY);
+      } catch {
+        return;
+      }
+      if (raw === null || raw === savedRaw.current) return;
+      savedRaw.current = raw;
+      const next = loadGame();
+      // No round was committed here, so the callout effect must not replay one: a stale
+      // tab catching up five rounds would flash GAME! for a round it never saw.
+      prevRoundCount.current = next.rounds.length;
+      setTargetStr(String(next.target));
+      setScreen(gameStarted(next) ? 'play' : 'setup');
+      dispatch({ type: 'adopt', game: next });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') adopt();
+    };
+    window.addEventListener('storage', adopt);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('storage', adopt);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // A match joins the archive the moment it is won, and leaves again if the
   // winning round is undone. Comparing against the id rather than a flag keeps

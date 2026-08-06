@@ -207,6 +207,28 @@ adding to it:**
   query rather than the quantity the property is about. **Check what a mutation
   actually prints**, not merely that something failed.
 
+`tools/verify-tabs.mjs` covers the one thing a second tab can be, and no unit test has
+one: a stale copy of the game. Measured before the fix — a tab left on setup, three
+rounds played in another tab, one keystroke in the stale tab's name field, and storage
+went from three rounds to **zero**, with the playing tab reloading to an empty setup
+screen. Six mutations were run and each was killed by exactly the assertion aimed at it,
+including two that are only visible as *numbers*: dropping the persist effect's
+already-saved guard cost 28 extra writes for three rounds of play, and breaking
+`upsertMatch` filed the win twice, which is what shows the adopting tab really does
+re-archive and that the upsert is what holds it to one record.
+
+- **A tab that is asleep is simulated by dropping the `storage` registration**, not by
+  hiding the page. `page.bringToFront()` does not move `document.visibilityState` in
+  either browser — measured, no transitions at all — so the `visibilitychange` path is
+  driven by dispatching the event on a page that never listened for `storage`. That is
+  the honest half: whether a browser fires it on unfreeze is the browser's behaviour,
+  but that the app listens for it and catches up is ours, and the mutation kills it.
+- **Both tabs must be able to write for the block to mean anything**, so the once-stale
+  tab's edit is driven from whichever screen it is on and asserted through the write
+  counter. The first version tapped a bag unconditionally; on a broken app the tab is
+  still on setup, the click timed out, and the run ended two blocks early — the file's
+  own recorded lesson, met on the first mutation.
+
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so
 passing locally is not evidence they pass in CI. `act` covers that gap for the

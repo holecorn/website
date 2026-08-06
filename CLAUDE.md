@@ -180,6 +180,20 @@ project dependency. It starts and stops its own preview server.
   `newGame()` defaults so games saved before a field existed still load (and
   migrates the old single-name shape to player slots). Prefer this
   merge-on-load approach over bumping the key.
+  - **A second tab re-reads rather than holding on, and that is not politeness.** The
+    game is kept whole in memory and written out whole, so the *stale* copy used to win
+    by writing last: measured, a tab left on setup plus one keystroke in a name field
+    took three committed rounds to zero and reloaded the playing tab to setup. `App.jsx`
+    adopts on `storage` and on `visibilitychange` — the second for the tab that was
+    frozen or bfcached while the writes happened — and `savedRaw` is what stops two tabs
+    writing at each other. **The screen follows the adopted game unconditionally**,
+    including off `stats`: that is what keeps `setup` meaning a game that has not
+    started, which the setup screen's name fields depend on, since they dispatch the
+    unguarded `rename` that would re-credit committed rounds. Safe because the adopting
+    tab is by definition not the one being used. `tools/verify-tabs.mjs` holds it.
+  - **The archive, the draw and the inactive marks need none of this** — every writer
+    re-reads storage first, so a second tab cannot lose an update there. Anything new
+    that keeps a whole document in state and writes it back wholesale does.
 - **The wide tier and the landscape tier must not both match**, which is what the
   wide tier's `min-height: 451px` is for — the exact complement of the landscape
   tier's `max-height: 450px`. A big phone on its side (932x430 on an iPhone Pro
