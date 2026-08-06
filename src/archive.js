@@ -9,7 +9,7 @@
 // Storage follows the scoreboard.js split: the record and list helpers are pure
 // and tested, the localStorage read/write is a thin untested wrapper.
 
-import { nameKey } from './scoring.js';
+import { nameKey, nameSlots } from './scoring.js';
 
 // Its own key, separate from game state, so `New game` can't clear the history.
 const STORAGE_KEY = 'holecorn.matches.v1';
@@ -179,14 +179,6 @@ export function savePlayerRename(from, to, at) {
 // A record can arrive from a file the user picked, so nothing about it can be
 // assumed. Require the fields stats.js reads without checking, rather than
 // letting one stray file break the whole screen.
-//
-// The *element* types matter as much as the arrays: `nameKey` coerces, so a slot
-// holding a number or an object keys truthily and every name-folding read then
-// trips over it. An empty slot is still a string, so singles records are unaffected.
-function nameSlots(list) {
-  return Array.isArray(list) && list.every((n) => typeof n === 'string');
-}
-
 export function validRecord(m) {
   return Boolean(
     m &&

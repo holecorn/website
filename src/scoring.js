@@ -92,6 +92,69 @@ export function newGame(target = DEFAULT_TARGET) {
   };
 }
 
+const isTeam = (team) => team === 'a' || team === 'b';
+
+// One side's bags for one round. The length matters as much as the tiers: every
+// surface indexes four lanes, so a short array draws a lane short of bags and a
+// long one silently stops being scoreable by `rawPoints`.
+function bagSide(list) {
+  return (
+    Array.isArray(list) &&
+    list.length === BAGS_PER_SIDE &&
+    list.every((tier) => Object.hasOwn(TIER_POINTS, tier))
+  );
+}
+
+// Whether a stored game can actually be played. `loadGame` merges a save over
+// `newGame()` before asking, so **absent is not the question** — a save that
+// predates a field already has the default by the time this sees it, and the
+// merge-on-load tolerance is untouched. What this catches is a field that is
+// *present and the wrong shape*, which the merge happily copies over the default.
+//
+// Measured on the shapes a hand-edited or half-written save can hold: 18 of 43
+// blanked the app, and every one of them stayed blank. The crash is during
+// render, so the persist effect never runs and the bad value is never replaced —
+// there is no reload that recovers, and no screen to clear the game from. That is
+// why this refuses the whole game rather than repairing a field: the answer was
+// always "start fresh", the `catch` above simply only asked it of JSON that
+// wouldn't parse.
+//
+// The id is deliberately not required. It is added by `identified` *after* this
+// runs, so a save from before matches had ids has none yet and must still load.
+export function validGame(g) {
+  return Boolean(
+    g &&
+      typeof g === 'object' &&
+      nameSlots(g.players?.a) &&
+      g.players.a.length === 2 &&
+      nameSlots(g.players?.b) &&
+      g.players.b.length === 2 &&
+      typeof g.colors?.a === 'string' &&
+      typeof g.colors?.b === 'string' &&
+      (g.mode === 'singles' || g.mode === 'doubles') &&
+      typeof g.casual === 'boolean' &&
+      (g.tournament === null || typeof g.tournament === 'string') &&
+      Number.isFinite(g.target) &&
+      g.target >= 1 &&
+      bagSide(g.current?.a) &&
+      bagSide(g.current?.b) &&
+      Array.isArray(g.rounds) &&
+      g.rounds.every(
+        (r) =>
+          bagSide(r?.a) &&
+          bagSide(r?.b) &&
+          Number.isFinite(r?.nets?.a) &&
+          Number.isFinite(r?.nets?.b) &&
+          // Optional, because rounds predate it and `undoRound` falls back — but a
+          // bad one is restored *into* `nextFirst`, so it bricks one undo later.
+          (r.first === undefined || isTeam(r.first)),
+      ) &&
+      isTeam(g.nextFirst) &&
+      (g.winner === null || isTeam(g.winner)) &&
+      (g.startSide === 'left' || g.startSide === 'right'),
+  );
+}
+
 export const TEAM_JOIN = ' & ';
 
 // Who a name refers to. Case and padding are folded, so "neil" and "Neil " are
@@ -101,6 +164,18 @@ export const TEAM_JOIN = ' & ';
 // disagree about whether two spellings are the same person.
 export function nameKey(name) {
   return String(name ?? '').trim().toLowerCase();
+}
+
+// A team's player slots. The *element* types matter as much as the array:
+// `nameKey` coerces, so a slot holding a number or an object keys truthily and
+// every name-folding read then trips over it. An empty slot is still a string,
+// so singles records are unaffected.
+//
+// Here rather than in archive.js because a live game and an archived record are
+// the same lineup shape, and `validGame` and `validRecord` disagreeing about what
+// a name slot is would let one accept what the other rejects.
+export function nameSlots(list) {
+  return Array.isArray(list) && list.every((n) => typeof n === 'string');
 }
 
 // A side with nobody identifiable on it. Not a real side: `sideRecord` reports no

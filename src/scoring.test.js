@@ -24,6 +24,7 @@ import {
   undoRound,
   unthrownCount,
   roundComplete,
+  validGame,
 } from './scoring.js';
 
 // Place a whole side's four bags: place(game, 'a', ['hole','board','floor','floor'])
@@ -50,6 +51,84 @@ describe('newGame', () => {
 
   it('accepts a custom target', () => {
     expect(newGame(11).target).toBe(11);
+  });
+});
+
+describe('validGame', () => {
+  // The corpus is the one that was measured against a real browser: each rejection
+  // below is a save that blanked the app and stayed blank, because the crash is
+  // during render so nothing ever writes the bad value back out.
+  const played = playRound(newGame(), ['hole', 'board', 'floor', 'floor'], [
+    'board',
+    'floor',
+    'floor',
+    'floor',
+  ]);
+
+  it('accepts a fresh game and one with rounds played', () => {
+    expect(validGame(newGame())).toBe(true);
+    expect(validGame(played)).toBe(true);
+  });
+
+  it('accepts a game with no id, because identified() adds it afterwards', () => {
+    expect(validGame({ ...newGame(), id: undefined })).toBe(true);
+  });
+
+  it.each([
+    ['null', null],
+    ['a string', 'game'],
+    ['an array', []],
+    ['nothing at all', {}],
+  ])('rejects %s', (_label, value) => {
+    expect(validGame(value)).toBe(false);
+  });
+
+  it.each([
+    ['rounds as an object', { rounds: { 0: played.rounds[0] } }],
+    ['rounds as a string', { rounds: 'three' }],
+    ['rounds as a number', { rounds: 3 }],
+    ['a null round', { rounds: [null] }],
+    ['a round missing a team', { rounds: [{ a: played.rounds[0].a, nets: { a: 2, b: 0 } }] }],
+    ['a round with a short side', { rounds: [{ ...played.rounds[0], a: ['hole'] }] }],
+    [
+      'a round with an unknown tier',
+      { rounds: [{ ...played.rounds[0], a: ['roof', 'floor', 'floor', 'floor'] }] },
+    ],
+    ['a round with no nets', { rounds: [{ a: played.rounds[0].a, b: played.rounds[0].b }] }],
+    ['a round whose first names no team', { rounds: [{ ...played.rounds[0], first: 'z' }] }],
+    ['current as a string', { current: 'nope' }],
+    ['current as null', { current: null }],
+    ['current missing a side', { current: { a: emptyPositions() } }],
+    ['current side as a string', { current: { a: 'hole', b: emptyPositions() } }],
+    ['current side too short', { current: { a: ['hole'], b: emptyPositions() } }],
+    ['winner naming an absent team', { winner: 'c' }],
+    ['winner as an object', { winner: {} }],
+    ['nextFirst out of range', { nextFirst: 'z' }],
+    ['nextFirst as null', { nextFirst: null }],
+    ['startSide out of range', { startSide: 'up' }],
+    ['players as null', { players: null }],
+    ['players missing a team', { players: { a: ['Rho', 'Tau'] } }],
+    ['players team as a string', { players: { a: 'Rho', b: ['Sigma', 'Phi'] } }],
+    ['an object in a player slot', { players: { a: [{}, 'Tau'], b: ['Sigma', 'Phi'] } }],
+    ['a number in a player slot', { players: { a: [7, 'Tau'], b: ['Sigma', 'Phi'] } }],
+    ['a team with one slot', { players: { a: ['Rho'], b: ['Sigma', 'Phi'] } }],
+    ['colors as null', { colors: null }],
+    ['colors as a string', { colors: 'blue' }],
+    ['a colour that is not a string', { colors: { a: 0x2f80ed, b: '#eb5757' } }],
+    ['mode unknown', { mode: 'triples' }],
+    ['casual as a string', { casual: 'yes' }],
+    ['tournament as a number', { tournament: 7 }],
+    ['target as a string', { target: 'lots' }],
+    ['target as zero', { target: 0 }],
+  ])('rejects %s', (_label, patch) => {
+    expect(validGame({ ...played, ...patch })).toBe(false);
+  });
+
+  // A target above the two-digit cap is not corruption: `MAX_TARGET` arrived after
+  // the app shipped, so a save can legitimately hold one and refusing it would
+  // throw away a game that has always loaded. Clamping is the display's job.
+  it('keeps a target from before the two-digit cap', () => {
+    expect(validGame({ ...played, target: MAX_TARGET + 1 })).toBe(true);
   });
 });
 

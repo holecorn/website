@@ -249,6 +249,32 @@ re-archive and that the upsert is what holds it to one record.
   still on setup, the click timed out, and the run ended two blocks early — the file's
   own recorded lesson, met on the first mutation.
 
+`tools/verify-recovery.mjs` covers a gap of the same shape one level down: not what a
+second tab does to the game, but what an **unplayable** game does to the app. Measured
+across 43 shapes a `holecorn.game.v3` value can hold, 18 blanked it and none recovered,
+because the crash is during render so the persist effect never runs and the bad value is
+never rewritten. `validGame` is pure and `scoring.test.js` holds the corpus shape by
+shape; what only a browser can see is whether `loadGame` *calls* it — deleting that one
+line passes all 635 unit tests.
+
+- **It is two-sided, and that is the point.** Over-rejection is the failure this kind of
+  guard invites: a validator that refuses a playable save silently deletes a game in
+  progress, and widening the refusal is the tempting way to make a future failure go
+  green. So the file also asserts a good save is still played and that one written before
+  four of today's fields existed still loads its rounds. Six mutations, each killed by
+  the block aimed at it — and the two over-rejecting ones (demand an id; ask before the
+  merge instead of after) are killed *only* by that second half.
+- **A blank page has no selector to wait for**, so the `.app` wait is bounded and
+  swallowed. Unbounded, the first mutation ends the run in a stack trace instead of
+  naming which shape did it — the lesson `verify-tabs.mjs` records above, met again.
+- **Falling back is not enough; it has to fall back to something startable.** The check
+  requires the setup screen *and* an enabled `Start`, because a fresh game that
+  `lineupFaults` refuses would be a different way to be stuck.
+- **The mutation harness must restore from a snapshot, not `git checkout`.** HEAD is
+  pre-fix while the work is uncommitted, so restoring from git wipes the fix and every
+  mutation reports identically — a green-looking harness measuring nothing. Second time
+  that has bitten in this series; the other was forgetting to rebuild `dist/`.
+
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so
 passing locally is not evidence they pass in CI. `act` covers that gap for the

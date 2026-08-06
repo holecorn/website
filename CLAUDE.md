@@ -180,6 +180,13 @@ project dependency. It starts and stops its own preview server.
   `newGame()` defaults so games saved before a field existed still load (and
   migrates the old single-name shape to player slots). Prefer this
   merge-on-load approach over bumping the key.
+  - **Then it refuses what it cannot play**, through `validGame` in `scoring.js` — the
+    merge fills a field a save predates, but it copies a *present and wrong* one straight
+    over the default, and a game that crashes on render blanks the app permanently
+    (measured: 18 of 43 shapes, none recovering). **A new field in game state needs a line
+    in `validGame`**, or the one save that holds a bad one is a phone that has to be
+    reinstalled. Asked after the merge, so absent is never the question — see
+    `.claude/rules/scoring.md`.
   - **A second tab re-reads rather than holding on, and that is not politeness.** The
     game is kept whole in memory and written out whole, so the *stale* copy used to win
     by writing last: measured, a tab left on setup plus one keystroke in a name field

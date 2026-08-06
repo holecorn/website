@@ -352,3 +352,39 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
   because that is the failure where every doubles stat is silently re-credited and
   nothing fails. Note that a *boolean* prop would be a runtime guard rather than a
   structural one: the absent handler is the gate.
+
+## A save the app cannot play
+
+- **`validGame` is a refusal, not a repair, and that is the whole design.** `loadGame`
+  merges a save over `newGame()` and then asks whether the result is playable; if it is
+  not, you get a fresh game. Measured across 43 shapes a `holecorn.game.v3` value can
+  hold, **18 blanked the app and not one of them recovered** — the crash is during
+  render, so the persist effect never runs, the bad value is never rewritten, and there
+  is no screen left to clear it from. On a phone that is an uninstall, and the career
+  archive goes with it.
+  - **Asked *after* the merge and the migrations**, which is what preserves the
+    merge-on-load tolerance: a save that predates a field already holds the default by
+    the time this sees it, so absent is never the question. Only a field that is
+    *present and the wrong shape* — which the merge copies straight over the default —
+    can fail. Asked before the merge instead, every save older than today's shape is
+    thrown away; that is a mutation, and `verify-recovery.mjs` kills it.
+  - **The whole game, not the field.** Repairing per field is more machinery and can
+    assemble states that never existed — `rounds` repaired to `[]` beside a `winner` of
+    `a` is a game won from nothing. Corruption also arrives wholesale in practice (a
+    half-written value, another version's shape), so one bad field is not evidence that
+    the rest is sound. The `catch` above already answered "start fresh"; this just asks
+    it of a save that parses and won't run.
+  - **The id is deliberately not required**, unlike `validRecord`'s: `identified()` adds
+    it *after* this runs, so demanding one refuses every save made before matches had
+    ids. `identified` now takes a non-string id as no id — an object one reaches the
+    archive, where `validRecord` rejects the record on the way out to a file and
+    `upsertMatch` can't find it, so the match exists locally and cannot be exported.
+  - **A target above `MAX_TARGET` is accepted.** The two-digit cap arrived after the app
+    shipped, so a save can legitimately hold one and refusing it deletes a real game.
+    Clamping is the input's job, not the loader's.
+  - **`nameSlots` moved here from `archive.js`** for the reason `nameKey` is here: a live
+    game and an archived record are the same lineup shape, and two definitions of what a
+    name slot is would let `validGame` accept what `validRecord` rejects.
+  - **Rejecting more is not safer**, which is why `verify-recovery.mjs` checks both
+    directions. A validator that refuses a playable save silently deletes a game in
+    progress — and that is the tempting way to make a future failure go green.

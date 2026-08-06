@@ -45,6 +45,7 @@ import {
   unthrownCount,
   tierCounts,
   teamLabel,
+  validGame,
   winVerb,
 } from './scoring.js';
 import {
@@ -73,7 +74,10 @@ const TOSS_MS = 500;
 // is added on load as well as on creation, so a game saved without one still
 // gets archived.
 function identified(game) {
-  return game.id ? game : { ...game, id: newMatchId() };
+  // A non-string id is no id. It survives to the archive otherwise, where
+  // `validRecord` rejects the record on the way out to a file and `upsertMatch`
+  // can't find it — a match that exists locally and cannot be exported.
+  return typeof game.id === 'string' && game.id ? game : { ...game, id: newMatchId() };
 }
 
 // Both teams used to default to Player 1 and Player 2, which `duplicateNames`
@@ -104,7 +108,11 @@ function loadGame() {
       }
       merged.players = migrateDefaults(merged.players);
       delete merged.names;
-      return identified(merged);
+      // Asked after the merge and the migrations, so absent fields have already
+      // been filled and only a value that is present and wrong gets here. A game
+      // that can't be played blanks the app *permanently* — the crash is during
+      // render, so nothing ever writes the bad value back out. See `validGame`.
+      if (validGame(merged)) return identified(merged);
     }
   } catch {
     // ignore corrupt state and start fresh

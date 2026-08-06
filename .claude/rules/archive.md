@@ -335,6 +335,12 @@ themselves, correcting the names on them, and marking a player inactive.
     make that unreachable by playing, so a fixture showing one would be showing a
     state nobody can get to. See the next bullet for why the *importer* doesn't
     refuse it.
+- **`nameSlots` lives in `scoring.js` now, not here.** The live game's `validGame` needs
+  the same test, and a second definition would let one of the two accept a lineup the
+  other rejects — the same reason `nameKey` is there. `validRecord` is otherwise
+  unchanged, and deliberately keeps requiring an id where `validGame` doesn't: a record
+  is only ever created with one, whereas a save can predate them. See
+  `.claude/rules/scoring.md`.
 - **An imported record may carry the same colour on both teams, and that is left
   alone deliberately.** `validRecord` gates the fields `stats.js` reads without
   checking, and colour is not one of them — refusing a whole match over decoration
