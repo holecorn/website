@@ -60,9 +60,32 @@ export function inactiveKeys(marks, matches) {
   return out;
 }
 
-// The names still worth offering, in the order they came.
-export function activeNames(names, hidden) {
-  return names.filter((name) => !hidden.has(nameKey(name)));
+// Everyone the archive knows and still plays — the one list every surface that *offers* a
+// name draws from, and the reason there is no unfiltered half to reach for by mistake.
+//
+// The derivation and the filter used to be two steps composed in `App.jsx`, which held
+// the whole recipe inline: walk the records, dedupe, then filter. That is what made the
+// rule "a new surface must read `knownNames`" a convention rather than a fact — the
+// recipe was sitting there to be copied, and a copy of the first step alone offers people
+// who have left, silently and on the one screen nobody would think to check. One function
+// with the filter inside it has no first step to take on its own.
+//
+// Newest spelling last so it is the one offered, the rule `playerStats` settles a display
+// name by. **Every slot, not `rosterFor`'s roster**, unlike `lastSeen` above: a name typed
+// into a slot that did not throw is still a name the archive knows how to spell, and
+// `nameKey` drops the blanks a singles record leaves behind.
+export function offerableNames(matches, marks) {
+  const hidden = inactiveKeys(marks, matches);
+  const seen = new Map();
+  for (const match of [...(matches ?? [])].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0))) {
+    for (const team of TEAMS) {
+      for (const name of match?.players?.[team] ?? []) {
+        const key = nameKey(name);
+        if (key && !hidden.has(key)) seen.set(key, String(name).trim());
+      }
+    }
+  }
+  return [...seen.values()].sort((x, y) => x.localeCompare(y));
 }
 
 // Stamped past their last match as well as by the clock. Both are `Date.now()`

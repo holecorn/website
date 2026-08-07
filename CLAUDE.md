@@ -96,8 +96,10 @@ project dependency. It starts and stops its own preview server.
   the browser's own contact autofill fighting the archive's suggestions.
 - `src/inactive.js` — who has stopped playing, and so is no longer offered by the
   name fields. **Stores when they were marked and derives the rest**, the way
-  `tournament.js` stores the draw — see `.claude/rules/archive.md`. Pure, plus the
-  localStorage wrapper the same split; tested in `src/inactive.test.js`.
+  `tournament.js` stores the draw — see `.claude/rules/archive.md`. Also `offerableNames`,
+  **the one way to get a list of names to offer**: it derives and filters in a single
+  call, so there is no unfiltered half to reach for. Pure, plus the localStorage wrapper
+  the same split; tested in `src/inactive.test.js`.
 - `src/store.js` — the localStorage end of the three keys above, each of which holds one
   whole JSON document. **Absent and unreadable are different answers** — see
   Conventions. Tested through the three modules in `src/store.test.js`.
@@ -356,9 +358,9 @@ What constrains code outside those files:
   person played: the cup returns to In progress with a null champion and its final
   offered again. **A name is stored in exactly three places** — match records, the draw,
   and the inactive mark — and a rename has to reach all three.
-- **Marking a player inactive stores *when* they were marked, not that they are**, and
-  the filter is one line in `App.jsx`'s `knownNames`. **A new surface that offers names
-  must read `knownNames`**, or it will be the one list still naming people who left.
+- **Marking a player inactive stores *when* they were marked, not that they are.**
+  `offerableNames` in `inactive.js` derives and filters in one call, so a surface that
+  offers names cannot get an unfiltered list — there is no export that gives one.
 - **`.app.stats-screen`, not `.stats-screen`** — `Stats.css` is bundled before
   `App.css`, so the single-class form loses at equal specificity. See Conventions.
 

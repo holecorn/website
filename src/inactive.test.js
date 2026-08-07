@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  activeNames,
   inactiveKeys,
   markActive,
   markInactive,
   mergeInactive,
+  offerableNames,
   renameMark,
 } from './inactive.js';
 
@@ -146,9 +146,47 @@ describe('mergeInactive', () => {
   });
 });
 
-describe('activeNames', () => {
-  it('drops the hidden and keeps the order', () => {
-    const hidden = inactiveKeys(markInactive({}, 'Rho', [RHO_V_TAU], 2000), [RHO_V_TAU]);
-    expect(activeNames(['Neil', 'Rho', 'Tau'], hidden)).toEqual(['Neil', 'Tau']);
+// The list every surface that offers a name draws from. It lived inline in `App.jsx`
+// until it moved here, where `vitest` can reach it — which is the point of the move as
+// much as the filter being inseparable is.
+describe('offerableNames', () => {
+  it('offers everyone the archive knows, alphabetically', () => {
+    expect(offerableNames([RHO_V_TAU], {})).toEqual(['Player 2', 'Player 4', 'Rho', 'Tau']);
+  });
+
+  it('leaves out anybody marked and not seen since', () => {
+    const marks = markInactive({}, 'Rho', [RHO_V_TAU], 2000);
+    expect(offerableNames([RHO_V_TAU], marks)).not.toContain('Rho');
+    expect(offerableNames([RHO_V_TAU], marks)).toContain('Tau');
+  });
+
+  // Playing again takes the mark off with nothing to remember, so a later match has to
+  // put the name back on the list — the whole reason the mark stores *when*.
+  it('offers a marked player again once they have played since', () => {
+    const marks = markInactive({}, 'Rho', [RHO_V_TAU], 2000);
+    const later = match({ a: ['Rho'], b: ['Tau'] }, 3000);
+    expect(offerableNames([RHO_V_TAU, later], marks)).toContain('Rho');
+  });
+
+  // Newest spelling last, the rule `playerStats` settles a display name by: a name
+  // corrected on a later match is the one worth offering, and it folds to one entry
+  // rather than two spellings of one person.
+  it('keeps the newest spelling and only one of it', () => {
+    const early = match({ a: ['rho'], b: ['Tau'] }, 1000);
+    const late = match({ a: ['Rho'], b: ['Tau'] }, 5000);
+    expect(offerableNames([late, early], {})).toEqual(['Rho', 'Tau']);
+  });
+
+  // Every slot rather than the mode's roster, unlike `lastSeen`: a name typed into a
+  // slot that never threw is still a name the archive can spell. Blanks are not names
+  // and `nameKey` drops them, which is what a singles record leaves in slot two.
+  it('reads every slot but offers no blanks', () => {
+    const sparse = match({ a: ['Neil', ''], b: ['Phi', '  '] }, 2000);
+    expect(offerableNames([sparse], {})).toEqual(['Neil', 'Phi']);
+  });
+
+  it('has nothing to offer from no history', () => {
+    expect(offerableNames([], {})).toEqual([]);
+    expect(offerableNames(undefined, undefined)).toEqual([]);
   });
 });

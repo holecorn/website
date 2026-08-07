@@ -740,12 +740,17 @@ offered when a lineup or a tournament field is filled in.
   returning player is never locked out of the lineup they are standing in. That is
   what makes the whole feature safe to get wrong — the worst outcome is typing a name
   — and it is why nothing in `lineupFaults` or `entrantFaults` knows about this.
-- **The filter is one line in `App.jsx`'s `knownNames` and nowhere else.** That memo is
-  what both the setup `datalist` and the entire tournament draw screen offer from, so
-  one place decides who gets suggested. **A new surface that offers names must read
-  `knownNames`** or it will be the one list still naming people who left.
+- **`offerableNames` is the derivation and the filter at once, and that is why there is no
+  rule to remember.** It used to be two steps composed in `App.jsx` — walk the records,
+  then filter — with the recipe inline, so "a new surface must read `knownNames`" was a
+  convention held by there being only two datalists. A third surface would have found the
+  first step sitting there to copy, and a copy of it alone offers people who have left,
+  silently. One function with the filter inside has no first step to take on its own, and
+  it is unit tested where the memo was not.
   - The career table and everything on the stats screen deliberately read the archive
-    unfiltered: the point is that the numbers stay.
+    unfiltered: the point is that the numbers stay. `inactiveKeys` is still exported for
+    that — `Stats.jsx` dims a row with it — but it answers *who is hidden*, not *what to
+    offer*, so it cannot be mistaken for the list.
 - **The mark has to move with a career rename**, or it goes on hiding a name nobody
   answers to. **On a merge the surviving name's own state stands** — renaming a
   departed player onto somebody still playing must not retire them, and a mark being

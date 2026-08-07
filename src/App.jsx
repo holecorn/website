@@ -60,7 +60,7 @@ import {
   tieFor,
   tieSetup,
 } from './tournament.js';
-import { activeNames, inactiveKeys, loadInactive } from './inactive.js';
+import { loadInactive, offerableNames } from './inactive.js';
 import { NAME_FIELD } from './nameField.js';
 import './App.css';
 
@@ -561,26 +561,12 @@ export default function App() {
     }
   };
 
-  // Everyone the archive knows and still plays, newest spelling last so it is the
-  // one offered — the same rule `playerStats` settles a display name by.
-  //
-  // The filter sits here and nowhere else: this list is what both the setup fields
-  // and the whole tournament draw screen offer from, so one place decides who gets
-  // suggested. It only ever removes a *suggestion* — every name is still accepted if
-  // it is typed, and playing takes the mark off again.
-  const hidden = useMemo(() => inactiveKeys(inactive, matches), [inactive, matches]);
-  const knownNames = useMemo(() => {
-    const seen = new Map();
-    for (const m of [...matches].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0))) {
-      for (const team of ['a', 'b']) {
-        for (const n of m.players?.[team] ?? []) {
-          const key = nameKey(n);
-          if (key) seen.set(key, String(n).trim());
-        }
-      }
-    }
-    return activeNames([...seen.values()], hidden).sort((x, y) => x.localeCompare(y));
-  }, [matches, hidden]);
+  // What the setup fields and the whole tournament draw screen offer from. The
+  // derivation is `offerableNames` rather than anything of this file's, so the inactive
+  // filter cannot be left off by a surface that builds its own list — there is no
+  // unfiltered version to build. It only ever removes a *suggestion*: every name is
+  // still accepted if it is typed, and playing takes the mark off again.
+  const knownNames = useMemo(() => offerableNames(matches, inactive), [matches, inactive]);
 
   if (screen === 'tournament') {
     // `onCreate` and `onDrop` report whether the write got through, because the screen
