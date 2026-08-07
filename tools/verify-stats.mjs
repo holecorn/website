@@ -412,9 +412,7 @@ check(
 );
 // Reachable is not the same as usable — the picker has to actually open without a pointer.
 // Bounded and swallowed, because a hidden input simply never opens one, and an unbounded
-// wait there ends the whole run in a stack trace instead of naming the fault. Bounded
-// *loosely*: at 3s this failed in the CI container and nowhere else, so it was measuring
-// the runner rather than the app.
+// wait there ends the whole run in a stack trace instead of naming the fault.
 const opensPicker = async (activate) => {
   try {
     const [chooser] = await Promise.all([
@@ -429,9 +427,40 @@ const opensPicker = async (activate) => {
     return false;
   }
 };
+
+// **The keyboard half asserts that the press lands, not that a chooser follows, and that
+// is a limit of the container rather than a softening.** Chromium there opens a chooser
+// for a pointer activation every time and for a keypress only sometimes — measured with
+// a capture-phase listener, the failing runs deliver `Enter` to the focused
+// `input[type=file]` with `isTrusted` true and `defaultPrevented` false, and no chooser
+// ever arrives. So a wait was measuring the runner, and not by being too short: it was
+// already loosened from 3s to 15s once for the same reason, and at 15s the event is not
+// late, it is absent. Nothing about the app differs between a passing run and a failing
+// one, which is the whole reason this cannot stay as it was.
+//
+// It still covers the regression the block exists for. Under `display: none` the input
+// left the accessibility tree entirely, so Tab skipped it and no key reached it at all —
+// which fails the tab stop above *and* this. And the chooser itself is still asserted,
+// on the pointer path immediately below.
+const dismiss = (chooser) => chooser.setFiles([]);
+page.on('filechooser', dismiss);
+await page.evaluate(() => {
+  window.__enter = null;
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      window.__enter = { type: e.target?.type, prevented: e.defaultPrevented };
+    },
+    { capture: true, once: true },
+  );
+});
+await page.keyboard.press('Enter');
+const landed = await page.evaluate(() => window.__enter);
+page.off('filechooser', dismiss);
 check(
-  'and Enter opens the picker',
-  await opensPicker(() => page.keyboard.press('Enter')),
+  'and Enter reaches the file input with nothing swallowing it',
+  landed?.type === 'file' && landed.prevented === false,
+  JSON.stringify(landed),
 );
 // `:focus-within` would light the ring for a tap too, and the input keeps focus after one,
 // so the ring would sit there until something else took it. That is what `:has(:focus-

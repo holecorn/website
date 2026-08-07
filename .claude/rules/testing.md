@@ -86,13 +86,27 @@ the ring rule fails only `the focus ring lands on the visible label`; `:focus-wi
 `:has(:focus-visible)` fails only `but a tap leaves no ring behind`; `tabIndex={-1}` fails
 the tab stop, the ring and the picker; and removing the label's text fails the two
 name-based ones.
-  - **The picker waits are bounded loosely and swallowed, and both halves are
+  - **The picker wait is bounded loosely and swallowed, and both halves are
     load-bearing.** A hidden input never opens a chooser, so an unbounded wait ends the
     run in a stack trace two blocks early instead of naming the fault — this file's
     standing lesson. But bounded at 3s it failed **in the CI container and nowhere
     else**, passing in headed Chrome and in bundled headless Chromium locally, so it was
     measuring the runner. 15s bounds a mutation without measuring the machine, and `act`
     is what found this — a local pass said nothing.
+  - **Only the *pointer* half waits for a chooser now, and the keyboard half asserts
+    that the press lands.** Loosening the bound was the wrong read of the same symptom:
+    at 15s the event is not late, it is **absent**. Measured with a capture-phase
+    listener, a failing run delivers `Enter` to the focused `input[type=file]` with
+    `isTrusted` true and `defaultPrevented` false and no chooser ever follows, so
+    nothing about the app differs between a run that passes and one that fails — and it
+    is intermittent, 5 of 8 container runs on one tree against 0 of 4 on another that
+    could not affect it. A pointer activation opens one every time, which is why that
+    half is unchanged. **Don't restore the keyboard chooser wait**; it cannot be made to
+    measure the app in that container.
+    - It still kills the mutation it exists for. Under `display: none` the input leaves
+      the accessibility tree, so Tab skips it and no key reaches it at all — measured,
+      that mutation fails the tab stop, this, and the tap, six assertions in total, the
+      same count as before the change.
 
 The same is true of the guest-game guard, and both ways round of getting it wrong
 are silent: either a stranger is folded into somebody's career, or every real match
