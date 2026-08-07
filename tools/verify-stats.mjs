@@ -1206,9 +1206,9 @@ check(
     JSON.stringify(rows.find((r) => r[0] === 'Neil')?.slice(0, 2)) === '["Neil","1–1"]',
     JSON.stringify(rows));
 
-  // The recent list is capped at 12, so a player outside the newest twelve had no
-  // visible history at all — measured on the sample archive, four of eleven
-  // players, one of them with 37 matches played.
+  // The list shows a page at a time, so a player outside the newest twelve had to be paged
+  // to — measured on the sample archive, four of eleven players, one of them with 37
+  // matches played. Scoping puts their own history on the first page.
   check('the recent list is scoped to them too',
     (await sp.locator('.recent li').count()) === 8,
     `${await sp.locator('.recent li').count()} rows`);
@@ -1250,6 +1250,142 @@ check(
     (await sp.locator('.rival-tag').count()) === 0);
   check('but their opponents are still listed', (await sp.locator('.h2h li').count()) === 1);
   await sel.close();
+}
+
+// The recent list is paged, and the pager is the only route to most of the archive: delete,
+// the round-by-round expansion and Edit names all live *inside* a row, so a match the list
+// will not draw cannot be opened, corrected or deleted at all. It used to stop at 12 — and
+// measured on the sample archive that left 86 of 156 matches (55%) with none of the three,
+// the newest of them five months old, with the per-player scoping above already counted.
+// Nothing in the unit suite can see any of this: `Stats.jsx` is the only place the archive
+// meets a page.
+{
+  const pag = await browser.newContext({ viewport: { width: 393, height: 852 } });
+  const pp = await pag.newPage();
+  pp.on('pageerror', (e) => { console.log('  PAGE ERROR', e.message); failures++; });
+  await pp.goto(URL);
+  await pp.evaluate(() => {
+    localStorage.clear();
+    const four = ['hole', 'hole', 'hole', 'hole'];
+    const none = ['floor', 'floor', 'floor', 'floor'];
+    const beat = (opponent, id, day, rounds) => ({
+      format: 1, id, endedAt: Date.UTC(2026, 5, day, 12), mode: 'singles',
+      players: { a: ['Neil', ''], b: [opponent, ''] },
+      colors: { a: '#2f80ed', b: '#eb5757' }, target: 21, winner: 'a',
+      final: { a: 21, b: 11 }, rounds,
+    });
+    // Fourteen, so the second page holds exactly two — few enough to empty by deleting,
+    // which is the only thing that shortens the list under a page that has been paged to.
+    // Neil is in all of them and Sigma in exactly the newest twelve, so scoping to one
+    // pages and scoping to the other does not.
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify([
+      ...Array.from({ length: 12 }, (_, i) => beat('Sigma', `new-${i}`, 20 - i, [])),
+      // The two oldest, and the only matches either of these two ever played, so an
+      // assertion on the row is an assertion about which page is on screen. The first
+      // carries a round, because the expansion is one of the three things being reached.
+      beat('Upsilon', 'old-a', 3, [{ a: four, b: none, nets: { a: 12, b: 0 }, first: 'a' }]),
+      beat('Omicron', 'old-b', 2, []),
+    ]));
+  });
+  await pp.reload();
+  await pp.getByRole('button', { name: 'Stats' }).click();
+  await pp.waitForSelector('.recent li');
+
+  const newest = pp.getByRole('button', { name: 'Newest matches' });
+  const newer = pp.getByRole('button', { name: 'Newer matches' });
+  const older = pp.getByRole('button', { name: 'Older matches' });
+  const oldest = pp.getByRole('button', { name: 'Oldest matches' });
+  const upsilon = pp.locator('.recent-teams', { hasText: 'Upsilon' });
+  // Both read through a count first, the way the delete dialog above is: a list with no
+  // pager has no range and no arrows either, so reading one straight off ends the run in a
+  // 30s timeout instead of naming the fault. Verified — that is exactly what the mutation
+  // back to a hard cap of 12 did before this. It is also a state the screen reaches
+  // legitimately, once a deletion leaves one page.
+  const range = async () =>
+    (await pp.locator('.recent-at').count()) ? pp.locator('.recent-at').innerText() : 'no pager';
+  // Inert as well as absent, and for the same reason: pressing an arrow at the end of the
+  // list moves nothing, so a run that goes on to assert a page turn reports a fault that is
+  // its own. Verified — dropping the page reset below left the list on its last page, and
+  // pressing for older there failed a later assertion rather than the one at fault.
+  const inert = async (arrow) => (await arrow.getAttribute('aria-disabled')) === 'true';
+  const press = async (arrow) => {
+    if ((await arrow.count()) && !(await inert(arrow))) await arrow.click();
+  };
+  const focused = () =>
+    pp.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName);
+
+  const paged = (await pp.locator('.recent-paging').count()) === 1;
+  check('a list longer than a page gets a pager', paged);
+  check('the list opens on one page of matches', (await pp.locator('.recent li').count()) === 12);
+  // The range is the only thing that says how much history is behind the page. Before it
+  // the twelfth row was the end of the archive as far as anything on screen said.
+  check('and the range says how much is behind it', (await range()) === '1–12 of 14', await range());
+  if (paged) {
+    check('with nothing newer to go to', (await inert(newer)) && (await inert(newest)));
+  }
+  check('a match past the first page is not drawn yet', (await upsilon.count()) === 0);
+
+  await press(older);
+  check('paging older reaches the rest of the archive',
+    (await pp.locator('.recent li').count()) === 2);
+  check('and the range moves with it', (await range()) === '13–14 of 14', await range());
+  check('the oldest match is on screen', (await upsilon.count()) === 1);
+  if (paged) {
+    check('with nothing older to go to', (await inert(older)) && (await inert(oldest)));
+  }
+
+  // The three things that live inside a row, which is the whole reason a cap here was not
+  // merely a browsing limit. Asserted on a row that only a second page can reach.
+  const row = pp.locator('.recent li').first();
+  await row.locator('.recent-open').click();
+  check('a match on a later page opens round by round',
+    (await row.locator('.match-round').count()) === 1);
+  check('and offers Edit names',
+    (await row.getByRole('button', { name: 'Edit names' }).count()) === 1);
+  check('and Delete', (await row.locator('.match-drop').count()) === 1);
+
+  // Stepping does not scale — measured on the stress fixture, 973 matches is 81 presses of
+  // the older arrow — and the far end is a named errand, since the full-archive refusal
+  // tells you to delete some matches and the ones to delete are the oldest.
+  await press(newest);
+  check('one press returns to the newest page', (await range()) === '1–12 of 14', await range());
+  await press(oldest);
+  check('and one reaches the oldest', (await range()) === '13–14 of 14', await range());
+  // An arrow that goes inert under the finger is the fault the deleted undo bar had: a real
+  // `disabled` cannot hold focus, so pressing » dropped focus to `BODY` and a keyboard user
+  // had to Tab from the top of the document to get back. Only the browser can see this.
+  check('and pressing an end leaves focus on the arrow rather than dropping it',
+    (await focused()) === 'Oldest matches', await focused());
+
+  // Selecting scopes the list, and the page has to come back to the top with it: page 2 of
+  // somebody's history is an arbitrary place to land from pressing their name. Neil is in
+  // all fourteen, so their scoped list still pages and the range can be read.
+  await pp.getByRole('button', { name: 'Neil', exact: true }).click();
+  check('scoping to a player starts at their newest matches',
+    (await range()) === '1–12 of 14', await range());
+  await pp.getByRole('button', { name: 'Neil', exact: true }).click();
+  await pp.getByRole('button', { name: 'Sigma', exact: true }).click();
+  check('and a history that fits one page has no pager at all',
+    (await pp.locator('.recent-paging').count()) === 0);
+  await pp.getByRole('button', { name: 'Sigma', exact: true }).click();
+
+  // The page is clamped on the way out rather than reset by whatever shortened the list, so
+  // emptying the last page lands on one that has rows. Without it the list draws nothing at
+  // all — an archive of 12 matches showing an empty section.
+  await press(oldest);
+  for (const _ of [0, 1]) {
+    const last = pp.locator('.recent li').first();
+    if ((await last.locator('.match-drop').count()) === 0) {
+      await last.locator('.recent-open').click();
+    }
+    await last.locator('.match-drop').click();
+    await pp.locator('.confirm-danger').click();
+  }
+  check('emptying the last page falls back to one with matches on it',
+    (await pp.locator('.recent li').count()) === 12);
+  check('and the pager goes when there is one page left',
+    (await pp.locator('.recent-paging').count()) === 0);
+  await pag.close();
 }
 
 // A match imported from a written-down result — a score and no rounds. Every

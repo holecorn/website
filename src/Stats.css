@@ -227,6 +227,64 @@
   color: var(--muted);
 }
 
+/* The recent list's pager, shaped after `.bracket-paging`: the arrows are anchored to the
+   right edge rather than the two being spaced apart, so a range changing width cannot walk
+   the buttons out from under a thumb pressing one of them twice. Unlike that bar this one is
+   drawn at every width — no screen is wide enough to hold a whole archive, so there is no
+   tier at which paging has nothing to do.
+   It **wraps rather than ellipsising**, which is the opposite of `.bracket-at`: a clipped
+   round name is still a round name, where a clipped range is a lie about which matches are
+   on screen. Measured on the stress fixture, the four 44px targets take 194px, leaving 84px
+   at 320px for a range needing 99 — and only 25px of slack at 360px, which is inside the
+   22px the deploy runner's wider `system-ui` has cost a row before now. A range is bounded
+   at 17 characters ("3389–3400 of 3400", the archive's storage ceiling), so on its own line
+   it always fits and there is nothing to ellipsise. */
+.recent-paging {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* No letter-spacing, unlike `.bracket-at`: that one holds a word, this one holds digits,
+   which tabular-nums has already put on an even pitch. */
+.recent-at {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.recent-arrows {
+  flex: 0 0 auto;
+  /* Right on both lines, which `justify-content: space-between` cannot do: wrapped, the
+     arrows are alone on their line and space-between leaves them at the start of it. */
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+/* Larger than the bracket's 36x32 deliberately: walking to the far end of a long archive
+   is a repeated press on the same target, where stepping between six bracket columns is
+   not. */
+.recent-paging button {
+  width: 44px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* `aria-disabled`, not `:disabled` — see `Stats.jsx` for why the arrows at the ends stay
+   focusable, and don't "fix" this selector back. */
+.recent-paging button[aria-disabled='true'] {
+  color: var(--border);
+}
+
 /* Round-by-round for one match, laid out to echo the in-play history. */
 .match-rounds {
   padding: 0 14px 12px;

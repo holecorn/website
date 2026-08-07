@@ -193,15 +193,18 @@ same thing the other way round. Both need at least three meetings, so one bad
 afternoon doesn't make a rivalry. Either can be missing, which is different from
 having played nobody.
 
-**Recent matches** narrows to that player at the same time. This matters more than
-it sounds: the list only ever shows the twelve newest matches, so anyone who
-hasn't played lately had no visible history at all — picking them out is the only
-way to see their games — and it is why every date carries its year. Tap the name
-again to put both back.
+**Recent matches** narrows to that player at the same time, which puts their own
+games on the first page however long ago they last played — and it is why every
+date carries its year. Tap the name again to put both back.
 
 Players are matched up by name, ignoring capitals and stray spaces, so "neil"
 and "Neil " are the same person. In doubles both partners share the match result,
 while bag stats go to whoever actually threw that round.
+
+**Recent matches shows a dozen at a time**, newest first, with the range and the
+arrows under the list — one step at a time, or straight to the newest or oldest.
+That is the only route to an older game, because everything you can do to a match
+is inside its row.
 
 **Tap a row under Recent matches** to open it up round by round: how each team's
 four bags landed, what the round netted after cancellation, and the score as it

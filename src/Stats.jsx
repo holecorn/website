@@ -55,6 +55,12 @@ import './Stats.css';
 
 const matchCount = (n) => `${n} ${plural(n, 'match', 'matches')}`;
 const tournamentCount = (n) => `${n} ${plural(n, 'tournament', 'tournaments')}`;
+// One page of the recent list. The list is **paged rather than capped**, and that is not a
+// browsing nicety: delete, the round-by-round expansion and Edit names all live *inside* a
+// row, so a match the list won't draw cannot be opened, corrected or deleted at all.
+// Measured on the sample archive, a hard cap of 12 — with the per-player scoping already
+// counted — left 86 of 156 matches (55%) with none of the three, the newest five months old.
+const RECENT_PER_PAGE = 12;
 // One separator for every join in the rivals heading, so the gap after the
 // player's name matches the gap between the two rivalries rather than being a
 // margin that has to be eyeballed against it.
@@ -145,6 +151,10 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   // playerStats already applies, and transient like openId — a scope you set
   // while looking, not a setting.
   const [selected, setSelected] = useState(null);
+  // Which page of the recent list. Held as the page asked for and clamped on the way out
+  // rather than reset by anything, so deleting the last match on the final page, importing
+  // a file and scoping to a player all land somewhere valid with nothing to remember.
+  const [page, setPage] = useState(0);
 
   const totalsFor = useMemo(() => summary(matches), [matches]);
   // Which tie each match was, if any. Keyed by match id, because nothing on a record says
@@ -164,15 +174,31 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   );
   const worst = nemesis(rivals);
   const best = dominates(rivals);
-  // Scoped to the selected player, and that is not a nicety: the list is capped,
-  // so measured on the sample archive four of eleven players appear in none of the
-  // twelve newest matches — Tau with 37 played — and had no way to see any of their
-  // games at all.
+  // Every match, newest first, scoped to the selected player. Scoping is not a nicety:
+  // measured on the sample archive four of eleven players appear in none of the twelve
+  // newest matches — Tau with 37 played — so before it they had to be paged to.
   const recent = useMemo(() => {
     const mine = subject ? matches.filter((m) => playedIn(m, subject.name)) : matches;
-    return [...mine].sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0)).slice(0, 12);
+    return [...mine].sort((x, y) => (y.endedAt ?? 0) - (x.endedAt ?? 0));
   }, [matches, subject]);
+  // A page is always in range because it is clamped here rather than reset by whatever
+  // shortened the list. `pages` is at least 1, so an empty scope has a page to be on.
+  // Clamped at both ends, the way `goTo` in `Tournament.jsx` is, which is what lets the
+  // arrows below be `aria-disabled` rather than `disabled`: a press at either end arrives
+  // here and is absorbed, so no handler needs to know it was inert.
+  const pages = Math.max(1, Math.ceil(recent.length / RECENT_PER_PAGE));
+  const at = Math.min(Math.max(page, 0), pages - 1);
+  const from = at * RECENT_PER_PAGE;
+  const shown = recent.slice(from, from + RECENT_PER_PAGE);
   const pending = unexportedCount(matches, lastExport);
+
+  // One writer for the scope, because the page has to come back to the top with it:
+  // clamping keeps page 5 of Tau's history *valid*, and it is still an arbitrary place to
+  // land from pressing their name.
+  const selectPlayer = (key) => {
+    setSelected(key);
+    setPage(0);
+  };
 
   // Asked rather than undone, the way a tournament is deleted — and the delete lives
   // inside the open match for the same reason its does. It used to be one tap on the
@@ -221,7 +247,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
     setNotice(null);
     // Follow the rename, or the panel closes under whoever is being looked at —
     // and on a merge it follows them into the career they were folded into.
-    setSelected(nameKey(to));
+    selectPlayer(nameKey(to));
   };
 
   // Their matches and every number on this screen are untouched either way; all this
@@ -390,7 +416,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                         <button
                           className="player-select"
                           onClick={() =>
-                            setSelected((s) => (s === nameKey(p.name) ? null : nameKey(p.name)))
+                            selectPlayer(nameKey(p.name) === selected ? null : nameKey(p.name))
                           }
                           aria-pressed={nameKey(p.name) === selected}
                         >
@@ -526,14 +552,14 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
             {/* A marked row has to say what it is, not merely look special — the lesson the
                 shaded nemesis row taught. Drawn only when the list actually holds a tie, so
                 an archive with no tournaments spends nothing on it. */}
-            {recent.some((m) => ties.has(m.id)) && (
+            {shown.some((m) => ties.has(m.id)) && (
               <p className="recent-key">
                 <span className="recent-key-mark" aria-hidden="true" />
                 Tournament tie
               </p>
             )}
             <ul className="recent">
-              {recent.map((m) => {
+              {shown.map((m) => {
                 const final = finalScore(m);
                 const open = openId === m.id;
                 return (
@@ -581,6 +607,63 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                 );
               })}
             </ul>
+            {/* Below the list rather than above it, because below is where the cut-off was:
+                the twelfth row used to be the end of the archive as far as anything on
+                screen said. Stepping reads off `at` rather than `page`, so a press moves
+                from the page you are looking at even when the list has shrunk under it. */}
+            {pages > 1 && (
+              <div className="recent-paging">
+                <span className="recent-at">
+                  {from + 1}–{from + shown.length} of {recent.length}
+                </span>
+                {/* **`aria-disabled`, not `disabled`, and that is the whole reason the ends
+                    are safe to offer.** A real `disabled` cannot hold focus, so pressing »
+                    dropped focus to `BODY` — measured — leaving a keyboard user to Tab from
+                    the top of the document, which is the fault the deleted undo bar had. The
+                    press still lands and the clamp above absorbs it, so an inert arrow needs
+                    no guard of its own.
+                    Older and newer rather than previous and next, on all four: the list is in
+                    date order, so the direction is the thing worth saying. The ends earn
+                    their place because stepping does not scale — measured on the stress
+                    fixture, 973 matches is 81 presses of › to reach 2020 and one of » — and
+                    the oldest is a named errand, since the full-archive refusal tells you to
+                    delete some matches and those are the ones to delete. */}
+                <div className="recent-arrows">
+                  <button
+                    type="button"
+                    onClick={() => setPage(0)}
+                    aria-disabled={at === 0}
+                    aria-label="Newest matches"
+                  >
+                    «
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage(at - 1)}
+                    aria-disabled={at === 0}
+                    aria-label="Newer matches"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage(at + 1)}
+                    aria-disabled={at === pages - 1}
+                    aria-label="Older matches"
+                  >
+                    ›
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage(pages - 1)}
+                    aria-disabled={at === pages - 1}
+                    aria-label="Oldest matches"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </>
       )}

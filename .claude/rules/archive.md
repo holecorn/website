@@ -122,6 +122,49 @@ themselves, correcting the names on them, and marking a player inactive.
   - **Focus still lands on `BODY` after a confirmed delete**, because the row it was on
     is gone. That is what the tournament screen already does and it is not worth
     machinery: the difference from before is that the user asked for it.
+- **The recent list is paged, and a cap there was never a browsing limit** — which is the
+  point the three bullets above make between them. Delete, the round-by-round expansion
+  and Edit names all live *inside* a row, so a match the list would not draw could not be
+  opened, corrected or deleted at all. Measured on the sample archive, `.slice(0, 12)` left
+  **86 of 156 matches (55%) unreachable**, spanning 17 Jun 23 to 18 Sept 25 — five months
+  before the newest, with the per-player scoping below already counted, since a player's own
+  list was capped at twelve too.
+  - **Uncapping it was the one-line fix and it costs the export.** `Keeping this history` is
+    the *last* section of the screen, so every row pushes it down: measured at 393px, a row
+    is 41.6px and Export goes from **1.9 screens down to 8.9 at 156 matches** and 167 at
+    the ~3,400 the archive fills at. The screen whose whole subject is not losing the
+    history would have put its only backstop behind a nine-screen scroll. A
+    reveal-everything toggle is the same list one tap later, so it buys only that the scroll
+    was asked for.
+  - **So the page height is the property, and it holds.** Measured across all 13 pages of
+    the sample archive the document stays **1719–1743px** and Export stays 1.9 screens down
+    whatever the archive holds.
+  - **The page is clamped on the way out, not reset by whatever shortened the list.**
+    `at = Math.min(page, pages - 1)` covers deleting the last row of the final page, a scope
+    that shrinks and an import, with nothing to remember; unclamped, emptying the last page
+    draws an empty section over a full archive. Scoping to a player *is* reset, because
+    clamping keeps page 5 of their history valid and it is still an arbitrary place to land
+    from pressing their name — hence one `selectPlayer` writer for the two.
+  - **The bar mirrors `.bracket-paging`** — range left, arrows anchored right so a range
+    changing width cannot walk a button out from under a thumb — with two differences, both
+    measured. It is drawn at **every** width, since no screen is wide enough to hold an
+    archive; and it **wraps rather than ellipsising**, because a clipped round name is still
+    a round name where a clipped range lies about which matches are on screen. The four
+    44x40 targets take 194px, leaving 84px at 320px for a range needing 99, and only 25px of
+    slack at 360px — inside the 22px the deploy runner's wider `system-ui` has cost a row
+    before. A range is bounded at 17 characters (`3389–3400 of 3400`, the storage ceiling),
+    so on its own line it always fits and there is nothing to clip.
+  - **The end jumps are there because stepping does not scale.** Measured on the stress
+    fixture, 973 matches is **81 presses of `›` to reach 2020 and one of `»`** — and the far
+    end is a named errand, since the full-archive refusal tells you to export and delete
+    some matches and the ones to delete are the oldest.
+  - **`verify-stats.mjs` is the only thing that can see any of this**, and its paging block
+    reads the range and the arrows *through a count* first, the way the delete dialog does:
+    a list with no pager has neither, so reading one straight off ended the run in a 30s
+    timeout instead of naming the fault — which is what the back-to-a-hard-cap mutation did
+    before that guard, and `press` skips a *disabled* arrow for the same reason. Three
+    mutations were checked: the cap fails 9 assertions, dropping the clamp exactly 1, and
+    dropping the page reset exactly 1. All three pass every unit test.
 - **Records carry a `format` stamp.** When the state model becomes an event log
   (planned for when the board sensors land), round-level snapshots need to be
   distinguishable from event streams without guessing at the shape.
@@ -458,10 +501,10 @@ themselves, correcting the names on them, and marking a player inactive.
     one, and nobody qualifies at zero. Deficit for the same reason: beating somebody
     five times out of thirty is not dominating them.
   - **The recent match list is scoped to the same selection, and that is a fix
-    rather than a flourish.** It is hard capped at 12, so anyone outside the newest
-    twelve had *no* visible history at all — measured on the sample archive, four
-    of eleven players, one of them with **37 matches played**. Selecting them now
-    shows their twelve.
+    rather than a flourish.** It showed a page at a time and stopped there, so anyone
+    outside the newest twelve had *no* visible history at all — measured on the sample
+    archive, four of eleven players, one of them with **37 matches played**. Selecting
+    them puts their own matches on the first page.
     - **`playedIn` decides, not the record's `players` arrays.** It reads the
       mode's roster, the same rule `playerStats` credits by, so a singles record's
       unused second slot does not list a match for somebody who never threw in it.
