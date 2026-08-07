@@ -94,6 +94,10 @@ function asSide(names) {
   return { names: list, key: sideKeyOf(list) };
 }
 
+// What a side is called. `sideLabel` keeps a blank half so `teamLabel` has an empty one to
+// find, so dropping it is the tournament's job and this is the one place it happens.
+export const sideNames = (side) => sideLabel(side.names.filter(Boolean));
+
 // Why this field cannot be drawn, one entry per entrant at fault. The same rules
 // `lineupFaults` applies to a lineup, and they have to be the same or the draw succeeds
 // and produces a tie that can never be started: `Start` is disabled on exactly these,
@@ -470,6 +474,27 @@ export function bracketTree(view) {
   });
   const final = view.ties.find((t) => t.level === 1);
   return final ? node(final) : null;
+}
+
+// What one seat in the bracket says, which is a side's names once it has one and a plan
+// until then. Naming what it is waiting for is most of what a bracket is for — "winner of
+// Rho v Tau" is a plan, "—" is not.
+//
+// Two levels up, the feeder's own sides are unknown too, and recursing there reads as
+// "winner of winner of ... v winner of ..." — so it falls back to the feeder's round.
+// "winner of a quarter-final" is true and readable where "winner of ? v ?" is neither.
+//
+// Here rather than in `Tournament.jsx` because nothing imports a `.jsx`, so over there no
+// arm of this could be asserted at all. **Don't move it back** — see the rule file.
+export function seatLabel(side, from, ties, rounds) {
+  if (side) return sideNames(side);
+  const feeder = ties.find((t) => t.id === from);
+  if (!feeder) return '—';
+  if (feeder.a && feeder.b) return `winner of ${sideNames(feeder.a)} v ${sideNames(feeder.b)}`;
+  // `a` fits every name this module produces — Final, Semi-final, Quarter-final,
+  // Round of N, Preliminary — so the article is not derived.
+  const round = rounds.find((r) => r.level === feeder.level);
+  return round ? `winner of a ${round.name.toLowerCase()}` : 'winner of an earlier tie';
 }
 
 // The second lens on a bracket: not who is through, but how it has gone. Everything

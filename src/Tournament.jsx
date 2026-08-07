@@ -27,8 +27,10 @@ import {
   newestFirst,
   nextEditions,
   routeFor,
+  seatLabel,
   seriesStats,
   shuffled,
+  sideNames,
   tieExtremes,
   tieHistory,
   tieMatches,
@@ -51,26 +53,6 @@ const TABS = [
   ['bracket', 'Bracket'],
   ['stats', 'Stats'],
 ];
-
-// Rounds are drawn deepest-first, so the screen reads the way the paper sheet does:
-// the preliminaries at the top, the final at the bottom.
-const sideNames = (side) => sideLabel(side.names.filter(Boolean));
-
-// What one seat in the bracket says, which is a side's names once it has one and a plan
-// until then. Naming what it is waiting for is most of what a bracket is for — "winner
-// of Rho v Tau" is a plan, "—" is not.
-//
-// Two levels up, the feeder's own sides are unknown too, and recursing there reads as
-// "winner of winner of ... v winner of ..." — so it falls back to the feeder's round.
-// "winner of a quarter-final" is true and readable where "winner of ? v ?" is neither.
-function seatLabel(side, from, ties, rounds) {
-  if (side) return sideNames(side);
-  const feeder = ties.find((t) => t.id === from);
-  if (!feeder) return '—';
-  if (feeder.a && feeder.b) return `winner of ${sideNames(feeder.a)} v ${sideNames(feeder.b)}`;
-  const round = rounds.find((r) => r.level === feeder.level);
-  return `winner of a ${round ? round.name.toLowerCase() : 'earlier tie'}`;
-}
 
 // A tie's box. When it can be played, **the box itself is the button** — nothing is added
 // beside the names. Two things forced that: every box has to stay the same height or the

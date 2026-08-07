@@ -39,6 +39,18 @@ the alternatives that were rejected; this section holds what breaks when you cha
   are the same side whichever team letter and slot order they held. It moved out of `stats.js`
   for the reason `nameKey` did — the career fold, the head-to-head pairs and the bracket all
   have to agree, and two definitions of "the same side" is the failure with no symptom.
+- **What an empty seat says is derived here too — `seatLabel` — and `sideNames` is how any
+  side is named.** Both were in `Tournament.jsx`, where nothing could reach them: the config
+  is `environment: 'node'` and no test imports a `.jsx`, so **the file boundary is the test
+  boundary** and all four of `seatLabel`'s arms were unassertable. Two of them are
+  unreachable from any view `bracket()` builds — a `from` naming no tie, and a `rounds` list
+  short of the feeder's level — and they are asserted by being called directly, because the
+  alternative to a guard there is a crash during render, which blanks the app.
+  - **`sideNames` is the one place a blank half is dropped.** `sideLabel` keeps it so
+    `teamLabel` has an empty half to find, so a second copy of the filter is what would let
+    a side of one read `Rho & ` — it is in `shared.test.js`'s `OWNED` for that reason.
+  - **Moving a derivation out of that screen is how anything there gets covered**, and the
+    header's "It draws only" is the standing invitation to do it.
 - **The bracket's shape is forced, which is what makes generating it safe.** Kraft equality
   fixes the depths: for 11 entrants exactly six must win four ties and five must win three, in
   *every* arrangement. So no draw is fairer than another and the only free choice is which

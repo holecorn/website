@@ -36,6 +36,7 @@ const OWNED = {
   teamLabel: 'scoring.js',
   winVerb: 'scoring.js',
   seriesKey: 'tournament.js',
+  sideNames: 'tournament.js',
   shortDate: 'dates.js',
   dateSpan: 'dates.js',
   drawMeets: 'scoreboard.js',

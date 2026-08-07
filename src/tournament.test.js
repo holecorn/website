@@ -11,6 +11,7 @@ import {
   levelName,
   reachedBy,
   routeFor,
+  seatLabel,
   tieExtremes,
   tieHistory,
   tieMatches,
@@ -28,6 +29,7 @@ import {
   splitSeriesName,
   removeTournament,
   shuffled,
+  sideNames,
   tieLabels,
   tieSetup,
   upsertTournament,
@@ -934,6 +936,65 @@ describe('what a waiting side is waiting for', () => {
     const b = bracket(t, beat([], t, 'Chi'));
     const above = b.ties.find((x) => x.fromA || x.fromB);
     expect(above.fromA ?? above.fromB).toBeTruthy();
+  });
+});
+
+describe('sideNames', () => {
+  it('joins a doubles pair and drops a blank half', () => {
+    expect(sideNames({ names: ['Rho'] })).toBe('Rho');
+    expect(sideNames({ names: ['Rho', 'Tau'] })).toBe('Rho & Tau');
+    // `sideLabel` keeps the blank so `teamLabel` has an empty half to find; the tournament
+    // is where it is dropped, so a side of one never reads `Rho & `.
+    expect(sideNames({ names: ['Rho', ''] })).toBe('Rho');
+  });
+});
+
+describe('seatLabel', () => {
+  const view = () => bracket(tournamentOf(ELEVEN));
+  const label = (tie, side) =>
+    side === 'a'
+      ? seatLabel(tie.a, tie.fromA, view().ties, view().rounds)
+      : seatLabel(tie.b, tie.fromB, view().ties, view().rounds);
+  const tieAt = (id) => view().ties.find((x) => x.id === id);
+
+  it('names a side that has one', () => {
+    expect(label(tieAt('4.0'), 'a')).toBe('Rho');
+    const pairs = bracket(tournamentOf([['Rho', 'Tau'], ['Sigma', 'Phi']], 'doubles'));
+    const final = pairs.ties.find((x) => x.level === 1);
+    expect(seatLabel(final.a, final.fromA, pairs.ties, pairs.rounds)).toBe('Rho & Tau');
+  });
+
+  it('names the pairing an empty seat is waiting on', () => {
+    expect(label(tieAt('3.0'), 'a')).toBe('winner of Rho v Tau');
+    expect(label(tieAt('2.0'), 'b')).toBe('winner of Chi v Psi');
+    // A doubles seat waits on two pairs, so the join has to survive being nested in it.
+    const pairs = bracket(
+      tournamentOf([['Rho', 'Tau'], ['Sigma', 'Phi'], ['Omega', 'Iota'], ['Kappa', 'Zeta']], 'doubles'),
+    );
+    const final = pairs.ties.find((x) => x.level === 1);
+    expect(seatLabel(final.a, final.fromA, pairs.ties, pairs.rounds)).toBe(
+      'winner of Rho & Tau v Sigma & Phi',
+    );
+  });
+
+  it('falls back to the round two levels up rather than recursing', () => {
+    // The feeder's own sides are unknown here, and "winner of winner of ... v winner
+    // of ..." is what naming them would read as.
+    expect(label(tieAt('2.0'), 'a')).toBe('winner of a quarter-final');
+    expect(label(tieAt('1.0'), 'a')).toBe('winner of a semi-final');
+    expect(label(tieAt('1.0'), 'b')).toBe('winner of a semi-final');
+    expect(view().ties.every((x) => !label(x, 'a').includes('winner of winner'))).toBe(true);
+  });
+
+  it('says something for a seat no bracket produces', () => {
+    // Both guards below are unreachable from any view `bracket()` builds — every `fromA`
+    // names a tie in the same list, and `rounds` always covers every level the ties sit
+    // at. They are asserted because the alternative to a guard here is a crash during
+    // render, which blanks the app; driven directly because nothing else can reach them.
+    const v = view();
+    expect(seatLabel(null, 'no.such.tie', v.ties, v.rounds)).toBe('—');
+    const feeder = v.ties.find((x) => x.id === '2.0');
+    expect(seatLabel(null, feeder.id, v.ties, [])).toBe('winner of an earlier tie');
   });
 });
 
