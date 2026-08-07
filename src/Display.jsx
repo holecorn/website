@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from 'react';
 import {
   configComplete,
   configFromSearch,
+  drawMeets,
   loadScoreboardConfig,
   saveScoreboardConfig,
   segmentDigits,
@@ -322,12 +323,7 @@ export default function Display() {
 // name the way `winner` is told from a live game.
 function DrawCard({ card }) {
   const opponents = Array.isArray(card.o) ? card.o.filter((s) => typeof s === 'string') : [];
-  const meets =
-    opponents.length === 0
-      ? null
-      : opponents.length === 1
-        ? `plays ${opponents[0]}`
-        : `plays the winner of ${opponents.join(' v ')}`;
+  const meets = drawMeets(opponents);
   // A cup with no round is the opening card, and the cup takes the row a name takes on
   // every other card — it is what the screen is about until somebody is. The count keeps
   // its one wording rather than gaining a second for "0 of 11": it is the line that ticks

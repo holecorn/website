@@ -186,6 +186,18 @@ export function drawPayload(reveal) {
   };
 }
 
+// Who a pulled name has drawn, written out. `render.h` composes the same fact from
+// `VERSUS_CHARS` and its own words, so this is the *prose* half — the ceremony screen
+// says it to the scorer and `?display=1` says it to the room, and the two stood side by
+// side during the draw with the sentence written out twice, word for word and asserted
+// nowhere. Takes labels rather than sides, because the two callers have different halves:
+// the phone holds `step.opponents` as sides and the display receives them already joined.
+export function drawMeets(opponents) {
+  if (opponents.length === 0) return null;
+  if (opponents.length === 1) return `plays ${opponents[0]}`;
+  return `plays the winner of ${opponents.join(' v ')}`;
+}
+
 // Mirrors parseDraw in board_logic.h: a card is a round or a cup, and everything else is
 // optional — a message without a name is the drum roll, one without opponents is an
 // entrant still waiting for theirs, and a cup with no round is the opening card.

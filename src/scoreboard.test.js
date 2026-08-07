@@ -7,6 +7,7 @@ import {
   configComplete,
   configFromSearch,
   displayUrl,
+  drawMeets,
   drawPayload,
   drawTopic,
   layoutTopic,
@@ -573,6 +574,28 @@ describe('the draw card', () => {
     expect(card).toEqual({ t: 'Hole Corn VI', d: 0, e: 11 });
     expect(card).not.toHaveProperty('r');
     expect(card).not.toHaveProperty('n');
+  });
+
+  // The prose half, which the ceremony screen and `?display=1` draw side by side during
+  // the one moment everyone is watching. It existed twice, word for word, and neither copy
+  // was asserted — so a reworded phone and an unchanged board would have read differently
+  // on two screens in the same room with nothing failing.
+  describe('drawMeets', () => {
+    it('names one opponent, and the winner of two', () => {
+      expect(drawMeets(['Rho'])).toBe('plays Rho');
+      expect(drawMeets(['Omega', 'Iota'])).toBe('plays the winner of Omega v Iota');
+    });
+
+    // The entrant who is out of the hat with nobody yet. The card draws the name alone
+    // rather than a sentence with a hole in it — the next press names their opponent.
+    it('has nothing to say for an entrant still waiting for an opponent', () => {
+      expect(drawMeets([])).toBeNull();
+    });
+
+    // The join is `sideLabel`'s, so a pair arrives already written and is not re-joined.
+    it('takes a doubles pair as one opponent', () => {
+      expect(drawMeets(['Sigma & Phi'])).toBe('plays Sigma & Phi');
+    });
   });
 
   describe('usableDraw', () => {

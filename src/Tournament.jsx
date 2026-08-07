@@ -33,6 +33,7 @@ import {
   tieHistory,
   tieMatches,
 } from './tournament.js';
+import { drawMeets } from './scoreboard.js';
 import { NAME_FIELD } from './nameField.js';
 import { dateSpan, dropRepeatedYear, sameDay, shortDate } from './dates.js';
 import { minutes, one, pct, plural } from './format.js';
@@ -1446,13 +1447,11 @@ function SeriesRow({ group, stats, matches, isOpen, onToggle }) {
 // undebounced — at 400ms of settling the two beats would collapse into one.
 const PULL_MS = 1100;
 
-// How one pull reads in prose, on the phone and to a screen reader. The panel says the
-// same thing in three rows; this is the one place the wording is a sentence.
+// How one pull reads in prose, on the phone and to a screen reader. The wording is
+// `drawMeets` in scoreboard.js, shared with `?display=1` so the phone and the board
+// cannot word the same pull differently while sitting next to each other.
 function stepLine(step) {
-  const label = (side) => sideLabel(side.names);
-  if (step.opponents.length === 0) return null;
-  if (step.opponents.length === 1) return `plays ${label(step.opponents[0])}`;
-  return `plays the winner of ${step.opponents.map(label).join(' v ')}`;
+  return drawMeets(step.opponents.map((side) => sideLabel(side.names)));
 }
 
 // The draw played out one name at a time, which is the whole of the ceremony. A **view**
