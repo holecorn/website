@@ -326,6 +326,16 @@ invisible to the unit suite. Before it, the lanes were 24 buttons named `bag hol
   navigation starting point survives a blur, so Tab resumes from the last thing clicked
   and the walk silently misses every lane before it — measured, 6 stops instead of 8,
   which reads as a failure of the fix rather than of the check.
+- **The live region's sentence is checked in `scoring.test.js`, not here.** `roundReport`
+  is pure, so ten mutations of it — a wash read as a score, the four bagger dropped or
+  called at three in the hole, the plural dropped, the skunk dropped, the round number
+  pinned, `playerLabel` for `teamLabel`, the score line kept after a win, a sentence
+  before the first round — all die against exact expected strings. What is left for the
+  browser is only the wiring: that the region exists on a fresh play screen, is empty,
+  is clipped rather than drawn, and holds the report afterwards.
+- **It is located `getByRole('status')`, not `.main > [role=status]`.** Measured: with a
+  selector, adding `aria-hidden="true"` to the region passes every assertion in the file
+  while no screen reader would ever read it. The role query is what fails that.
 
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so

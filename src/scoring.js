@@ -432,6 +432,36 @@ export function undoRound(game) {
   return { ...next, winner: checkWinner(next) };
 }
 
+// Where the game stands after the last committed round, for the play screen's live
+// region. Derived from `rounds` rather than remembered from the press, the way
+// `.toss-result` is, so undo walks it back and a game adopted from another tab
+// describes itself rather than the round this tab last saw.
+export function roundReport(game) {
+  const n = game.rounds.length;
+  if (n === 0) return '';
+  const last = game.rounds[n - 1];
+  const t = totals(game);
+  const scorer = last.nets.a > 0 ? 'a' : last.nets.b > 0 ? 'b' : null;
+  const parts = [
+    scorer
+      ? `Round ${n}: ${teamLabel(game, scorer)} scored ${last.nets[scorer]}.`
+      : `Round ${n}: wash.`,
+  ];
+  // Unnamed on purpose: four in the hole is 12 raw and only another four bagger can
+  // match it, so one belongs to the side just named and two can only be the wash.
+  const fours = ['a', 'b'].filter((tm) => tierCounts(last[tm]).hole === BAGS_PER_SIDE).length;
+  if (fours > 0) parts.push(fours > 1 ? 'Four baggers!' : 'Four bagger!');
+  if (game.winner) {
+    const won = teamLabel(game, game.winner);
+    const lost = game.winner === 'a' ? t.b : t.a;
+    parts.push(`${won} ${winVerb(won)}, ${t[game.winner]} to ${lost}.`);
+    if (lost === 0) parts.push('Skunk!');
+  } else {
+    parts.push(`${teamLabel(game, 'a')} ${t.a}, ${teamLabel(game, 'b')} ${t.b}.`);
+  }
+  return parts.join(' ');
+}
+
 // Whether a bag has been thrown yet. Lives here rather than in App.jsx because
 // the scoreboard needs it too: the pre-game form screen is published while this
 // is false, so "the game has begun" has to mean the same thing to both.

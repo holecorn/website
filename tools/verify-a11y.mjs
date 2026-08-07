@@ -1,4 +1,5 @@
-// Whether a round can be scored without seeing the screen.
+// Whether a round can be scored without seeing the screen: entering one in the lanes,
+// and hearing what committing it did.
 //
 // The lanes are the whole app: twelve tap targets per team, and where a bag is
 // resting is drawn as the vertical position of a coloured square. Measured before
@@ -17,6 +18,11 @@
 // is real rather than decorative. Native radios grouped by `name` are what give
 // it: drop the attribute and the roles and labels all still read correctly while
 // the count goes back to 24.
+//
+// The other half: committing the round was silent. Measured across every reachable
+// state, the only live region on the play screen was the footer's save warning, which
+// is empty unless the phone cannot write — so the score changing, WASH, a four bagger
+// and the win were all announced to nobody.
 
 import { chromium } from 'playwright';
 
@@ -49,8 +55,27 @@ await page.getByRole('button', { name: 'Start', exact: true }).click();
 await page.waitForSelector('.lane');
 
 const lanesOf = (team) => page.locator('.team-lanes').nth(team).locator('.lane');
+// By role rather than by selector, because that is what excludes a region an
+// `aria-hidden` ancestor has taken out of the tree — clipped to a pixel is not
+// hidden, but hidden from the tree is exactly the failure this file is about. The
+// footer's save warning is the app's other live region, and it is outside `.main`.
+const report = page.locator('.main').getByRole('status');
+// `allInnerTexts` rather than `innerText`, so a region that is missing entirely
+// fails the check it belongs to instead of throwing out of the whole file.
+const spoken = async () => ((await report.allInnerTexts())[0] ?? '').replace(/\s+/g, ' ').trim();
 
-console.log('every lane says whose bag it is and which one');
+console.log('the play screen has something that can speak, before it has anything to say');
+{
+  // Mounted empty rather than mounted on the first commit: a live region inserted
+  // along with its content is announced unreliably, so a conditional one would
+  // silently swallow round one.
+  check('a live region is already in the tree', (await report.count()) === 1, `${await report.count()}`);
+  check('and silent', (await spoken()) === '', JSON.stringify(await spoken()));
+  const box = (await report.count()) === 1 ? await report.boundingBox() : { width: 0, height: 0 };
+  check('and clipped away, not drawn', box.width <= 1 && box.height <= 1, `${box.width}x${box.height}`);
+}
+
+console.log('\nevery lane says whose bag it is and which one');
 {
   const groups = page.getByRole('radiogroup');
   check('one group per bag', (await groups.count()) === 8, `${await groups.count()}`);
@@ -153,6 +178,32 @@ console.log('\nand committing a round clears every choice');
     'and the same tier can be chosen again',
     (await lanesOf(0).nth(0).getByRole('radio', { checked: true }).count()) === 1,
   );
+}
+
+// End round changes the score, clears eight bags and can finish the game, and the
+// overlays that show it (`.callout`, `.four-bagger`) are `aria-hidden`. So this region
+// is the only report of any of it. The sentence itself is `roundReport`, pinned string
+// by string in `scoring.test.js`; what is left for here is that it reaches a live one.
+console.log('\nand what the round did is said out loud');
+{
+  check(
+    'the committed round, whose it was and where it leaves the score',
+    (await spoken()) === 'Round 1: wash. Rho & Tau 0, Sigma & Phi 0.',
+    await spoken(),
+  );
+
+  for (let round = 0; round < 2; round += 1) {
+    for (let i = 0; i < 4; i += 1) await lanesOf(0).nth(i).locator('.tier-hole').click();
+    for (let i = 0; i < 4; i += 1) await lanesOf(1).nth(i).locator('.tier-floor').click();
+    await page.locator('.end-round').click();
+    await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0);
+  }
+  check(
+    'the win, which only a banner and an aria-hidden callout showed before',
+    (await spoken()) === 'Round 3: Rho & Tau scored 12. Four bagger! Rho & Tau win, 24 to 0. Skunk!',
+    await spoken(),
+  );
+  check('the banner agrees with it', (await page.locator('.winner-banner').innerText()) === 'Rho & Tau win!');
 }
 
 await browser.close();

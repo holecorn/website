@@ -24,6 +24,7 @@ import {
   undoRound,
   unthrownCount,
   roundComplete,
+  roundReport,
   validGame,
 } from './scoring.js';
 
@@ -229,6 +230,74 @@ describe('undoRound', () => {
   it('is a no-op with no committed rounds', () => {
     const g = newGame();
     expect(undoRound(g)).toEqual(g);
+  });
+});
+
+describe('roundReport', () => {
+  const ALL_IN = ['hole', 'hole', 'hole', 'hole'];
+  const named = (target, over = {}) => ({
+    ...newGame(target),
+    players: { a: ['Rho', 'Tau'], b: ['Sigma', 'Phi'] },
+    ...over,
+  });
+
+  it('has nothing to say before the first round is committed', () => {
+    expect(roundReport(named())).toBe('');
+  });
+
+  it('names the scorer, what they scored and where that leaves both sides', () => {
+    const g = playRound(named(), ['hole', 'board', 'floor', 'floor'], ['board', 'floor', 'floor', 'floor']);
+    expect(roundReport(g)).toBe('Round 1: Rho scored 3. Rho 3, Sigma 0.');
+  });
+
+  it('counts the rounds, not just the last one', () => {
+    let g = playRound(named(), ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    g = playRound(g, emptyPositions(), ['board', 'board', 'floor', 'floor']);
+    expect(roundReport(g)).toBe('Round 2: Sigma scored 2. Rho 3, Sigma 2.');
+  });
+
+  it('says a wash rather than naming a scorer, and still gives the score', () => {
+    let g = playRound(named(), ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    g = playRound(g, ['board', 'floor', 'floor', 'floor'], ['board', 'floor', 'floor', 'floor']);
+    expect(roundReport(g)).toBe('Round 2: wash. Rho 3, Sigma 0.');
+  });
+
+  it('calls a four bagger without naming the side, because the sentence before it has', () => {
+    const g = playRound(named(), ALL_IN, emptyPositions());
+    expect(roundReport(g)).toBe('Round 1: Rho scored 12. Four bagger! Rho 12, Sigma 0.');
+  });
+
+  it('says nothing of the sort for three in the hole', () => {
+    const g = playRound(named(), ['hole', 'hole', 'hole', 'floor'], emptyPositions());
+    expect(roundReport(g)).toBe('Round 1: Rho scored 9. Rho 9, Sigma 0.');
+  });
+
+  it('pluralises when both sides put all four in, which is the only way to wash one', () => {
+    const g = playRound(named(), ALL_IN, ALL_IN);
+    expect(roundReport(g)).toBe('Round 1: wash. Four baggers! Rho 0, Sigma 0.');
+  });
+
+  it('replaces the score line with the result, and takes the plural from the label', () => {
+    let g = playRound(named(4, { mode: 'doubles' }), emptyPositions(), ['board', 'floor', 'floor', 'floor']);
+    g = playRound(g, ['hole', 'board', 'floor', 'floor'], emptyPositions());
+    expect(roundReport(g)).toBe('Round 2: Rho & Tau scored 4. Rho & Tau win, 4 to 1.');
+  });
+
+  it('calls a skunk when the loser never scored', () => {
+    const g = playRound(named(3), ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    expect(roundReport(g)).toBe('Round 1: Rho scored 3. Rho wins, 3 to 0. Skunk!');
+  });
+
+  it('walks back with an undo rather than reporting a round that is no longer played', () => {
+    let g = playRound(named(6), ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    g = playRound(g, ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    expect(roundReport(g)).toBe('Round 2: Rho scored 3. Rho wins, 6 to 0. Skunk!');
+    expect(roundReport(undoRound(g))).toBe('Round 1: Rho scored 3. Rho 3, Sigma 0.');
+  });
+
+  it('says the colour in a guest game, like everything else that names a player', () => {
+    const g = playRound(named(21, { casual: true }), ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    expect(roundReport(g)).toBe('Round 1: Blue scored 3. Blue 3, Red 0.');
   });
 });
 

@@ -177,6 +177,12 @@ project dependency. It starts and stops its own preview server.
   hole, ramping at three. The FOUR BAGGER reveal fires at round commit, not on
   the fourth tap. WASH/GAME/SKUNK callouts fire from the round-commit effect in
   `App.jsx`.
+  - **Those overlays are the seen half, and `roundReport` is the spoken one.** They are
+    `aria-hidden` and the winner banner has no live region, so the play screen's one
+    `role="status"` region is the only thing that reports a committed round to somebody
+    not looking at it. **Anything new that celebrates a round has to be in the sentence
+    too**, or it is the one event that still happens silently — see
+    `.claude/rules/scoring.md`.
 
 ## Conventions & gotchas
 

@@ -152,6 +152,33 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     the zones touch, so an outset ring on the middle one is drawn over its neighbours
     and reads as the wrong band being focused.
 
+## `roundReport` is the only thing that says a round happened
+
+- **`End round` changes the score, clears eight bags and can finish the game, and before
+  `roundReport` it did all of that silently.** Measured across the play screen: the one
+  live region reachable there was the footer's save warning, which is empty unless the
+  phone cannot write — so nothing was announced on a fresh board, after eight bags, at a
+  four bagger, at WASH/GAME/SKUNK, or after a win. The `.callout` and `.four-bagger`
+  overlays are `aria-hidden` and the winner banner is inserted with no live region, which
+  is right: they are the *seen* half, and this is the spoken one.
+  - **Derived from `rounds`, never remembered from the press**, the same reasoning as
+    `.toss-result`. So undo walks the sentence back to the round now standing, and a game
+    adopted from another tab describes itself rather than the round this tab last saw —
+    neither of which a stored "last announcement" would get right.
+  - **In `scoring.js` rather than `App.jsx` because that is what makes it testable.**
+    `vitest.config.js` is `environment: 'node'` and no test imports a `.jsx`, so a
+    sentence built in the component could only ever be checked in a browser. Pure, so
+    `scoring.test.js` pins it string by string; the browser check only has to prove it is
+    wired to a live region.
+  - **The four bagger is called but not attributed**, which is exact rather than sloppy:
+    four in the hole is 12 raw and only another four bagger can match it, so one belongs
+    to the side the previous sentence just named and two can only be the wash it named.
+  - **The region is always mounted, and empty until there is something to say.** One
+    inserted along with its content is announced unreliably — mount it on the first
+    commit and round one is the round nobody hears. `verify-a11y.mjs` locates it with
+    `getByRole` for the same reason it exists at all: a selector would still find a
+    region an `aria-hidden` ancestor had taken out of the tree.
+
 ## Nobody plays themselves, and nobody plays nameless
 
 - **Nobody can play themselves and nobody plays nameless, and `lineupFaults` is the

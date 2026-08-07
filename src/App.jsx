@@ -42,6 +42,7 @@ import {
   totals,
   roundNets,
   roundComplete,
+  roundReport,
   unthrownCount,
   tierCounts,
   teamLabel,
@@ -848,6 +849,13 @@ export default function App() {
           first={game.nextFirst === 'b'}
         />
       </header>
+
+      {/* The overlays that show a committed round are `aria-hidden`, so this is the
+          only report of one. Always mounted, because a live region inserted along with
+          its content is announced unreliably — the same reason `.toss-result` is. */}
+      <p className="visually-hidden" role="status">
+        {roundReport(game)}
+      </p>
 
       {game.winner && (
         <div className="winner-banner" style={{ background: colors[game.winner] }}>
