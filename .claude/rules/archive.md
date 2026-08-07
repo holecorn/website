@@ -8,6 +8,8 @@ paths:
   - "src/Stats.css"
   - "src/inactive.js"
   - "src/inactive.test.js"
+  - "src/store.js"
+  - "src/store.test.js"
   - "src/Chip.jsx"
   - "src/Chip.css"
   - "src/FormPips.jsx"
@@ -138,6 +140,38 @@ themselves, correcting the names on them, and marking a player inactive.
   - **So every caller settles the write.** `App.jsx`'s archive effect only latches
     `archivedId` on `saved`, which keeps the file-it-on-the-next-load retry path;
     `Stats.jsx` routes every refusal through its `notice`.
+- **Nor does it overwrite what it could not read, which is the other way a write
+  destroys history, and both live in `store.js` now** — one factory over the three keys
+  that hold a whole document, because the rule is one rule and a copy per module is how
+  two of them come to disagree. `loadArchive` and `saveArchive` are `store.load` and
+  `store.save`; `archive.js` keeps its pure half exactly as it was.
+  - **The read fails soft and the *write* is what refuses.** `loadArchive` returning
+    `[]` for a shape it cannot parse was never the destructive part on its own — the
+    damage is the unconditional write that follows it. Measured against a
+    `{format: 2, matches: [...300]}` envelope, the shape a later version would
+    plausibly write: winning one game took **296,012 characters holding 300 matches to
+    990 holding 1**, and a one-match import did that *and* replaced the tournaments and
+    the inactive marks, reporting "Added 1 match". Merely opening the app cost nothing.
+  - **Absent still means empty, and that separation is the whole guard.** `getItem`
+    gives `null` for a key never written and `JSON.parse(null)` is `null` rather than a
+    throw, so absent has to be answered *before* the parse — otherwise a first run reads
+    as the failure and the phone can never store its first match. `store.test.js` pins
+    both directions; the mutation that drops that early return fails only the
+    never-stored-one case.
+  - **Refusing costs less than writing, which is why it refuses rather than repairing
+    or moving the value aside.** A phone stops recording until it updates — which a PWA
+    does by itself — where a write costs the history outright, and the game is
+    unaffected either way, being under its own key and still playable. A sidecar key
+    holding the unreadable value was the alternative and buys nothing: nothing would
+    ever read it back.
+  - **The refusal carries a `reason`, and the second message is not decoration.** The
+    full-archive wording sends you to export and delete, and with an unreadable archive
+    the tables on screen are *empty* — that export would be saved as a backup of
+    nothing and there is nothing listed to delete. `refusal()` in `Stats.jsx` chooses;
+    `verify-recovery.mjs` is the only thing that can see the choice.
+  - **An array under the inactive key is as unreadable as a string is.** The marks are a
+    plain object and nothing has ever written a list, so `plainObject` is the predicate
+    there where the other two take `Array.isArray`.
 - **The summary chips take a singular label at exactly one**, and both word forms are
   spelled out rather than derived: "wash" and "match" take `es` while "round" takes `s`,
   so a suffix rule gets one of them wrong. Zero stays plural, as English has it. **The two

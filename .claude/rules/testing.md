@@ -288,6 +288,24 @@ line passes all 635 unit tests.
   pre-fix while the work is uncommitted, so restoring from git wipes the fix and every
   mutation reports identically — a green-looking harness measuring nothing. Second time
   that has bitten in this series; the other was forgetting to rebuild `dist/`.
+- **It also covers the same question one key over: what the app does with *history* it
+  cannot read.** Here rather than in a tenth file because it is the same failure with a
+  different key. It seeds the archive, the draw and the marks with shapes a newer
+  version would plausibly write, loads a won game so the archive effect fires without a
+  tap, and requires all three raw values **byte-identical** afterwards — measured before
+  the fix, that one game took 300 matches to 1. It asserts the footer *says* so too:
+  refusing silently makes a phone that has stopped recording look like one that hasn't.
+  - **Two-sided for the same reason the block above it is.** A guard that refuses every
+    write passes all four of those assertions while recording nothing ever again, so a
+    readable archive must still gain the won game. Four mutations: dropping the guard
+    fails the three key assertions, refusing everything fails only the two-sided one,
+    and reusing the full-archive wording fails only the notice block. **Treating absent
+    as unreadable fails nothing here** and is caught by `store.test.js` instead — a
+    phone that has never stored a match has no key to seed.
+  - **The notice block is the only thing that can see `refusal()`.** Both messages are
+    correct strings and both write paths are correct; only the choice between them can
+    be wrong, and the wrong one sends you to export an empty archive and delete matches
+    that are not listed.
 
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so

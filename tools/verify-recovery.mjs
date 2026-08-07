@@ -64,16 +64,36 @@ const UNPLAYABLE = [
   ['colors is null', broken({ colors: null })],
 ];
 
+// Enough of a game to be won, so loading it is enough to make the app write to all
+// three history keys without a single tap.
+const won = {
+  ...structuredClone(good),
+  id: 'a-won-game',
+  rounds: Array.from({ length: 7 }, () => round),
+  winner: 'a',
+};
+
+const MATCHES = 'holecorn.matches.v1';
+// One envelope apiece, the shape a later version would plausibly write — the export
+// file already carries one — plus an array where the marks expect an object.
+const UNREADABLE = {
+  [MATCHES]: JSON.stringify({ format: 2, matches: [{ id: 'kept' }] }),
+  'holecorn.tournaments.v1': JSON.stringify({ format: 2, tournaments: [{ id: 'kept' }] }),
+  'holecorn.inactive.v1': JSON.stringify([{ name: 'omicron', at: 900 }]),
+};
+
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
 
-const open = async (value) => {
+const open = async (value, alongside = {}) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message.split('\n')[0]));
   await page.addInitScript(
-    ([key, raw]) => localStorage.setItem(key, raw),
-    [KEY, typeof value === 'string' ? value : JSON.stringify(value)],
+    (seed) => {
+      for (const [key, raw] of Object.entries(seed)) localStorage.setItem(key, raw);
+    },
+    { ...alongside, [KEY]: typeof value === 'string' ? value : JSON.stringify(value) },
   );
   await page.goto(URL);
   // Bounded and swallowed: a blank page never grows `.app`, and an unbounded wait
@@ -129,6 +149,65 @@ console.log('\nand a save from before a field existed still loads');
     'and it is given an id, so it can be archived',
     await page.evaluate((k) => typeof JSON.parse(localStorage.getItem(k)).id === 'string', KEY),
   );
+  await context.close();
+}
+
+// The other half of the same question, one key over: what the app does with *history*
+// it cannot read. Measured before the fix, seeding the archive with a plausible newer
+// envelope and doing nothing but winning one game took 296,012 characters holding 300
+// matches down to 990 holding 1 — and reading was never what did it, so the damage
+// only lands on the first write after a bad read. Here rather than in a tenth check
+// because it is the same failure as the block above with a different key: storage the
+// bundle cannot understand must cost nothing.
+console.log('\nand history it cannot read is left exactly as it found it');
+{
+  const { context, page, drew } = await open(won, UNREADABLE);
+  const after = await page.evaluate(
+    (keys) => Object.fromEntries(keys.map((k) => [k, localStorage.getItem(k)])),
+    Object.keys(UNREADABLE),
+  );
+  for (const [key, raw] of Object.entries(UNREADABLE)) {
+    check(key.replace('holecorn.', ''), after[key] === raw, `${after[key]?.length ?? 0} chars`);
+  }
+  // Said, not merely survived. Refusing silently is how the phone that has stopped
+  // recording looks identical to the one that is.
+  check(
+    'and the footer says nothing new will survive',
+    drew && (await page.locator('.save-warning').innerText()).includes('won’t save'),
+  );
+  await context.close();
+}
+
+// Two-sided, the same reason the block above the last one is: a guard that refuses
+// every write passes all four assertions above while quietly recording nothing ever
+// again, and widening the refusal is the tempting way to make a future failure green.
+console.log('\nand history it can read is still written to');
+{
+  const { context, page } = await open(won, { [MATCHES]: '[]' });
+  await page.waitForSelector('.winner-banner', { timeout: 15_000 }).catch(() => {});
+  const stored = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), MATCHES);
+  check('the won game is archived', Array.isArray(stored) && stored.length === 1);
+  await context.close();
+}
+
+// A refusal has to be *actionable*, and the advice differs by which one it was. The
+// full-archive wording sends you to export and delete, and here there is nothing on
+// screen to do either to — the tables are empty because the history is unreadable, so
+// that export would be saved as a backup of nothing. `refusal()` in `Stats.jsx` is the
+// only thing choosing between the two and nothing below it can see the choice.
+console.log('\nand it says which refusal it was');
+{
+  const fresh = { ...structuredClone(good), id: 'not-started', rounds: [] };
+  const { context, page } = await open(fresh, UNREADABLE);
+  await page.getByRole('button', { name: 'Stats' }).click();
+  await page.locator('.file-button input').setInputFiles({
+    name: 'holecorn-matches.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ format: 1, matches: [], tournaments: [], inactive: {} })),
+  });
+  const notice = await page.locator('.durability-notice').first().innerText();
+  check('the import notice names the cause', notice.includes('newer version'), notice);
+  check('rather than sending you to export and delete', !notice.includes('no room'), notice);
   await context.close();
 }
 

@@ -45,6 +45,7 @@ import {
   renameMark,
   saveInactive,
 } from './inactive.js';
+import { UNREADABLE } from './store.js';
 import { NAME_FIELD } from './nameField.js';
 import { shortDate } from './dates.js';
 import { minutes, one, pct, plural } from './format.js';
@@ -65,6 +66,14 @@ const DOT = ' · ';
 // the list it was given — which looked like it had worked until the next reload.
 const FULL =
   'There’s no room on this phone, so that didn’t save. Export below, then delete some matches.';
+
+// The other refusal, and it needs its own words rather than reusing the one above: the
+// history this cannot read is not *on the screen*, so the empty tables would be exported
+// as a backup and there is nothing listed to delete. See `store.js` for what causes it.
+const NEWER =
+  'This phone’s history was written by a newer version of Holecorn, so nothing here can change it. It hasn’t been lost — close the app and reopen it to update.';
+
+const refusal = (write) => (write.reason === UNREADABLE ? NEWER : FULL);
 
 // Wipe the history and start again. **Development only** — `import.meta.env.DEV` is a
 // compile-time constant, so Vite eliminates the whole branch and the built app cannot
@@ -173,7 +182,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
     const write = dropMatch(record.id);
     setMatches(write.stored);
     if (!write.saved) {
-      setNotice(FULL);
+      setNotice(refusal(write));
       return;
     }
     setDeleted(record);
@@ -184,7 +193,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const undoDelete = () => {
     const write = restoreMatch(deleted);
     setMatches(write.stored);
-    if (!write.saved) return setNotice(FULL);
+    if (!write.saved) return setNotice(refusal(write));
     setDeleted(null);
   };
 
@@ -193,7 +202,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const saveNames = (id, players) => {
     const write = saveMatchPlayers(id, players, Date.now());
     setMatches(write.stored);
-    if (!write.saved) return setNotice(FULL);
+    if (!write.saved) return setNotice(refusal(write));
     setEditing(null);
     setNotice(null);
   };
@@ -207,7 +216,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const renamePlayer = (from, to, merges) => {
     const write = savePlayerRename(from, to, Date.now());
     setMatches(write.stored);
-    if (!write.saved) return setNotice(FULL);
+    if (!write.saved) return setNotice(refusal(write));
     // The draw names people too, and `bracket()` matches a tie by `sideKeyOf` — so a
     // spelling that moves in the archive and not in `entrants`/`champion`/`runnerUp`
     // un-plays every tie this person appeared in, silently. See `renameEntrant`.
@@ -233,7 +242,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
         : markInactive(inactive, player.name, matches, Date.now()),
     );
     setInactive(write.stored);
-    setNotice(write.saved ? null : FULL);
+    setNotice(write.saved ? null : refusal(write));
   };
 
   const exportMatches = () => {
@@ -286,9 +295,14 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
       // deleted, so it comes back with its results intact — and reporting only the
       // archive said "nothing new" at the moment a whole bracket reappeared.
       const addedTournaments = tw.stored.length - tournaments.length;
-      if (!mw.saved || !tw.saved || !iw.saved) {
+      // Whichever of the three refused first says why, because the two reasons want
+      // opposite things done about them and a file can meet either.
+      const refused = [mw, tw, iw].find((w) => !w.saved);
+      if (refused) {
         setNotice(
-          'There’s no room on this phone for that file. Nothing was lost — export below, delete some matches, and try again.',
+          refused.reason === UNREADABLE
+            ? NEWER
+            : 'There’s no room on this phone for that file. Nothing was lost — export below, delete some matches, and try again.',
         );
         return;
       }

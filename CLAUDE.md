@@ -20,7 +20,7 @@ many hard-won constraints, and loading all of them on every task crowds out the 
 | File | Loads when you open | Holds |
 | --- | --- | --- |
 | `.claude/rules/scoring.md` | `scoring.js`, `Board.jsx`, `Positions.*`, `Lineup.*`, `GameStats.*` | guest games, lineup faults, the court, the toss |
-| `.claude/rules/archive.md` | `archive.js`, `stats.js`, `Stats.*`, `inactive.js` | records, career stats, name editing, inactive players |
+| `.claude/rules/archive.md` | `archive.js`, `stats.js`, `Stats.*`, `inactive.js`, `store.js` | records, career stats, name editing, inactive players, the storage refusals |
 | `.claude/rules/tournament.md` | `tournament.js`, `Tournament.*` | the bracket, the draw ceremony, past tournaments |
 | `.claude/rules/scoreboard.md` | `scoreboard*`, `panel*`, `Display.*`, `Panel.*`, `segments.js` | the MQTT contract, the five board screens, the emulator |
 | `.claude/rules/layout.md` | any `src/*.css`, `Logo.jsx` | lane caps, responsive tiers, the wordmark, the side rail |
@@ -83,6 +83,9 @@ project dependency. It starts and stops its own preview server.
   name fields. **Stores when they were marked and derives the rest**, the way
   `tournament.js` stores the draw — see `.claude/rules/archive.md`. Pure, plus the
   localStorage wrapper the same split; tested in `src/inactive.test.js`.
+- `src/store.js` — the localStorage end of the three keys above, each of which holds one
+  whole JSON document. **Absent and unreadable are different answers** — see
+  Conventions. Tested through the three modules in `src/store.test.js`.
 - `src/dates.js` — how a date is written on screen, shared by the stats screen's recent
   list and the tournament rows. Pure and framework-free; tested in `src/dates.test.js`.
 - `src/Lineup.jsx` / `src/Lineup.css` — the setup screen's pre-game form panel.
@@ -201,6 +204,20 @@ project dependency. It starts and stops its own preview server.
   - **The archive, the draw and the inactive marks need none of this** — every writer
     re-reads storage first, so a second tab cannot lose an update there. Anything new
     that keeps a whole document in state and writes it back wholesale does.
+- **Absent and unreadable are different answers, and `store.js` is where that lives.**
+  Those three keys used to give the empty value for both and then write regardless, so a
+  value this bundle could not parse was overwritten by whatever the app had in hand:
+  measured against a plausible `{format: 2, matches: [...]}` envelope, **winning one game
+  took 300 matches to 1**, and one import took the cup and the inactive marks with it.
+  Reading was never the destructive half. It is a forward-compatibility hazard the
+  project walks towards deliberately — merge-on-load rather than a new key puts a newer
+  shape under the same name, and the PWA keeps an older bundle running. **A new key that
+  holds one whole document goes through `jsonStore`**, or it is the one that still
+  overwrites. The game key deliberately does not: it holds this tab's own state, so
+  refusing the value on the way *in* (`validGame`) is the recovery.
+  - **A refusal now carries a `reason`**, because the advice differs — a full phone is
+    told to export and delete, and a phone whose history it cannot read has neither on
+    screen to do. `Stats.jsx`'s `refusal()` picks; the footer's warning covers both.
 - **The wide tier and the landscape tier must not both match**, which is what the
   wide tier's `min-height: 451px` is for — the exact complement of the landscape
   tier's `max-height: 450px`. A big phone on its side (932x430 on an iPhone Pro

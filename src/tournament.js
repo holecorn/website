@@ -11,6 +11,7 @@
 
 import { NO_SIDE, nameKey, sideKeyOf, sideLabel } from './scoring.js';
 import { blankStats, finalScore, rosterFor, sideStats } from './stats.js';
+import { jsonStore } from './store.js';
 
 // Stamped on every tournament so a later change of shape can be told from this one
 // without guessing, the way RECORD_FORMAT does for a match.
@@ -20,6 +21,8 @@ export const TOURNAMENT_FORMAT = 1;
 // clear it and a tournament outlives the ties played in it. The archive and the
 // scoreboard settings are split the same way.
 const STORAGE_KEY = 'holecorn.tournaments.v1';
+
+const store = jsonStore(STORAGE_KEY, Array.isArray, () => []);
 
 // Below two entrants there is no tie to play, so there is no tournament.
 export const MIN_ENTRANTS = 2;
@@ -1053,14 +1056,7 @@ export function mergeTournaments(list, incoming) {
   }, list);
 }
 
-export function loadTournaments() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+export const loadTournaments = store.load;
 
 // What is in storage now, and whether this write got through — the shape
 // `saveArchive` and `saveInactive` return.
@@ -1071,15 +1067,9 @@ export function loadTournaments() {
 // there. Nothing deletes to make room here — a tournament is a few hundred bytes
 // against a match's rounds, so a write that fails has not run out of room for
 // *this*, and losing an old bracket would take its ties' meaning with it while
-// leaving them in the archive.
-export function saveTournaments(list) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    return { saved: true, stored: list };
-  } catch {
-    return { saved: false, stored: loadTournaments() };
-  }
-}
+// leaving them in the archive. Nor does it overwrite a value it could not read;
+// `store.js` holds both refusals.
+export const saveTournaments = store.save;
 
 export function saveTournament(t) {
   return saveTournaments(upsertTournament(loadTournaments(), t));

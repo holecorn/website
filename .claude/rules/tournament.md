@@ -289,6 +289,11 @@ the alternatives that were rejected; this section holds what breaks when you cha
     Both merges are individually right, so only `verify-stats.mjs` can see it.
   - **Nothing deletes to make room** — not here, and not in `saveArchive` either: losing a
     bracket would take its ties' meaning with it while leaving the ties in the archive.
+- **`saveTournaments` will not overwrite a draw it cannot read**, the archive's rule and
+  the same code — both `loadTournaments` and `saveTournaments` are `store.js`'s now. A
+  newer shape under the tournaments key used to be replaced by whatever list the app had
+  in hand, so an import that added one cup destroyed every bracket. See
+  `.claude/rules/archive.md`; nothing about the pure half of this file changed.
 - **`saveTournaments` returns `{ saved, stored }`, and the draw ceremony depends on it.**
   It used to catch the quota error and hand the list straight back, and `App.jsx` set
   React state from it — so a draw announced as random and final played out, the bracket

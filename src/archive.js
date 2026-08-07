@@ -10,9 +10,12 @@
 // and tested, the localStorage read/write is a thin untested wrapper.
 
 import { nameKey, nameSlots } from './scoring.js';
+import { jsonStore } from './store.js';
 
 // Its own key, separate from game state, so `New game` can't clear the history.
 const STORAGE_KEY = 'holecorn.matches.v1';
+
+const store = jsonStore(STORAGE_KEY, Array.isArray, () => []);
 
 const TEAMS = ['a', 'b'];
 
@@ -122,14 +125,7 @@ export function renamePlayer(records, from, to, at) {
   });
 }
 
-export function loadArchive() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+export const loadArchive = store.load;
 
 // What is in storage now, and whether this write got through — the shape
 // `saveTournaments` and `saveInactive` return, so a caller settles all three the
@@ -145,14 +141,10 @@ export function loadArchive() {
 // and an oversized import is the only realistic trigger — where deleting local
 // history to fit somebody else's file is the wrong answer under any ordering.
 // Saying it didn't fit is the whole fix; export and delete are already there.
-export function saveArchive(records) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    return { saved: true, stored: records };
-  } catch {
-    return { saved: false, stored: loadArchive() };
-  }
-}
+//
+// **Nor does it overwrite what it could not read** — the same answer to the other
+// way a write destroys history, and the reason both live in `store.js`.
+export const saveArchive = store.save;
 
 export function archiveMatch(game, endedAt) {
   return saveArchive(upsertMatch(loadArchive(), matchRecord(game, endedAt)));

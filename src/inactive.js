@@ -22,10 +22,13 @@
 
 import { nameKey } from './scoring.js';
 import { rosterFor } from './stats.js';
+import { jsonStore, plainObject } from './store.js';
 
 // Its own key, separate from the game, the archive and the tournaments, for the same
 // reason theirs are separate: `New game` must not be able to clear it.
 const STORAGE_KEY = 'holecorn.inactive.v1';
+
+const store = jsonStore(STORAGE_KEY, plainObject, () => ({}));
 
 const TEAMS = ['a', 'b'];
 
@@ -114,26 +117,13 @@ export function mergeInactive(mine, incoming) {
   return out;
 }
 
-export function loadInactive() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
+export const loadInactive = store.load;
 
 // What is in storage now, and whether this write got through — the shape
 // `saveArchive` and `saveTournaments` return. It used to swallow the error and
 // hand the marks back regardless, so the caller set React state from a write that
 // never happened and the person stayed hidden until the next reload brought them
 // back. Nothing deletes to make room: this is a handful of keys against a match's
-// rounds, so a write that fails has not run out of room for *this*.
-export function saveInactive(marks) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(marks));
-    return { saved: true, stored: marks };
-  } catch {
-    return { saved: false, stored: loadInactive() };
-  }
-}
+// rounds, so a write that fails has not run out of room for *this*. Nor does it
+// overwrite a value it could not read; `store.js` holds both refusals.
+export const saveInactive = store.save;
