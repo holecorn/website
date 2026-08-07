@@ -30,7 +30,6 @@ import {
   shuffled,
   tieLabels,
   tieSetup,
-  unfinished,
   upsertTournament,
   validTournament,
 } from './tournament.js';
@@ -554,19 +553,15 @@ describe('tieSetup', () => {
   });
 });
 
-describe('unfinished', () => {
-  it('is every tournament without a champion', () => {
-    const t = tournamentOf([['Rho'], ['Tau']]);
-    expect(unfinished([t], []).map((x) => x.id)).toEqual(['t1']);
-    const played = [tie(t.id, 'singles', ['Rho'], ['Tau'], 'a')];
-    expect(unfinished([t], played)).toEqual([]);
-  });
-
-  it('brings one back when its final is un-archived', () => {
+// `done` is what the two lists split on, so un-archiving the final has to move a
+// tournament back across that line — the reversibility the whole derived shape is for.
+describe('done', () => {
+  it('turns over when the final is archived, and back when it is un-archived', () => {
     const t = tournamentOf([['Rho'], ['Tau']]);
     const played = [tie(t.id, 'singles', ['Rho'], ['Tau'], 'a')];
-    expect(unfinished([t], played)).toEqual([]);
-    expect(unfinished([t], [])).toHaveLength(1);
+    expect(bracket(t, []).done).toBe(false);
+    expect(bracket(t, played).done).toBe(true);
+    expect(bracket(t, []).done).toBe(false);
   });
 });
 
@@ -645,8 +640,8 @@ describe('a recorded result', () => {
     expect(bracket(pairs, []).champion.names).toEqual(['Rho', 'Tau']);
   });
 
-  it('does not announce itself as still running', () => {
-    expect(unfinished([holecornI], [])).toEqual([]);
+  it('is done the moment it is read, having no ties to play', () => {
+    expect(bracket(holecornI, []).done).toBe(true);
   });
 
   it('is nothing at all without a champion, the way a bare id always was', () => {

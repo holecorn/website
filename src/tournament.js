@@ -651,12 +651,6 @@ export function newestFirst(tournaments) {
   return [...tournaments].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 
-// Tournaments with no champion yet. What the setup screen announces, because the
-// next session may be a fortnight after the last one and nobody will remember.
-export function unfinished(tournaments, matches) {
-  return tournaments.filter((t) => !bracket(t, matches)?.done);
-}
-
 // ---------------------------------------------------------------- the series --
 //
 // A cup played again every year, its editions told apart by a suffix on the name — Hole
