@@ -35,6 +35,19 @@ wholesale, by this file's own globs and by that directory's `CLAUDE.md`, so noth
 there can slip through. Where `App.jsx` ended up, and why `scoreboard.md` was left off,
 is in the root `CLAUDE.md`.
 
+`src/shared.test.js` is the third of that kind, and the one with the best evidence behind
+it. Six notes across these files say some helper was consolidated because a second copy
+would drift — `nameKey` and `sideKeyOf` so the career fold and the bracket agree,
+`sideLabel` because four callers join names, `FormPips` and `dates.js` because two copies
+of "what this looks like" have no symptom. Prose was holding all six, and it **did not
+hold**: `pct` had three identical definitions, so the career table and the setup Form panel
+quoted the same percentage through different functions, and `GameStats.jsx` hand-rolled the
+plural `format.js` exists to get right. A one-line formatter is easier to retype than to
+import and there is no structural fix for that, so `OWNED` names each helper and the module
+allowed to declare it. Verified by mutation: putting the local `pct` back fails it and
+names both files. Declarations only, so a call site or an import is not a false positive,
+and the suites are excluded — a test may spell out whatever value it likes.
+
 `src/css.test.js` is the other one that tests something the app never runs: the cascade in
 the stylesheets. Every top-level `@media` block redeclares selectors the base rules already
 set, with no extra class to lift it, so it wins **by source order alone** — and a base rule

@@ -348,7 +348,10 @@ What constrains code outside those files:
   itself on the next reload.
 - **`nameKey` and `sideKeyOf` live in `scoring.js`**, not `stats.js` — the career fold,
   the archive rewrite, the head-to-head pairs and the bracket all have to agree, and two
-  definitions of "the same person" is the failure with no symptom.
+  definitions of "the same person" is the failure with no symptom. **That family is
+  checked now, not merely written down**: `src/shared.test.js` names each helper that
+  exists because a second copy would drift, and the module allowed to declare it. It was
+  added because prose had already failed to hold one — `pct` reached three copies.
 - **Nothing new is recorded to make a stat work.** `rounds` already holds every bag's
   resting tier, so check whether a stat is derivable before adding a field to game state.
 - **Rewriting a record's `players` array *is* the reattribution** — no name index, no
