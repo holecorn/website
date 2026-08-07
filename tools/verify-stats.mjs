@@ -975,6 +975,8 @@ check(
     };
   });
   check('the stats screen is centred', m.left === m.right, `${m.left}px left vs ${m.right}px right`);
+  // Structural now the grid is `.app.play-screen` rather than a list of exclusions, but
+  // this is the screen that taught it, and what it catches is a broad selector coming back.
   check('it does not take the play screen grid', m.display !== 'grid', m.display);
   // `.app` also declares max-width, and Stats.css is bundled first, so the single-class
   // form lost at equal specificity and the screen ran at `.app`'s 480px.

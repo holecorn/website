@@ -276,13 +276,13 @@ project dependency. It starts and stops its own preview server.
   `Positions.css` is its own file for the same reason `Stats.css` is: appending
   base rules to `App.css` is a trap, so a new surface brings its own file and its
   own tier at the end of it.
-- **The wide tier's grid is the *play* screen's, so it excludes `.stats-screen` as well
-  as `.setup`.** The stats screen is an `.app` too, and without the exclusion it took the
-  grid: everything landed in the 408px first column while 340px stayed reserved for a rail
-  that never renders. Measured on an 11" iPad, that put the content **196px left of
-  centre** and squeezed the ten-column career table into a 408px scroller on the widest
-  screens there are — while the mostly-empty box was itself perfectly centred, which is
-  why it read as a slight offset rather than a broken layout.
+- **The wide tier's grid is asked for by name — `.app.play-screen` — and a new screen
+  needs nothing.** It used to be spelled as a list of the screens it *isn't*
+  (`.app:not(.setup):not(.stats-screen):not(.tournament-screen)`), which every new screen
+  joined by being written: the stats screen took the grid and landed **196px left of
+  centre** with 340px held for a rail that never renders, and the tournament screen then
+  did the same to its bracket. **So the class in `App.jsx` is what turns the grid on**,
+  and a screen that wants the rail asks for it — see `.claude/rules/layout.md`.
 - **`.app.stats-screen`, not `.stats-screen`, and that is not tidiness.** All three of its
   declarations (`max-width`, `gap`, `padding-top`) also exist on `.app`, and at equal
   specificity source order decides — which `App.jsx` settles by importing `Stats.jsx`, and
@@ -376,9 +376,6 @@ What constrains code outside those files:
   disagree. `Lineup` folds whatever pool it is handed and only the heading says which —
   **anything new that reports form has to be told which pool it is drawing**, or it will
   be the one surface still adding up a career at a cup.
-- **`.tournament-screen` must stay excluded from the wide tier's grid in `App.css`** —
-  the same trap `.stats-screen` carries. Without it the bracket draws in 408px with
-  340px reserved for a rail that never renders.
 
 ## External scoreboard
 

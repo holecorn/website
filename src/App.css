@@ -1405,17 +1405,14 @@
 @media (min-width: 900px) and (orientation: landscape) and (min-height: 451px) {
   /* Column 1 matches `.main`'s cap, so the rail sits beside the cards instead of
      across a gutter, and the pair is centred rather than left-aligned.
-     `:not(.stats-screen)` because that screen is also an `.app` and has no rail: it
-     was getting this grid, dropping all its content into the 408px column while 340px
-     stayed reserved for a rail that never renders. Measured, that put the content
-     196px left of centre and squeezed the career table into a 408px scroller on the
-     widest screens there are. */
-  /* The play screen's grid, so every other screen has to be excluded by name. The
-     stats screen taught this once: without the exclusion it took the grid, landed in
-     the 408px first column and reserved 340px for a rail that never renders. The
-     tournament screen did exactly the same, and its bracket had two of four columns
-     to draw in. A new screen with its own class needs adding here. */
-  .app:not(.setup):not(.stats-screen):not(.tournament-screen) {
+     Asked for by name, because this is the only screen with a rail to put in column 2.
+     It used to be `.app:not(.setup):not(.stats-screen):not(.tournament-screen)` — a
+     list of everything that isn't the play screen, which a new screen joined by being
+     written. Both additions were made after the fact: the stats screen took the grid,
+     landing 196px left of centre with 340px reserved for a rail that never renders,
+     and the tournament screen then did the same to its bracket. Inherited by default
+     and only at iPad-class sizes, so both survived every phone test. */
+  .app.play-screen {
     max-width: 1040px;
     display: grid;
     grid-template-columns: minmax(0, 408px) minmax(260px, 340px);
@@ -1424,10 +1421,10 @@
     column-gap: 24px;
     row-gap: 16px;
   }
-  .app:not(.setup):not(.stats-screen):not(.tournament-screen) > *:not(.side-rail):not(.footer) {
+  .app.play-screen > *:not(.side-rail):not(.footer) {
     grid-column: 1;
   }
-  .app:not(.setup):not(.stats-screen):not(.tournament-screen) > .footer {
+  .app.play-screen > .footer {
     grid-column: 1 / -1;
   }
   .side-rail {

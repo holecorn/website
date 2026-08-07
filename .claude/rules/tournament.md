@@ -307,9 +307,6 @@ the alternatives that were rejected; this section holds what breaks when you cha
   once a year, its button sits under the bracket you were reading, and there is a fact an undo
   bar cannot carry — the ties stay in the archive and keep counting. The dialog says so, and
   `verify-tournament.mjs` checks the claim is true rather than only that it is made.
-- **`.tournament-screen` must be excluded from the wide tier's grid in `App.css`**, the same
-  trap `.stats-screen` already carries. Without it the screen took the play screen's grid: a
-  bracket drawing in 408px with 340px reserved for a rail that never renders.
 - **A tournament's own stats are the second tab of an open row, and everything on it is
   derived from the view the bracket tab is drawing.** `tieMatches`, `entrantStats`,
   `routeFor`, `reachedBy`, `tieExtremes` and `tieHistory` all take that view rather than the

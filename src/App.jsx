@@ -817,7 +817,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app play-screen">
       <div className="main">
       <header className="scoreboard">
         <TeamScore

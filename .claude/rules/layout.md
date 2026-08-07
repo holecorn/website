@@ -42,6 +42,20 @@ source-order traps themselves — read those first, they bite hardest.
 
 ## The wide and landscape tiers
 
+- **The wide tier's grid is opt-in — `.app.play-screen` — and that is the fix for a trap
+  that fired twice.** It was written as `.app:not(.setup):not(.stats-screen):not(.tournament-screen)`:
+  the play screen described by naming every screen that isn't it. Every screen is an
+  `.app`, so a new one inherited the grid by *default* and had to be excluded after the
+  fact. Both times the symptom was the same and neither was caught before shipping — the
+  content drops into the 408px first column while 340px stays reserved for a rail that
+  never renders. Measured on an 11" iPad the stats screen sat **196px left of centre**
+  with its ten-column career table in a 408px scroller, and it read as a slight offset
+  rather than a broken layout because the mostly-empty box was itself perfectly centred;
+  the tournament screen then drew its bracket in two of the four columns it wanted. It
+  only misbehaves at iPad-class sizes, which is why every phone test passed. Opting in
+  costs one class in `App.jsx` and defends itself: `verify-lanes.mjs` asserts the rail
+  and the grid agree, and dropping the class fails it on all three wide devices, because
+  `wideLayout` still renders the rail's panels with nothing to lay them out.
 - **The wide tier and the landscape tier must not both match**, which is what the
   wide tier's `min-height: 451px` is for — the exact complement of the landscape
   tier's `max-height: 450px`. A big phone on its side (932x430 on an iPhone Pro
