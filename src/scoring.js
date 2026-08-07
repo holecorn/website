@@ -54,6 +54,16 @@ export const PALETTE = [
   { name: 'yellow', value: '#f2c94c' },
 ];
 
+// Blue against red, which is what a game opens on and what every surface that can be
+// asked to draw a team before there is a game falls back to — `Logo.jsx` with no props,
+// `Display.jsx` with no payload yet. Those two held the hexes literally, so a team colour
+// changed here left the wordmark and the board's cold-start drawing on the old one.
+// Derived from the palette rather than written again for the same reason.
+//
+// **Not the reds in App.css, Stats.css and Tournament.css.** Those share `#eb5757` by
+// coincidence — they are a UI accent, and they must not move when a team colour does.
+export const DEFAULT_COLORS = { a: PALETTE[0].value, b: PALETTE[1].value };
+
 export function newGame(target = DEFAULT_TARGET) {
   return {
     // Two player slots per team; singles uses only the first. In doubles the
@@ -66,7 +76,7 @@ export function newGame(target = DEFAULT_TARGET) {
     // odd/even split is what keeps singles reading "Player 1" against
     // "Player 2", which is the pairing seen most.
     players: { a: ['Player 1', 'Player 3'], b: ['Player 2', 'Player 4'] },
-    colors: { a: '#2f80ed', b: '#eb5757' },
+    colors: { ...DEFAULT_COLORS },
     mode: 'singles',
     // A game with guests in it: no names are taken and nothing is recorded. Not
     // a second value of `mode` — it is orthogonal to singles/doubles, and unlike

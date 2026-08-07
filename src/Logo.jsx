@@ -23,6 +23,8 @@
 // instead: generate_logo.mjs fits each box to its own letters, and at 5 mm pitch the
 // quantisation swamps a nudge this size.
 
+import { DEFAULT_COLORS } from './scoring.js';
+
 // Tint a colour toward white so it reads as powdery chalk and stays legible on
 // the dark background.
 function chalk(hex, amount = 0.28) {
@@ -34,7 +36,11 @@ function chalk(hex, amount = 0.28) {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 
-export default function Logo({ colorA = '#2f80ed', colorB = '#eb5757', className }) {
+export default function Logo({
+  colorA = DEFAULT_COLORS.a,
+  colorB = DEFAULT_COLORS.b,
+  className,
+}) {
   const chalkA = chalk(colorA);
   const chalkB = chalk(colorB);
   return (

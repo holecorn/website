@@ -11,7 +11,7 @@ import {
   saveScoreboardConfig,
   segmentDigits,
 } from './scoreboard.js';
-import { winVerb } from './scoring.js';
+import { DEFAULT_COLORS, winVerb } from './scoring.js';
 import { DIGIT_VIEWBOX, SEGMENTS, litSegments } from './segments.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import './Display.css';
@@ -191,8 +191,8 @@ export default function Display() {
     );
   }
 
-  const colorA = payload?.colorA ?? '#2f80ed';
-  const colorB = payload?.colorB ?? '#eb5757';
+  const colorA = payload?.colorA ?? DEFAULT_COLORS.a;
+  const colorB = payload?.colorB ?? DEFAULT_COLORS.b;
   const stale = status !== 'connected' || !senderOnline;
   const winnerLabel = payload?.winner
     ? (payload.winner === 'a' ? payload.teamA : payload.teamB)
