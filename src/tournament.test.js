@@ -491,6 +491,21 @@ describe('entrantFaults', () => {
     expect(entrantFaults([['Rho', 'Rho'], ['Rho']]).map((f) => f.index)).toEqual([0, 1]);
   });
 
+  it('refuses one person drawn into two different pairs', () => {
+    // The fault counting sides could not see: these two are not the same pair, so their
+    // keys differ and neither is a duplicate of the other. Rho is still one person on
+    // both sides of the bracket.
+    expect(entrantFaults([['Rho', 'Tau'], ['Rho', 'Sigma']]).map((f) => f.index)).toEqual([0, 1]);
+    const three = entrantFaults([['Rho', 'Tau'], ['Rho', 'Sigma'], ['Rho', 'Phi']]);
+    expect(three.map((f) => f.index)).toEqual([0, 1, 2]);
+    expect(three.every((f) => f.fault === 'twice')).toBe(true);
+    // Only the sides that share somebody, and the spelling is compared the way the rest
+    // of the app compares a name.
+    expect(
+      entrantFaults([['Rho', 'Tau'], ['sigma', 'Phi'], ['Omega', ' SIGMA ']]).map((f) => f.index),
+    ).toEqual([1, 2]);
+  });
+
   it('refuses a pair with one half missing, which the draw used to accept', () => {
     // The bug this rule exists for: the draw succeeded and the tie it produced could
     // never be started, because `lineupFaults` refuses a blank slot and `Start` stays

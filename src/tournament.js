@@ -103,21 +103,21 @@ function asSide(names) {
 //     pair with one half empty is a side of one person who would play two, and it is
 //     `lineupFaults` that would eventually refuse it, long after the draw.
 //   'twice' — one person in two seats is one person on both sides of the bracket, where
-//     `playerStats` folds a win and a loss for the same tie into one career. A pair that
-//     is the same person twice is the same fault turned inward: they are their own
-//     partner. `sideKeyOf` dedupes, so that one has to be counted rather than keyed.
+//     `playerStats` folds a win and a loss for the same tie into one career. **Counted per
+//     named slot across the field, never per side**: two different pairs sharing one person
+//     have different `sideKeyOf` keys, so a key count reads them as clean — the fault that
+//     was live here. One slot count catches that, the same pair drawn twice, and a pair
+//     that is its own partner, which is why no key check is left.
 export function entrantFaults(entrants) {
-  const sides = entrants.map((names) => {
-    const side = asSide(names);
-    return { ...side, people: new Set(side.names.map(nameKey).filter(Boolean)).size };
-  });
-  const counts = new Map();
-  for (const { key } of sides) {
-    if (key !== NO_SIDE) counts.set(key, (counts.get(key) ?? 0) + 1);
+  const sides = entrants.map(asSide);
+  const seats = new Map();
+  const peopleIn = (side) => side.names.map(nameKey).filter(Boolean);
+  for (const side of sides) {
+    for (const person of peopleIn(side)) seats.set(person, (seats.get(person) ?? 0) + 1);
   }
-  const faultOf = ({ names, key, people }) => {
-    if (names.some((n) => !n)) return 'blank';
-    if (people < names.length || counts.get(key) > 1) return 'twice';
+  const faultOf = (side) => {
+    if (side.names.some((n) => !n)) return 'blank';
+    if (peopleIn(side).some((person) => seats.get(person) > 1)) return 'twice';
     return null;
   };
   return sides

@@ -165,6 +165,14 @@ the alternatives that were rejected; this section holds what breaks when you cha
   tie nobody can start. It did once: `sideKeyOf` filters blanks, so a doubles pair with one
   half empty read as a good one-person side, the draw took it, and `Start` then stayed off
   for ever. A side needs as many people as it has slots, and every slot named.
+  - **It counts *named slots* across the field, and keying by side is what got this wrong
+    a second time.** Counting duplicate `sideKeyOf` keys catches the same pair drawn twice
+    and misses one person in two *different* pairs — different keys, neither a duplicate —
+    so `[['Rho','Tau'], ['Rho','Sigma']]` drew clean and made a tie `lineupFaults` then
+    refused, with no route out but deleting the cup. One slot count catches all three
+    shapes (two seats, the same pair twice, a pair that is its own partner), which is why
+    there is no key check left in it. **Don't reintroduce one**; `tournament.test.js` pins
+    every shape.
   - **The faults are *reported* only once a name is in, though they are computed from the
     start.** The form opens on two empty rows that are the app's rather than anybody's, so
     on arrival the old version underlined both and said `Everyone entering needs a name.` —
