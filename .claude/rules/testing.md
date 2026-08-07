@@ -35,6 +35,18 @@ wholesale, by this file's own globs and by that directory's `CLAUDE.md`, so noth
 there can slip through. Where `App.jsx` ended up, and why `scoreboard.md` was left off,
 is in the root `CLAUDE.md`.
 
+`src/css.test.js` is the other one that tests something the app never runs: the cascade in
+the stylesheets. Every top-level `@media` block redeclares selectors the base rules already
+set, with no extra class to lift it, so it wins **by source order alone** — and a base rule
+written below it silently takes that win back, at one viewport size, with nothing failing.
+It asserts the property rather than the position the notes used to claim: a base rule may
+sit below a tier, it may not redeclare a property that tier sets for the same selector.
+**Verified by mutation and not by failing today**, because the invariant does hold — adding
+`.history { font-size }` to `App.css`'s landscape tier fails it and names the rule, the
+property and the tier; adding `.history { letter-spacing }`, which no base rule sets,
+correctly passes. The positional version would have failed on 47 harmless rules and still
+not said which one mattered.
+
 `tools/verify-positions.mjs` covers the court and in-game stats panels, and the
 assertion it exists for is that **the court names the same thrower the scoring
 lanes do**. Both sides derive the parity correctly and are unit tested; nothing

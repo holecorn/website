@@ -286,13 +286,15 @@ project dependency. It starts and stops its own preview server.
   - **`public/icon.svg` and `public/app-icon.svg` are still at 15°**, deliberately. They
     are an abstract pair of filled boxes rather than the wordmark, and changing them means
     re-rasterising three committed PNGs and moving everyone's installed home-screen icon.
-- **CSS media-query ordering:** in `src/App.css`, the responsive tiers
-  (`max-height` and the landscape/wide-history queries) live at the **end of the
-  file, after the base rules**. They rely on source order to win at equal
-  specificity — don't move base rules below them (a bug we already hit once).
-  `Positions.css` is its own file for the same reason `Stats.css` is: appending
-  base rules to `App.css` is a trap, so a new surface brings its own file and its
-  own tier at the end of it.
+- **A `@media` tier wins by source order alone, so a base rule below one silently beats
+  it** — no error, and only at the size that tier is for (`App.css` collapsed the lanes to
+  26px this way once). This was carried as "the tiers live at the end of the file", which
+  is a position standing in for the property, and **the position had already drifted**: 47
+  base rules sit below a tier across three files and not one of them is named by the tier
+  above it. `src/css.test.js` holds the property instead — a base rule may sit below a
+  tier, but not redeclare a property that tier sets for the same selector.
+  `Positions.css` is its own file for the same reason `Stats.css` is: appending base rules
+  to `App.css` is a trap, so a new surface brings its own file and its own tier.
 - **The wide tier's grid is asked for by name — `.app.play-screen` — and a new screen
   needs nothing.** It used to be spelled as a list of the screens it *isn't*
   (`.app:not(.setup):not(.stats-screen):not(.tournament-screen)`), which every new screen
