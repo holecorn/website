@@ -10,6 +10,7 @@ paths:
   - "src/Display.css"
   - "src/Panel.jsx"
   - "src/Panel.css"
+  - "src/main.jsx"
   - "src/panelRender.js"
   - "src/panelRender.test.js"
   - "src/panelPaint.js"

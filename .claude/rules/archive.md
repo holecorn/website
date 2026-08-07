@@ -10,6 +10,8 @@ paths:
   - "src/inactive.test.js"
   - "src/store.js"
   - "src/store.test.js"
+  - "src/App.jsx"
+  - "src/nameField.js"
   - "src/Chip.jsx"
   - "src/Chip.css"
   - "src/FormPips.jsx"

@@ -19,18 +19,31 @@ many hard-won constraints, and loading all of them on every task crowds out the 
 
 | File | Loads when you open | Holds |
 | --- | --- | --- |
-| `.claude/rules/scoring.md` | `scoring.js`, `Board.jsx`, `Positions.*`, `Lineup.*`, `GameStats.*` | guest games, lineup faults, the court, the toss |
-| `.claude/rules/archive.md` | `archive.js`, `stats.js`, `Stats.*`, `inactive.js`, `store.js` | records, career stats, name editing, inactive players, the storage refusals |
-| `.claude/rules/tournament.md` | `tournament.js`, `Tournament.*` | the bracket, the draw ceremony, past tournaments |
-| `.claude/rules/scoreboard.md` | `scoreboard*`, `panel*`, `Display.*`, `Panel.*`, `segments.js` | the MQTT contract, the five board screens, the emulator |
-| `.claude/rules/layout.md` | any `src/*.css`, `Logo.jsx` | lane caps, responsive tiers, the wordmark, the side rail |
-| `.claude/rules/testing.md` | any `src/*.test.js`, anything in `tools/` | what each suite and browser check is for |
+| `.claude/rules/scoring.md` | `scoring.js`, `Board.jsx`, `Positions.*`, `Lineup.*`, `GameStats.*`, `App.jsx` | guest games, lineup faults, the court, the toss |
+| `.claude/rules/archive.md` | `archive.js`, `stats.js`, `Stats.*`, `inactive.js`, `store.js`, `nameField.js`, `App.jsx` | records, career stats, name editing, inactive players, the storage refusals |
+| `.claude/rules/tournament.md` | `tournament.js`, `Tournament.*`, `App.jsx` | the bracket, the draw ceremony, past tournaments |
+| `.claude/rules/scoreboard.md` | `scoreboard*`, `panel*`, `Display.*`, `Panel.*`, `segments.js`, `main.jsx` | the MQTT contract, the five board screens, the emulator |
+| `.claude/rules/layout.md` | any `src/*.css`, `Logo.jsx`, `App.jsx` | lane caps, responsive tiers, the wordmark, the side rail |
+| `.claude/rules/testing.md` | any `src/*.test.js`, anything in `tools/`, `App.jsx` | what each suite and browser check is for |
 | `firmware/hub75/CLAUDE.md` | anything in `firmware/hub75/` | the panel, the power budget, the pixel check |
 
 Each section below that has a rule file names it and keeps only the facts that constrain
 code **outside** that file's globs — because that is where the rule will not have loaded.
 `docs/TOURNAMENT.md` and `docs/OFFLINE-SCOREBOARD.md` hold decisions and alternatives;
 `firmware/hub75/README.md` holds the hardware reasoning.
+
+**`App.jsx` is in five of those lists on purpose, and it is the exception the scoping
+buys nothing on.** It is the app shell: the archive effect, the tournament derivations,
+the toss draw, `knownNames`, `wideLayout` and the publisher wiring all live there, so
+every subsystem has something to say about it and the six rule files name it 32 times in
+prose between them. Scoped to none of them, it opened with no rules at all — the one file
+where a change most often breaks something already written down. `scoreboard.md` is the
+one left off deliberately: both its mentions are pointers elsewhere (`PALETTE` belongs to
+`scoring.js`, the lineup pool to `tournament.md`), and it is the second-largest file.
+**The way to make this entry unnecessary is to move code out of `App.jsx`** into modules
+the existing globs already cover — not to trim the lists. `src/rules.test.js` holds both
+directions: a `src/` file the rules discuss but no glob matches, and a glob that matches
+nothing after a rename.
 
 **Adding a note:** put it in the rule file for the subsystem, not here. This file only
 grows for something that is true regardless of which file you have open.

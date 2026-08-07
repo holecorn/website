@@ -13,6 +13,7 @@ paths:
   - "src/index.css"
   - "src/Logo.jsx"
   - "src/Logo.test.js"
+  - "src/App.jsx"
   - "tools/verify-lanes.mjs"
 ---
 

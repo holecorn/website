@@ -4,6 +4,7 @@ paths:
   - "src/tournament.test.js"
   - "src/Tournament.jsx"
   - "src/Tournament.css"
+  - "src/App.jsx"
   - "tools/verify-tournament.mjs"
   - "docs/TOURNAMENT.md"
 ---

@@ -1,6 +1,7 @@
 ---
 paths:
   - "src/*.test.js"
+  - "src/App.jsx"
   - "tools/*.mjs"
   - "firmware/hub75/host/test_*.cpp"
 ---
@@ -21,6 +22,18 @@ drives the transport with a fake MQTT client, because the cases that matter — 
 lost acknowledgement, a refused subscription, a half-open socket — are ones a
 real broker will not reproduce on demand. `openScoreboardLink` takes an
 injectable `connect` for exactly this; production never passes it.
+
+`src/rules.test.js` is the odd one out: it tests the notes rather than the app. A rule
+file reaches a reader only through its `paths:` frontmatter, and prose and globs drift
+apart in both directions with no symptom either way — the rules simply don't arrive, and
+the next change breaks something the project had already written down. So it asserts that
+every `src/` file the rules discuss is matched by some rule file's globs, and that every
+glob still matches a file. The first found `App.jsx`, `main.jsx` and `nameField.js`
+orphaned; the second is the rename guard, and fails on a glob pointed at a name nothing
+answers to. It sweeps `src/` only — `tools/*.mjs` and `firmware/hub75/` are covered
+wholesale, by this file's own globs and by that directory's `CLAUDE.md`, so nothing new
+there can slip through. Where `App.jsx` ended up, and why `scoreboard.md` was left off,
+is in the root `CLAUDE.md`.
 
 `tools/verify-positions.mjs` covers the court and in-game stats panels, and the
 assertion it exists for is that **the court names the same thrower the scoring

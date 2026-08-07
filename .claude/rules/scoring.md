@@ -9,6 +9,7 @@ paths:
   - "src/Lineup.css"
   - "src/GameStats.jsx"
   - "src/GameStats.css"
+  - "src/App.jsx"
   - "tools/verify-positions.mjs"
 ---
 
