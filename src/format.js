@@ -1,7 +1,11 @@
-// How a number is written on screen, shared by the career screen and the tournament
-// screen. `src/dates.js` exists for exactly this reason and this is the same rule: two
-// copies of "how a duration reads" is the drift with no symptom, and the two screens sit
-// beside each other in the same app.
+// How a number is written on screen, shared by every screen that writes one — the career
+// and tournament screens, the setup Form panel and the in-game stats. `src/dates.js`
+// exists for exactly this reason and this is the same rule: two copies of "how a number
+// reads" is the drift with no symptom.
+//
+// It had three copies of `pct` and a hand-rolled plural in `GameStats.jsx`, so the career
+// table and the Form panel quoted the same player's hole percentage through two different
+// functions one screen apart. Import from here rather than writing a one-liner.
 //
 // Pure and framework-free, like dates.js. Nothing here reads the clock.
 

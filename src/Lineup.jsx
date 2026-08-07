@@ -15,10 +15,9 @@
 import { useMemo } from 'react';
 import { FORM_LENGTH, lineupStats, sideRecord } from './stats.js';
 import { teamLabel } from './scoring.js';
+import { pct } from './format.js';
 import FormPips from './FormPips.jsx';
 import './Lineup.css';
-
-const pct = (n) => `${Math.round(n * 100)}%`;
 
 export default function Lineup({ game, colors, matches, series }) {
   const rows = useMemo(() => lineupStats(matches, game), [matches, game]);

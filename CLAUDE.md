@@ -87,7 +87,9 @@ project dependency. It starts and stops its own preview server.
   row of them sits in. Shared by the career screen's totals and a tournament's, the
   way `FormPips` is shared; it was private to `Stats.jsx` until the second caller.
 - `src/format.js` — how a number is written on screen (`pct`, `one`, `plural`,
-  `minutes`), shared by the two stats screens. Pure, the `dates.js` precedent.
+  `minutes`). Pure, the `dates.js` precedent. **Import from here rather than writing the
+  one-liner**: `pct` had three copies and `GameStats.jsx` hand-rolled the plural that
+  `plural` exists for, so two screens quoted the same percentage through different code.
 - `src/Modal.jsx` — a dialog that opens by being mounted, shared by the stats and
   tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
 - `src/nameField.js` — `NAME_FIELD`, the props every person-name field needs to stop

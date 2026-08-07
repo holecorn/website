@@ -2,9 +2,8 @@
 // what a thrown bag can tell you, since nothing here has a result yet.
 
 import { gameStats, summary } from './stats.js';
+import { pct, plural } from './format.js';
 import './GameStats.css';
-
-const pct = (n) => `${Math.round(n * 100)}%`;
 
 export default function GameStats({ game, colors }) {
   if (game.rounds.length === 0) {
@@ -54,9 +53,9 @@ export default function GameStats({ game, colors }) {
         </tbody>
       </table>
       <p className="game-stats-foot">
-        {rounds} round{rounds === 1 ? '' : 's'} · {washes} wash
-        {washes === 1 ? '' : 'es'} · {fourBaggers} four bagger
-        {fourBaggers === 1 ? '' : 's'}
+        {rounds} {plural(rounds, 'round', 'rounds')} · {washes}{' '}
+        {plural(washes, 'wash', 'washes')} · {fourBaggers}{' '}
+        {plural(fourBaggers, 'four bagger', 'four baggers')}
       </p>
     </div>
   );
