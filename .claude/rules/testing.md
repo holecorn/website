@@ -336,6 +336,18 @@ invisible to the unit suite. Before it, the lanes were 24 buttons named `bag hol
 - **It is located `getByRole('status')`, not `.main > [role=status]`.** Measured: with a
   selector, adding `aria-hidden="true"` to the region passes every assertion in the file
   while no screen reader would ever read it. The role query is what fails that.
+- **The history block splits the same way**, and for the same reason: `roundLine` is
+  pure, so seven mutations of it — naming one partner instead of the side, naming
+  nobody, keeping the tiers nothing landed on, calling a zero net a score, swapping the
+  two tiers, reading the same side for both cells, and having nothing to say for a side
+  that put nothing on — die in `scoring.test.js`. The browser has the wiring and the
+  seen half: four mutations of `App.jsx` fail it (the sentences dropped, the glyphs let
+  back into the tree, the heading announced as a column header, the heading's two
+  colours swapped) and a fifth, the heading deleted outright, fails three checks.
+- **The heading's colours are read in one `page.evaluate`, not per element.** Deleting
+  the heading altogether then fails those two assertions as well; located separately it
+  timed out of the whole file instead — the same crash-rather-than-fail the live
+  region's `allInnerTexts` avoids.
 
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so

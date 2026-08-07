@@ -1356,26 +1356,46 @@
 }
 
 .history {
-  list-style: none;
-  margin: 0;
-  padding: 12px;
+  /* No padding at the top: the sticky heading below supplies it out of its own
+     background, so a scrolled row passes behind it rather than through the gap. */
+  padding: 0 12px 12px;
   background: var(--panel);
   border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
-.history li {
-  display: grid;
-  grid-template-columns: auto 1fr 1fr;
-  gap: 8px;
-  align-items: center;
+/* A table rather than the list this was, so the column naming each team lines up
+   with the cells under it by construction: two elements sharing a hand-written
+   `grid-template-columns` is the drift this avoids. */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.history-table th,
+.history-table td {
+  padding: 4px 8px 4px 0;
+  font-weight: inherit;
+}
+
+.history-table thead th {
+  /* The rail scrolls a long game (see the wide tier), and a column heading that
+     scrolls away takes the only non-colour way of telling the two apart with it. */
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  padding-top: 12px;
+  padding-bottom: 8px;
+  font-weight: 700;
 }
 
 .history-round {
+  /* `1%` with `nowrap` is how a table column is asked to take only what its content
+     needs; the two team columns then split the rest evenly. */
+  width: 1%;
+  white-space: nowrap;
   color: var(--muted);
   font-weight: 700;
 }

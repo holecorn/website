@@ -179,6 +179,32 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     `getByRole` for the same reason it exists at all: a selector would still find a
     region an `aria-hidden` ancestor had taken out of the tree.
 
+## `roundLine` is how a history row tells the two teams apart
+
+- **The round history failed both channels at once.** Measured from the accessibility
+  tree it read `R1 2◎ 2▬ → +0 2◎ 2▬ → +0` — one list item, nobody named in it, and the
+  glyphs reaching a screen reader as Unicode names or as nothing. And on a wash the two
+  halves are byte-identical, so the only thing telling them apart was hue: red against
+  green is CIEDE2000 **4.4** under deuteranopia, which is not a near miss but the same
+  colour, and the default blue against red is **1.11:1** in greyscale.
+  - **`roundLine` names the team rather than leaning on the column heading.** A heading
+    is only reliably announced when someone navigates cell by cell, and a row is read
+    straight through far more often than that — which is exactly the reading where two
+    identical cells stay ambiguous. So the heading is `aria-hidden` and purely the seen
+    half; without that it would be said again against every cell that has already
+    named itself.
+  - **It leaves out a tier nothing landed on**, because every row has at least one zero
+    and a zero read aloud is a word spent saying nothing happened. `nothing on` covers
+    the side that put no bags up at all.
+  - **The counts and the net are separate clauses on purpose.** Cancellation means a
+    side can out-throw the other and still score nothing, which is the row somebody is
+    most likely to be checking.
+  - **A `<table>`, not the `<ol>` it was.** The heading has to line up with the cells
+    under it, and two elements sharing a hand-written `grid-template-columns` is the
+    drift that avoids. The heading is `position: sticky` because the wide tier scrolls
+    a long game in the rail, and a heading that scrolls away takes the only non-colour
+    channel with it.
+
 ## Nobody plays themselves, and nobody plays nameless
 
 - **Nobody can play themselves and nobody plays nameless, and `lineupFaults` is the

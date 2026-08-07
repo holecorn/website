@@ -25,6 +25,7 @@ import {
   unthrownCount,
   roundComplete,
   roundReport,
+  roundLine,
   validGame,
 } from './scoring.js';
 
@@ -298,6 +299,68 @@ describe('roundReport', () => {
   it('says the colour in a guest game, like everything else that names a player', () => {
     const g = playRound(named(21, { casual: true }), ['hole', 'floor', 'floor', 'floor'], emptyPositions());
     expect(roundReport(g)).toBe('Round 1: Blue scored 3. Blue 3, Red 0.');
+  });
+});
+
+describe('roundLine', () => {
+  const named = (over = {}) => ({
+    ...newGame(),
+    players: { a: ['Rho', 'Tau'], b: ['Sigma', 'Phi'] },
+    ...over,
+  });
+  const line = (game, a, b, team) => roundLine(game, playRound(game, a, b).rounds[0], team);
+
+  it('names the team, because the two halves of a row are otherwise identical', () => {
+    const g = named();
+    const a = ['hole', 'hole', 'board', 'board'];
+    expect(line(g, a, a, 'a')).toBe('Rho: 2 in the hole, 2 on the board, no points.');
+    expect(line(g, a, a, 'b')).toBe('Sigma: 2 in the hole, 2 on the board, no points.');
+  });
+
+  it('gives the net rather than leaving it to be worked out from the counts', () => {
+    const g = named();
+    expect(line(g, ['hole', 'hole', 'hole', 'hole'], emptyPositions(), 'a')).toBe(
+      'Rho: 4 in the hole, scored 12.',
+    );
+  });
+
+  // The visible cell shows both counts whatever they are, but a zero read aloud is a
+  // word spent saying nothing happened — and every row has at least one.
+  it('leaves out a tier nothing landed on', () => {
+    const g = named();
+    expect(line(g, ['board', 'floor', 'floor', 'floor'], emptyPositions(), 'a')).toBe(
+      'Rho: 1 on the board, scored 1.',
+    );
+  });
+
+  it('says so plainly when a side put nothing on at all', () => {
+    const g = named();
+    expect(line(g, ['hole', 'floor', 'floor', 'floor'], emptyPositions(), 'b')).toBe(
+      'Sigma: nothing on, no points.',
+    );
+  });
+
+  // Cancellation, so a side can out-throw the other and still score nothing — which is
+  // the row a reader is most likely to be checking.
+  it('separates what was thrown from what it was worth', () => {
+    const g = named();
+    expect(line(g, ['hole', 'board', 'floor', 'floor'], ['hole', 'board', 'floor', 'floor'], 'a')).toBe(
+      'Rho: 1 in the hole, 1 on the board, no points.',
+    );
+  });
+
+  it('takes both partners in doubles, so the row names a side rather than a thrower', () => {
+    const g = named({ mode: 'doubles' });
+    expect(line(g, ['hole', 'floor', 'floor', 'floor'], emptyPositions(), 'a')).toBe(
+      'Rho & Tau: 1 in the hole, scored 3.',
+    );
+  });
+
+  it('says the colour in a guest game, like everything else that names a player', () => {
+    const g = named({ casual: true });
+    expect(line(g, ['hole', 'floor', 'floor', 'floor'], emptyPositions(), 'a')).toBe(
+      'Blue: 1 in the hole, scored 3.',
+    );
   });
 });
 

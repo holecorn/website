@@ -1,5 +1,5 @@
 // Whether a round can be scored without seeing the screen: entering one in the lanes,
-// and hearing what committing it did.
+// hearing what committing it did, and reading back what the earlier ones came to.
 //
 // The lanes are the whole app: twelve tap targets per team, and where a bag is
 // resting is drawn as the vertical position of a coloured square. Measured before
@@ -23,6 +23,12 @@
 // state, the only live region on the play screen was the footer's save warning, which
 // is empty unless the phone cannot write — so the score changing, WASH, a four bagger
 // and the win were all announced to nobody.
+//
+// The third: the round history said `R1 2◎ 2▬ → +0 2◎ 2▬ → +0` and nothing else —
+// measured from the accessibility tree, one list item, no team named anywhere in it.
+// On a wash the two halves are byte-identical, so the only thing telling them apart
+// was hue, and red against green is CIEDE2000 4.4 under deuteranopia. Two channels
+// failing on one row: nothing to read, and nothing to look at either.
 
 import { chromium } from 'playwright';
 
@@ -204,6 +210,62 @@ console.log('\nand what the round did is said out loud');
     await spoken(),
   );
   check('the banner agrees with it', (await page.locator('.winner-banner').innerText()) === 'Rho & Tau win!');
+}
+
+// Round 1 above was a wash both sides threw the same way, which is the row the colour
+// was carrying alone: the two halves are the same eleven characters. The sentences are
+// `roundLine`, pinned in `scoring.test.js`; what is left for here is that they reach the
+// tree, that the glyphs do not, and that the heading names the column it sits over.
+console.log('\nand the history says whose each half of a row is');
+{
+  await page.getByRole('button', { name: /^History/ }).click();
+  await page.waitForSelector('.history');
+
+  const seen = await page
+    .locator('.history tbody tr')
+    .last()
+    .locator('td [aria-hidden="true"]')
+    .allInnerTexts();
+  check('the two halves of the wash are the same characters', seen[0] === seen[1] && seen[0] === '0◎ 4▬ → +0', seen.join(' | '));
+
+  const snap = await page.locator('.history').ariaSnapshot();
+  const cells = [...snap.matchAll(/\bcell "(.+?)"/g)].map((m) => m[1]);
+  check('every cell names its own side and what it did', cells.length === 6, `${cells.length}`);
+  check(
+    'including the wash, where the characters cannot',
+    cells.slice(4).join(' | ') ===
+      'Rho & Tau: 4 on the board, no points. | Sigma & Phi: 4 on the board, no points.',
+    cells.slice(4).join(' | '),
+  );
+  // Glyphs, not words: a screen reader gets the Unicode names or nothing, and either
+  // way it is read on top of the sentence that already said it.
+  check('and the glyphs themselves are out of the tree', !snap.includes('◎'), snap.match(/.*◎.*/)?.[0] ?? '');
+  // The heading is the seen half only. In the tree it would be announced against every
+  // cell, each of which has already named the side.
+  check('the heading is not announced a second time', !snap.includes('columnheader'));
+
+  const head = page.locator('.history thead th');
+  check(
+    'and it names both sides where they are drawn',
+    (await head.allInnerTexts()).join('|') === '|Rho & Tau|Sigma & Phi',
+    (await head.allInnerTexts()).join('|'),
+  );
+  // Read in one pass rather than per element, so a heading that is missing altogether
+  // fails these two as well instead of timing out of the whole file.
+  const columns = await page.evaluate(() =>
+    [1, 2].map((n) => {
+      const at = (sel) => document.querySelector(`.history ${sel}:nth-child(${n + 1})`);
+      const colour = (el) => (el ? getComputedStyle(el).color : null);
+      return [colour(at('thead th')), colour(at('tbody tr td'))];
+    }),
+  );
+  for (const [i, [heading, column]] of columns.entries()) {
+    check(
+      `heading ${i + 1} is the colour of the column under it`,
+      heading !== null && heading === column,
+      `${heading} vs ${column}`,
+    );
+  }
 }
 
 await browser.close();

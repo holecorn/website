@@ -290,6 +290,13 @@ project dependency. It starts and stops its own preview server.
   the screen silently ran at `.app`'s 480px with a 16px gap; its `max-width` was dead code
   from the day it was written. **A new screen with its own file inherits this trap**:
   anything it re-declares from `.app` needs the two-class form.
+- **The two team colours are a second channel and never the only one.** Measured, red
+  against green is CIEDE2000 **4.4** under deuteranopia — not a near miss, the same
+  colour — and the default blue against red is **1.11:1** in greyscale. A name carries
+  the meaning nearly everywhere; the round history was the one surface where it did not,
+  two byte-identical cells told apart by hue alone. **Anything new that distinguishes the
+  teams has to say which is which in text**, and if the visible text is glyphs it needs
+  the spoken half too — see `.claude/rules/scoring.md`.
 - **Custom domain served from root**, so Vite `base` stays `/` and the PWA
   `scope`/`start_url` are `/`. Don't add a base path.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone

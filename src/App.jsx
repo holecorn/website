@@ -43,6 +43,7 @@ import {
   roundNets,
   roundComplete,
   roundReport,
+  roundLine,
   unthrownCount,
   tierCounts,
   teamLabel,
@@ -935,26 +936,47 @@ export default function App() {
       <aside className="history-panel">
         {game.rounds.length > 0
           ? (wideLayout || showHistory) && (
-              <ol className="history">
-                {game.rounds
-                  .map((r, i) => ({ r, n: i + 1 }))
-                  .reverse()
-                  .map(({ r, n }) => {
-                    const ca = tierCounts(r.a);
-                    const cb = tierCounts(r.b);
-                    return (
-                      <li key={n}>
-                        <span className="history-round">R{n}</span>
-                        <span style={{ color: colors.a }}>
-                          {ca.hole}◎ {ca.board}▬ → +{r.nets.a}
-                        </span>
-                        <span style={{ color: colors.b }}>
-                          {cb.hole}◎ {cb.board}▬ → +{r.nets.b}
-                        </span>
-                      </li>
-                    );
-                  })}
-              </ol>
+              <div className="history">
+                <table className="history-table">
+                  {/* Named columns are the seen half of the fix: on a wash the two
+                      cells are byte-identical, and red against green is CIEDE2000 4.4
+                      under deuteranopia — the same colour. `aria-hidden` because each
+                      cell names its own team, and a column header announced as well
+                      would say it twice. */}
+                  <thead aria-hidden="true">
+                    <tr>
+                      <th />
+                      <th style={{ color: colors.a }}>{teamLabel(game, 'a')}</th>
+                      <th style={{ color: colors.b }}>{teamLabel(game, 'b')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {game.rounds
+                      .map((r, i) => ({ r, n: i + 1 }))
+                      .reverse()
+                      .map(({ r, n }) => (
+                        <tr key={n}>
+                          <th scope="row" className="history-round">
+                            R{n}
+                          </th>
+                          {['a', 'b'].map((team) => {
+                            const c = tierCounts(r[team]);
+                            return (
+                              <td key={team} style={{ color: colors[team] }}>
+                                {/* Glyphs and a colour, so what they carry has to be
+                                    said as well — the same split as `.first-bag`. */}
+                                <span aria-hidden="true">
+                                  {c.hole}◎ {c.board}▬ → +{r.nets[team]}
+                                </span>
+                                <span className="visually-hidden">{roundLine(game, r, team)}</span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             )
           : wideLayout && (
               <p className="history-empty">Rounds will appear here.</p>

@@ -462,6 +462,21 @@ export function roundReport(game) {
   return parts.join(' ');
 }
 
+// One team's half of a history row, said out loud. The visible cell is `2◎ 2▬ → +0`
+// and the two teams' cells are byte-identical on a wash, so before this the row read
+// as two anonymous runs of glyph names with the colour — the only thing telling them
+// apart — carrying nothing into speech. Names the team rather than leaning on the
+// column header, because a header is only reliably announced when someone navigates
+// cell by cell, and the row is read straight through far more often than that.
+export function roundLine(game, round, team) {
+  const c = tierCounts(round[team]);
+  const on = [c.hole && `${c.hole} in the hole`, c.board && `${c.board} on the board`].filter(Boolean);
+  const net = round.nets[team];
+  return `${teamLabel(game, team)}: ${on.length ? on.join(', ') : 'nothing on'}, ${
+    net > 0 ? `scored ${net}` : 'no points'
+  }.`;
+}
+
 // Whether a bag has been thrown yet. Lives here rather than in App.jsx because
 // the scoreboard needs it too: the pre-game form screen is published while this
 // is false, so "the game has begun" has to mean the same thing to both.
