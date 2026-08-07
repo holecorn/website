@@ -328,22 +328,50 @@ await page.emulateMedia({ reducedMotion: null });
 // Deleting the match that is still the loaded game is the case worth checking:
 // the archive effect used to re-file a won game on mount, so the deletion only
 // survived until the next reload.
+//
+// The rest of this block is about *where* the delete is. It used to be a 34px × on the
+// row itself, six pixels from the chevron you press every visit, and its undo bar
+// rendered at the top of a screen you have scrolled to the bottom of — measured 486px
+// above the viewport, so a mis-tap looked like a row spontaneously vanishing. Nothing in
+// the components would notice either coming back, so the shut row's control count is
+// asserted rather than only the new path working.
 const recentRows = page.locator('.recent li');
+check(
+  'a shut row has one control, so a tap on it can only open the match',
+  (await recentRows.first().locator('button').count()) === 1,
+);
+check('no undo bar is left behind', (await page.locator('.stats-undo').count()) === 0);
 await recentRows.first().locator('.recent-open').click();
 check('a match can be open before deleting', (await recentRows.first().locator('.match-round').count()) > 0);
-await recentRows.first().locator('.recent-delete').click();
-check('deleting the open match closes the detail', (await page.locator('.match-round').count()) === 0);
-await page.locator('.stats-undo button').click();
-await recentRows.first().locator('.recent-delete').click();
-check('deleting removes the match from the list', (await recentRows.count()) === 1);
+
+// The dialog is read through a count first, and the row is reopened rather than assumed
+// still open: a delete that skipped the dialog deletes on that first press, so every
+// locator below it is gone and the run would end in a stack trace instead of naming the
+// fault. Verified — that is exactly what the no-confirm mutation did before this.
+const openAndDrop = async () => {
+  const row = recentRows.first();
+  if ((await row.locator('.match-drop').count()) === 0) await row.locator('.recent-open').click();
+  await row.locator('.match-drop').click();
+};
+
+await openAndDrop();
+const asked = (await page.locator('.modal:modal').count()) === 1;
+check('delete asks first, in a modal dialog', asked);
+// Naming the match is what makes a mis-tap recoverable now that the undo is gone: the
+// dialog is the last point at which the wrong row is still visible as the wrong row.
+const title = asked ? await page.locator('.modal-title').innerText() : '';
+check('and the dialog names the match it would delete', title.includes('Neil v Sigma'), title || 'no dialog');
+if (asked) await page.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
+check('cancelling leaves the match in the list', (await recentRows.count()) === 2);
+check('and in storage', (await archive()).length === 2);
+check('and leaves it open', (await recentRows.first().locator('.match-round').count()) > 0);
+
+await openAndDrop();
+if (await page.locator('.confirm-danger').count()) await page.locator('.confirm-danger').click();
+check('confirming removes the match from the list', (await recentRows.count()) === 1);
 check('and from storage', (await archive()).length === 1);
-check('an undo is offered', await page.locator('.stats-undo').isVisible());
+check('and closes the detail with it', (await page.locator('.match-round').count()) === 0);
 
-await page.locator('.stats-undo button').click();
-check('undo puts it back', (await recentRows.count()) === 2);
-check('undo restores it in storage', (await archive()).length === 2);
-
-await recentRows.first().locator('.recent-delete').click();
 await page.reload();
 await page.getByRole('button', { name: 'Stats' }).click();
 check('a deleted match stays deleted across a reload', (await archive()).length === 1);
@@ -645,7 +673,9 @@ check(
   check('the form panel shows a seeded match', (await delPage.locator('.lineup').count()) === 1);
 
   await delPage.getByRole('button', { name: 'Stats' }).click();
-  await delPage.locator('.recent-delete').first().click();
+  await delPage.locator('.recent-open').first().click();
+  await delPage.locator('.match-drop').click();
+  await delPage.locator('.confirm-danger').click();
   await delPage.getByRole('button', { name: '‹ Back' }).click();
   await delPage.waitForTimeout(250);
   check(

@@ -155,18 +155,15 @@
   font-size: 14px;
 }
 
-.recent-row {
-  display: flex;
-  align-items: center;
-}
-
+/* The whole row, because it is the row's only control now — the delete moved into the
+   open match, so there is no neighbour to leave 6px for and nothing to flex against. */
 .recent-open {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 6px 11px 14px;
+  padding: 11px 14px;
   border: none;
   background: transparent;
   color: inherit;
@@ -228,55 +225,6 @@
 
 .recent-v {
   color: var(--muted);
-}
-
-.stats-undo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 10px 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  font-size: 13px;
-}
-
-.stats-undo span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-}
-
-.stats-undo button {
-  flex: none;
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.recent-delete {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  margin-right: 8px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.recent-delete:hover {
-  background: var(--bg);
-  color: #eb5757;
 }
 
 /* Round-by-round for one match, laid out to echo the in-play history. */
@@ -385,7 +333,15 @@
   font-size: 11px;
 }
 
-.match-edit {
+/* The facts take the slack so the two buttons sit together at the right, rather than
+   `space-between` stranding `Edit names` in the middle of the line. */
+.match-rounds-foot > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.match-edit,
+.match-drop {
   flex: none;
   padding: 6px 10px;
   border: 1px solid var(--border);
@@ -393,6 +349,13 @@
   background: var(--bg);
   color: var(--text);
   font-size: 11px;
+}
+
+/* Outlined rather than filled, the rule `.tournament-drop` already follows: the solid
+   red belongs to the dialog that asks. */
+.match-drop {
+  border-color: #eb5757;
+  color: #eb5757;
 }
 
 /* Editing one match's lineup. A dialog like the rename one rather than a panel

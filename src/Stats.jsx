@@ -6,7 +6,6 @@ import {
   loadLastExport,
   mergeMatches,
   newestEnd,
-  restoreMatch,
   saveArchive,
   saveLastExport,
   saveMatchPlayers,
@@ -134,13 +133,13 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   const [inactive, setInactive] = useState(loadInactive);
   const [lastExport, setLastExport] = useState(loadLastExport);
   const [notice, setNotice] = useState(null);
-  const [deleted, setDeleted] = useState(null);
   // One match open at a time, so a long history doesn't unroll into a wall.
   const [openId, setOpenId] = useState(null);
   // Both editors are modal, so the screen holds which record or player is being
   // edited and the dialog opens by being mounted.
   const [editing, setEditing] = useState(null);
   const [renaming, setRenaming] = useState(null);
+  const [dropping, setDropping] = useState(null);
   // Whose stats the screen is showing below the table, or null for nobody. Held
   // as a nameKey rather than a display name so it survives the fold that
   // playerStats already applies, and transient like openId — a scope you set
@@ -175,26 +174,18 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
   }, [matches, subject]);
   const pending = unexportedCount(matches, lastExport);
 
-  // One tap deletes and offers an undo, rather than asking first. The undo bar
-  // sits outside the match list so deleting the last one doesn't take the way
-  // back with it.
+  // Asked rather than undone, the way a tournament is deleted — and the delete lives
+  // inside the open match for the same reason its does. It used to be one tap on the
+  // row and an undo bar, which the row had no room for: the bar sat at the top of a
+  // screen you have scrolled to the bottom of, so measured it rendered 486px above the
+  // viewport and a deletion looked like a row simply vanishing.
   const deleteMatch = (record) => {
     const write = dropMatch(record.id);
     setMatches(write.stored);
-    if (!write.saved) {
-      setNotice(refusal(write));
-      return;
-    }
-    setDeleted(record);
+    setDropping(null);
+    if (!write.saved) return setNotice(refusal(write));
     setNotice(null);
     if (openId === record.id) setOpenId(null);
-  };
-
-  const undoDelete = () => {
-    const write = restoreMatch(deleted);
-    setMatches(write.stored);
-    if (!write.saved) return setNotice(refusal(write));
-    setDeleted(null);
   };
 
   // A name that was wrong for one game only — a typo caught after Start game, or
@@ -329,15 +320,6 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
         </button>
         <h1>Stats</h1>
       </header>
-
-      {deleted && (
-        <div className="stats-undo">
-          <span>
-            Deleted {teamLabel(deleted, 'a')} v {teamLabel(deleted, 'b')}.
-          </span>
-          <button onClick={undoDelete}>Undo</button>
-        </div>
-      )}
 
       {matches.length === 0 ? (
         <p className="stats-empty">
@@ -554,50 +536,45 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
               {recent.map((m) => {
                 const final = finalScore(m);
                 const open = openId === m.id;
-                const label = `${teamLabel(m, 'a')} v ${teamLabel(m, 'b')} on ${shortDate(m.endedAt)}`;
                 return (
                   <li
                     key={m.id}
                     className={`${open ? 'is-open' : ''}${ties.has(m.id) ? ' is-tie' : ''}`}
                   >
-                    <div className="recent-row">
-                      <button
-                        className="recent-open"
-                        onClick={() => setOpenId(open ? null : m.id)}
-                        aria-expanded={open}
-                        aria-controls={`rounds-${m.id}`}
-                      >
-                        <span className="recent-date">{shortDate(m.endedAt)}</span>
-                        <span className="recent-teams">
-                          <span style={{ color: m.colors?.a }}>{teamLabel(m, 'a')}</span>
-                          <span className="recent-v"> v </span>
-                          <span style={{ color: m.colors?.b }}>{teamLabel(m, 'b')}</span>
-                        </span>
-                        <span className="recent-score">
-                          {final ? `${final.a}–${final.b}` : '—'}
-                        </span>
-                        {/* Rotated rather than swapped for ⌃: the two
-                            arrowheads are unrelated codepoints and render at
-                            different sizes, so the marker jumped on toggle. */}
-                        <span className="recent-chevron" aria-hidden="true">
-                          ⌄
-                        </span>
-                      </button>
-                      <button
-                        className="recent-delete"
-                        onClick={() => deleteMatch(m)}
-                        aria-label={`Delete ${label}`}
-                        title="Delete this match"
-                      >
-                        ×
-                      </button>
-                    </div>
+                    {/* The row's only control, which is what makes a mis-tap harmless:
+                        it used to carry a 34px × six pixels from the chevron, so the
+                        destructive target and the one you actually press every visit were
+                        neighbours. Delete moved inside, the way rename moved out of the
+                        Players table and for the same reason — a tap here can only open. */}
+                    <button
+                      className="recent-open"
+                      onClick={() => setOpenId(open ? null : m.id)}
+                      aria-expanded={open}
+                      aria-controls={`rounds-${m.id}`}
+                    >
+                      <span className="recent-date">{shortDate(m.endedAt)}</span>
+                      <span className="recent-teams">
+                        <span style={{ color: m.colors?.a }}>{teamLabel(m, 'a')}</span>
+                        <span className="recent-v"> v </span>
+                        <span style={{ color: m.colors?.b }}>{teamLabel(m, 'b')}</span>
+                      </span>
+                      <span className="recent-score">
+                        {final ? `${final.a}–${final.b}` : '—'}
+                      </span>
+                      {/* Rotated rather than swapped for ⌃: the two
+                          arrowheads are unrelated codepoints and render at
+                          different sizes, so the marker jumped on toggle. */}
+                      <span className="recent-chevron" aria-hidden="true">
+                        ⌄
+                      </span>
+                    </button>
                     {open && (
                       <MatchRounds
                         id={`rounds-${m.id}`}
                         match={m}
                         tie={ties.get(m.id)}
                         onEdit={() => setEditing(m)}
+                        onDelete={() => setDropping(m)}
                       />
                     )}
                   </li>
@@ -653,6 +630,31 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
           onCancel={() => setRenaming(null)}
           onSave={(to, merges) => renamePlayer(renaming.name, to, merges)}
         />
+      )}
+
+      {dropping && (
+        <Modal onClose={() => setDropping(null)}>
+          <p className="modal-title">
+            Delete {teamLabel(dropping, 'a')} v {teamLabel(dropping, 'b')}?
+          </p>
+          <p className="modal-body">
+            Played {shortDate(dropping.endedAt)}. It stops counting towards
+            everyone&apos;s record, and there is no undo — an export is the only way
+            back.{' '}
+            {/* The one thing worth saying that an undo bar could not have carried, the
+                same reason the tournament dialog says what survives it: the bracket is
+                derived from the archive, so deleting a tie puts it back on the sheet as
+                still to play, on a screen this one gives no hint of. */}
+            {ties.has(dropping.id) &&
+              `${ties.get(dropping.id).name} will show its ${ties.get(dropping.id).round} as still to play.`}
+          </p>
+          <div className="confirm-actions">
+            <button onClick={() => setDropping(null)}>Cancel</button>
+            <button className="confirm-danger" onClick={() => deleteMatch(dropping)}>
+              Delete
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -800,7 +802,7 @@ function MatchNames({ match, onCancel, onSave }) {
 
 // Round-by-round, using the same shorthand as the in-play history (◎ hole,
 // ▬ board) so the two read alike.
-function MatchRounds({ id, match, tie, onEdit }) {
+function MatchRounds({ id, match, tie, onEdit, onDelete }) {
   const rounds = matchRounds(match);
   const detailed = hasRounds(match);
   const doubles = match.mode === 'doubles';
@@ -855,6 +857,9 @@ function MatchRounds({ id, match, tie, onEdit }) {
         <span>{facts.join(' · ')}</span>
         <button className="match-edit" onClick={onEdit}>
           Edit names
+        </button>
+        <button className="match-drop" onClick={onDelete}>
+          Delete
         </button>
       </p>
     </div>

@@ -146,6 +146,19 @@ name-based ones.
       that mutation fails the tab stop, this, and the tap, six assertions in total, the
       same count as before the change.
 
+Its delete block covers a gap of a fourth shape: **where a control is**, which no unit
+test has an opinion about. Deleting a match now asks from inside the open row, and nothing
+in the components would notice the old row-level `×` coming back — so the block asserts the
+*shut row's control count* rather than only that the new path works. Four mutations, each
+killed by its own assertions: a second button on the row fails the count alone; deleting
+without asking fails six; and the tie sentence dropped or said unconditionally each fail
+one of the two directions in `verify-tournament.mjs`.
+- **The no-confirm mutation ended the run before the block was hardened**, which is this
+  file's standing lesson met again in a new way: that mutation deletes on the *first*
+  press, so every locator after it is gone and `innerText()` on the absent dialog threw.
+  The dialog is read through a count now and the row is reopened rather than assumed open,
+  so the mutation names the fault and the eleven checks below it still run.
+
 The same is true of the guest-game guard, and both ways round of getting it wrong
 are silent: either a stranger is folded into somebody's career, or every real match
 quietly stops being filed. So that block plays a casual game to a win and then

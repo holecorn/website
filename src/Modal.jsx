@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 // A dialog that opens by being mounted, so the screen owns *what* is being confirmed or
-// edited and there is no ref to toggle. `showModal`, not `show`: the list underneath must
-// not stay live, because it holds the delete buttons.
+// edited and there is no ref to toggle. `showModal`, not `show`: the match list underneath
+// must not stay live, because an open row holds Delete.
 //
 // Deliberately no backdrop-click dismissal, unlike App.jsx's confirm. Every use of this so
 // far either holds a name that has been typed or is a destructive confirmation, and losing

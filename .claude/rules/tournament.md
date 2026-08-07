@@ -323,11 +323,17 @@ the alternatives that were rejected; this section holds what breaks when you cha
   through**, and `Tournament` keeps the draw form open with the field intact rather than
   starting the ceremony. Nothing below `App.jsx` can see any of that:
   `verify-tournament.mjs`'s last block is the only cover.
-- **Deleting a tournament asks, where deleting a match offers an undo.** Deliberately
-  opposite: a match is deleted often enough that a confirm is in the way, a tournament about
-  once a year, its button sits under the bracket you were reading, and there is a fact an undo
-  bar cannot carry — the ties stay in the archive and keep counting. The dialog says so, and
-  `verify-tournament.mjs` checks the claim is true rather than only that it is made.
+- **Deleting a tournament asks, from inside the open row, and deleting a match now works
+  the same way** — this was the pattern first and the stats screen's one-tap-plus-undo was
+  the outlier, which failed on a screen its bar could not reach (see
+  `.claude/rules/archive.md`). Both dialogs exist to say the thing an undo could not: here
+  that the played ties stay in the archive and keep counting, there that the bracket will
+  offer the tie again. **`verify-tournament.mjs` checks each claim is true rather than only
+  that it is made** — it deletes a played tie from the stats screen and asserts the bracket
+  goes back from `1 of 10 ties` to `0 of 10`.
+  - **The tie sentence is checked in both directions.** Said unconditionally it would read
+    as true on a tie and be a lie on every friendly, so the block deletes one of each and a
+    mutation dropping the gate fails the friendly's assertion alone.
 - **A tournament's own stats are the second tab of an open row, and everything on it is
   derived from the view the bracket tab is drawing.** `tieMatches`, `entrantStats`,
   `routeFor`, `reachedBy`, `tieExtremes` and `tieHistory` all take that view rather than the

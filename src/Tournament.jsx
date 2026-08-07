@@ -1188,12 +1188,10 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
           >
             {verb}
           </button>
-          {/* Confirmed rather than undone, which is the opposite of how a *match* is
-              deleted — and deliberately. A match is deleted often enough that a confirm
-              would be in the way, so it gets one tap and an undo bar. A tournament is
-              deleted about once a year, the button sits directly under the bracket you were
-              reading, and there is something worth saying that an undo bar cannot carry:
-              the ties are not going anywhere. */}
+          {/* Confirmed rather than undone, and the stats screen's match delete follows this
+              now rather than contradicting it: the button sits inside the open row, and
+              there is something worth saying that an undo bar cannot carry — the ties are
+              not going anywhere. */}
           {confirming && (
             <Modal onClose={() => setConfirming(false)}>
               <p className="modal-title">

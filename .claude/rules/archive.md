@@ -92,10 +92,36 @@ themselves, correcting the names on them, and marking a player inactive.
   - **`verify-stats.mjs` covers it as a pair, and only as a pair.** It clicks the
     button *by name* after a win and again mid-game, so a label stuck either way
     round fails one of the two. Nothing below `App.jsx` can see this.
-- **Deleting is one tap plus an undo, not a confirmation.** The undo bar sits
-  outside the match list, because deleting the last match empties the list and
-  would otherwise take the way back with it. Undo is lost on leaving the screen;
-  export is the real backstop.
+- **Deleting asks first, and the control lives inside the open match** — the shape
+  `.tournament-drop` already had, and a match is now deleted the same way its cup is.
+  It was one tap on the row plus an undo bar, and both halves failed on the same
+  property: the recent list is the *last* section of a long screen.
+  - **The undo could not reach the place the deletion happened.** The bar was the second
+    child of the screen, in normal flow, so with the list scrolled to it rendered
+    **486px above the viewport** — measured — and a deletion looked like a row
+    spontaneously vanishing. It carried no `role="status"` and activating the `×`
+    dropped focus to `BODY`, so a keyboard user was neither told nor near the recovery.
+  - **And the row's two controls sat 6px apart** — the expand chevron's right edge at
+    x=325 against a 34x34 `×` at x=331, at 390px — so the destructive target neighboured
+    the one pressed every visit. **The row has one control now and that is the fix**: a
+    tap on it can only open the match, the same reasoning that moved rename out of the
+    Players table. Adding padding was the alternative and hardens the adjacency rather
+    than removing it, on a row already at zero slack.
+  - **Pinning the bar was the cheaper repair and buys less.** Moved to the end of the
+    screen with `position: sticky; bottom`, it rides the viewport for the whole scroll
+    range and needs no new component — but it answers only the undo, leaving the 6px and
+    the one-tap destructiveness, and it keeps a mechanism where asking removes three
+    (`.stats-undo`, the `deleted` state and `restoreMatch`, all now gone).
+  - **The dialog names the match**, which is what makes a mis-tap recoverable with no
+    undo left: it is the last point at which the wrong row is still visible as the wrong
+    row. Export is still the only backstop once it is confirmed, and the dialog says so.
+  - **A tie's dialog says the bracket will offer it again**, gated on `tieLabels` — see
+    `.claude/rules/tournament.md`. That consequence is on a different screen and is the
+    one thing an undo bar structurally could not have carried, which is the same bar the
+    tournament's own dialog has to clear before it says anything.
+  - **Focus still lands on `BODY` after a confirmed delete**, because the row it was on
+    is gone. That is what the tournament screen already does and it is not worth
+    machinery: the difference from before is that the user asked for it.
 - **Records carry a `format` stamp.** When the state model becomes an event log
   (planned for when the board sensors land), round-level snapshots need to be
   distinguishable from event streams without guessing at the shape.
@@ -631,8 +657,8 @@ themselves, correcting the names on them, and marking a player inactive.
   - **`Modal` opens by being mounted**, so the screen owns which record or player is
     being edited and there is no ref to toggle. It is `showModal`, and
     `verify-stats.mjs` asserts `:modal` — which is false both for a `show()` and for
-    the form going back inline, and in either case the match list stays live
-    underneath *with its delete buttons*.
+    the form going back inline, and in either case the match list stays live underneath
+    with the open row's *Delete* on it.
   - **Neither dismisses on a backdrop click, unlike `App.jsx`'s confirm dialog.**
     Both hold a name that has been typed, and losing it to a stray tap is worse than
     one more press on Cancel. Don't unify the two behaviours.

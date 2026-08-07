@@ -2168,6 +2168,57 @@ console.log('\nthe stats screen marks which matches were ties');
     facts.startsWith('Hole Corn VI · Preliminary'),
     facts,
   );
+
+  // Deleting a tie is the one thing on that screen with a consequence somewhere else: the
+  // bracket is derived from the archive, so the tie goes back to being unplayed on a screen
+  // the dialog is the last chance to mention. Both directions, because a sentence bolted on
+  // unconditionally would read as true here and be a lie on every friendly.
+  // Read through a count, this file's standing lesson: `innerText()` on a missing element
+  // throws, so a delete that stopped asking would end the run here rather than name it.
+  const dialogFor = async (row) => {
+    await page.locator(`${row} .match-drop`).click();
+    const said = (await page.locator('.modal-body').count())
+      ? await page.locator('.modal-body').innerText()
+      : null;
+    if (said !== null) await page.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
+    return said;
+  };
+
+  const tieSaid = await dialogFor('.recent li.is-tie');
+  check(
+    'deleting a tie says the bracket will offer it again',
+    Boolean(tieSaid?.includes('Hole Corn VI') && tieSaid.includes('Preliminary') && tieSaid.includes('still to play')),
+    tieSaid ?? 'no dialog',
+  );
+
+  await page.locator('.recent li:not(.is-tie) .recent-open').click();
+  const friendlySaid = await dialogFor('.recent li:not(.is-tie)');
+  check(
+    'and deleting a friendly claims nothing of the sort',
+    friendlySaid !== null && !friendlySaid.includes('still to play'),
+    friendlySaid ?? 'no dialog',
+  );
+
+  // The claim checked rather than only made, the rule the tournament's own delete dialog
+  // already follows.
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  await backToBracket(page);
+  check('the bracket counts the tie before it goes', (await progress(page)).trim() === '1 of 10 ties');
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Stats' }).click();
+  await page.locator('.recent li.is-tie .recent-open').click();
+  await page.locator('.recent li.is-tie .match-drop').click();
+  await page.locator('.confirm-danger').click();
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  await backToBracket(page);
+  check(
+    'and deleting it really does put it back on the bracket',
+    (await progress(page)).trim() === '0 of 10 ties',
+    await progress(page),
+  );
   await page.close();
 }
 

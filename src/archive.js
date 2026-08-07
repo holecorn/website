@@ -154,12 +154,6 @@ export function dropMatch(id) {
   return saveArchive(removeMatch(loadArchive(), id));
 }
 
-// Put back a record that was just deleted. The counterpart to dropMatch, so the
-// stats screen can offer an undo rather than making deletion final on one tap.
-export function restoreMatch(record) {
-  return saveArchive(upsertMatch(loadArchive(), record));
-}
-
 export function saveMatchPlayers(id, players, at) {
   return saveArchive(setMatchPlayers(loadArchive(), id, players, at));
 }
