@@ -35,7 +35,7 @@ code **outside** that file's globs — because that is where the rule will not h
 **`App.jsx` is in five of those lists on purpose, and it is the exception the scoping
 buys nothing on.** It is the app shell: the archive effect, the tournament derivations,
 the toss draw, `knownNames`, `wideLayout` and the publisher wiring all live there, so
-every subsystem has something to say about it and the six rule files name it 32 times in
+every subsystem has something to say about it and the six rule files name it 34 times in
 prose between them. Scoped to none of them, it opened with no rules at all — the one file
 where a change most often breaks something already written down. `scoreboard.md` is the
 one left off deliberately: both its mentions are pointers elsewhere (`PALETTE` belongs to
@@ -243,49 +243,22 @@ project dependency. It starts and stops its own preview server.
   - **A refusal now carries a `reason`**, because the advice differs — a full phone is
     told to export and delete, and a phone whose history it cannot read has neither on
     screen to do. `Stats.jsx`'s `refusal()` picks; the footer's warning covers both.
-- **The wide tier and the landscape tier must not both match**, which is what the
-  wide tier's `min-height: 451px` is for — the exact complement of the landscape
-  tier's `max-height: 450px`. A big phone on its side (932x430 on an iPhone Pro
-  Max) satisfies `min-width: 900px` *and* `max-height: 450px`, so before the guard
-  both applied: the landscape tier put the two cards in a row and the wide tier,
-  being later in source order, capped the column they shared. That is the lane
-  collapse the point above says the lift prevents — 26px lanes, measured, on a
-  phone. **The query is also duplicated in `App.jsx`** (`wideLayout`), because CSS
-  decides where the rail's panels go and JS decides whether they render at all;
-  they have to say the same thing or the panels appear with nothing laying them
-  out and no toggle to dismiss them.
+- **The wide tier and the landscape tier must not both match, and the same query is
+  written in `App.css` and in `App.jsx` (`wideLayout`).** CSS decides where the rail's
+  panels go and JS decides whether they render at all, so the two saying different things
+  puts panels on screen with nothing laying them out. Both halves — why the wide tier
+  carries `min-height: 451px`, and the 26px lanes a big phone on its side measured before
+  it — are in `.claude/rules/layout.md`, which loads with either file.
 - **The wordmark's geometry lives in two files, and `src/Logo.test.js` holds them
   together.** `src/Logo.jsx` draws it in the app; `public/logo.svg` is what
   `firmware/hub75/generate_logo.mjs` bakes for the LED panel. They can't be merged — the
   component takes the team colours as props, the generator needs a file to hand a browser —
   so a divergence would leave the panel showing the shape the SVG last held, visible only
   as a splash that looks slightly wrong next to the phone.
-  - **The tilt and the viewBox are pinned as a pair.** The mark leans 8°, not the 15° it
-    was drawn at, and the viewBox is sized to that: a rotated box is much taller than its
-    content, so easing the tilt gave the setup screen **13px** of height back. Easing the
-    tilt without re-deriving the box spends that on empty space; re-deriving the box
-    without the tilt clips the mark. The test fails either way round — measured, a box
-    trimmed to the painted mark gives an aspect of 4.00 at 8° and 3.37 at 15°, and the
-    bound sits between them.
-  - **The viewBox is trimmed to what the mark *paints*, not to `getBBox`.** A `<text>`
-    bbox includes the font's descender space, so deriving the box from it left 8.7 units
-    of dead space above the mark and 11.0 below — on screen, **50px of gap above the mark
-    and 37px below against `.setup`'s 20px rhythm**, since the margins sat on top of it.
-    Trimmed, the element is 80px rather than 101px and `.setup-logo` needs no vertical
-    margin at all: below the mark you get the flex gap, above it the screen's own
-    `padding-top`. Adding margin back, or re-deriving the box from `getBBox`, brings the
-    gap back with it.
-  - **The text's `x` is an optical centring — don't "correct" it to the box centre.**
-    Measured, the original `x=3` had the glyph run within 1.5 units of dead centre (gaps of
-    17.4 and 17.8 units for HOLE) and still read as sitting right; `x=1` balances it and
-    `x=-1` overshoots into looking left-biased. Two other criteria disagree with the eye
-    here and both are wrong: bounding-box centring wants 3.5, and centre-of-mass wants 6.2
-    for HOLE against 1.7 for CORN, because `H` is heavy where `L` and `E` are light. The
-    panel's copy is centred *geometrically* instead — `generate_logo.mjs` fits each box to
-    its own letters, and at 5 mm pitch the quantisation swamps a nudge this size.
-  - **`public/icon.svg` and `public/app-icon.svg` are still at 15°**, deliberately. They
-    are an abstract pair of filled boxes rather than the wordmark, and changing them means
-    re-rasterising three committed PNGs and moving everyone's installed home-screen icon.
+  The tilt, the viewBox and the optical centring are each pinned by that test and each
+  looks like something to tidy — `.claude/rules/layout.md` holds the measured reason for
+  all three, and loads with `Logo.jsx`. **`public/icon.svg` and `public/app-icon.svg` are
+  a different mark and stay at 15°**, which is the one fact here no glob would reach.
 - **A `@media` tier wins by source order alone, so a base rule below one silently beats
   it** — no error, and only at the size that tier is for (`App.css` collapsed the lanes to
   26px this way once). This was carried as "the tiers live at the end of the file", which
