@@ -22,6 +22,7 @@ const CHECKS = [
   'verify-tabs.mjs',
   'verify-recovery.mjs',
   'verify-lanes.mjs',
+  'verify-a11y.mjs',
   'verify-panel.mjs',
 ];
 

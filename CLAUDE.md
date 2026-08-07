@@ -92,7 +92,9 @@ project dependency. It starts and stops its own preview server.
   Draws only; `lineupStats()` and `sideRecord()` in `stats.js` derive it.
 - `src/GameStats.jsx` / `src/GameStats.css` — the in-game stats panel. Draws only;
   `gameStats()` in `stats.js` derives it.
-- `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects.
+- `src/Board.jsx` — the per-bag scoring lanes and the hole/four-bagger effects. A lane
+  is a **radio group** and the bag's tier is the checked option — see
+  `.claude/rules/scoring.md` before turning the zones back into buttons.
 - `src/Positions.jsx` / `src/Positions.css` — the court diagram (who stands in
   which pitcher's box this round). `courtPositions()` in `scoring.js` works out the
   arrangement; the only thing this file mutates is which side of the court each

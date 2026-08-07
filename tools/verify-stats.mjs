@@ -44,10 +44,10 @@ const archive = () =>
 
 // Team a's four bags into the hole, team b's onto the floor: +12 a side.
 const playRound = async () => {
-  for (const [team, tier] of [[0, 'bag hole'], [1, 'bag floor']]) {
+  for (const [team, tier] of [[0, 'hole'], [1, 'floor']]) {
     const lanes = page.locator('.team-lanes').nth(team).locator('.lane');
     for (let i = 0; i < 4; i++) {
-      await lanes.nth(i).getByLabel(tier, { exact: true }).click();
+      await lanes.nth(i).locator(`.tier-${tier}`).click();
     }
   }
   await page.getByRole('button', { name: 'End round' }).click();
@@ -1463,10 +1463,10 @@ check(
   const gp = await guest.newPage();
   const stored = () => gp.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]'), KEY);
   const play = async () => {
-    for (const [team, tier] of [[0, 'bag hole'], [1, 'bag floor']]) {
+    for (const [team, tier] of [[0, 'hole'], [1, 'floor']]) {
       const lanes = gp.locator('.team-lanes').nth(team).locator('.lane');
       for (let i = 0; i < 4; i++) {
-        await lanes.nth(i).getByLabel(tier, { exact: true }).click();
+        await lanes.nth(i).locator(`.tier-${tier}`).click();
       }
     }
     await gp.getByRole('button', { name: 'End round' }).click();
@@ -1619,10 +1619,10 @@ if (rendered) {
     // The round that would have blanked the screen: the write fires on every
     // committed round, so this is where a full storage bites mid-game.
     await stuck.getByRole('button', { name: 'Start', exact: true }).click();
-    for (const [team, tier] of [[0, 'bag hole'], [1, 'bag floor']]) {
+    for (const [team, tier] of [[0, 'hole'], [1, 'floor']]) {
       const lanes = stuck.locator('.team-lanes').nth(team).locator('.lane');
       for (let i = 0; i < 4; i++) {
-        await lanes.nth(i).getByLabel(tier, { exact: true }).click();
+        await lanes.nth(i).locator(`.tier-${tier}`).click();
       }
     }
     await stuck.getByRole('button', { name: 'End round' }).click();

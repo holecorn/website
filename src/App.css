@@ -793,8 +793,14 @@
   );
 }
 
+/* A radio input, so `appearance` and the UA margin have to go before it will fill
+   its third of the lane. The bag is drawn by `.bag-token`; the input itself is
+   only the target. */
 .tier-zone {
+  -webkit-appearance: none;
+  appearance: none;
   display: block;
+  margin: 0;
   width: 100%;
   height: calc(100% / 3);
   border: none;
@@ -808,6 +814,14 @@
 
 .tier-zone:active {
   background: rgba(255, 255, 255, 0.08);
+}
+
+/* Inset, because the zones touch: an outset ring on the middle one is drawn over
+   its neighbours and reads as the wrong band being focused. */
+.tier-zone:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -3px;
+  border-radius: 8px;
 }
 
 /* A bag is square, so the token is too: the height of a tier band is the tight

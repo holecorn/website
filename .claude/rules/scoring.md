@@ -120,6 +120,38 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     The existing route for a mixed game is to play it normally and delete the match
     afterwards.
 
+## A lane is a radio group, and the bag is the option that is checked
+
+- **The three tier zones are native `<input type="radio">`, one group per bag, and that
+  is the whole of what makes a round scoreable without seeing the screen.** Measured
+  before it, on a doubles game with one bag in the hole and one on the board: **24
+  buttons, every one of them named `bag hole` / `bag board` / `bag floor`** — no team,
+  no bag number, no lane boundary — and the bag itself a bare `<div>` with no text,
+  which Chrome drops from the tree entirely. Four bags in three different states
+  announced as twelve identical buttons, so you could not check what you had entered and
+  therefore could not find a mistap.
+  - **Native radios rather than buttons with `role="radio"`**, which was the obvious
+    route and is more machinery for less: the browser then owns the roving tabindex and
+    the arrow keys, so the board is **8 tab stops instead of 24** with no keydown handler
+    and no tabIndex to compute, and where the bag is resting *is* the `checked` state
+    rather than an `aria-checked` the lane would have to mirror and keep in step.
+  - **Three options and never a fourth.** `unthrown` is not a place a bag can be put
+    back to (`setBag` refuses it), so it is the absence of a checked option — which is
+    also what an unthrown bag reads as, correctly. A fourth zone would be the one place
+    the lanes broke a rule the rest of the app keeps.
+  - **The group is labelled `${name}, bag ${i + 1}` and the zones just `hole`/`board`/
+    `floor`**, so arrowing through a lane doesn't re-read the player every time. `name`
+    is the *thrower who is up* (`laneName` in `App.jsx`, via `playerLabel`), not the
+    team — in doubles it changes hands every round, and `verify-a11y.mjs` reads it off
+    `.lanes-team` rather than writing it down so the two cannot drift.
+  - **The radios' `name` attribute is what the grouping is**, and dropping it leaves
+    every role and label reading correctly while the count goes back to 24. That is why
+    the tab-stop number is asserted at all.
+  - **`.tier-zone` needs `appearance: none` and `margin: 0`** before an input will fill
+    its third of the lane, and the focus ring is declared rather than left to the UA:
+    the zones touch, so an outset ring on the middle one is drawn over its neighbours
+    and reads as the wrong band being focused.
+
 ## Nobody plays themselves, and nobody plays nameless
 
 - **Nobody can play themselves and nobody plays nameless, and `lineupFaults` is the

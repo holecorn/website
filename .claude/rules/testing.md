@@ -307,6 +307,26 @@ line passes all 635 unit tests.
     be wrong, and the wrong one sends you to export an empty archive and delete matches
     that are not listed.
 
+`tools/verify-a11y.mjs` covers whether a round can be scored without seeing the screen,
+which is a gap of the third kind: not a value handed to the wrong component and not a
+number, but a **role and a name that only exist in a browser** — `vitest.config.js` is
+`environment: 'node'` and nothing imports a `.jsx`, so the entire accessibility tree is
+invisible to the unit suite. Before it, the lanes were 24 buttons named `bag hole` /
+`bag board` / `bag floor` and the bag's resting tier was not exposed at all.
+- **The tab-stop count is the assertion that earns the file.** Every other one — the
+  group per bag, its label, the checked option — passes with the radios' `name`
+  attribute deleted, at which point there is no grouping and the board is 24 stops
+  again. Five mutations: no `name` fails only the count, no group label and no
+  `role="radiogroup"` fail the naming block, `checked` pinned false fails four, and a
+  label naming the player but not the bag fails only the distinctness assertion.
+- **The label is read off `.lanes-team` rather than written down**, because in doubles
+  the name on the card changes hands every round and hard-coding one would pass while
+  the lanes named the wrong partner.
+- **Focus is reset by focusing `document.body`, not by blurring.** The sequential focus
+  navigation starting point survives a blur, so Tab resumes from the last thing clicked
+  and the walk silently misses every lane before it — measured, 6 stops instead of 8,
+  which reads as a failure of the fix rather than of the check.
+
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so
 passing locally is not evidence they pass in CI. `act` covers that gap for the

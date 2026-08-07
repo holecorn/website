@@ -66,7 +66,11 @@ function vibration(holeCount, allInHole) {
   return { amp: 1, dur: 180 };
 }
 
-function Lane({ tier, color, holeCount, vibe, disabled, onSet }) {
+// Native radios rather than buttons with `role="radio"`, because the browser then
+// owns the roving tabindex and the arrow keys — the group is one tab stop instead
+// of three, and where the bag is is the `checked` state rather than something the
+// lane would have to mirror into `aria-checked` and keep in step.
+function Lane({ tier, label, group, color, holeCount, vibe, disabled, onSet }) {
   const [burst, setBurst] = useState(0);
 
   const place = (t) => {
@@ -80,14 +84,17 @@ function Lane({ tier, color, holeCount, vibe, disabled, onSet }) {
   const inHole = tier === 'hole';
   const vibrating = inHole && vibe.amp > 0;
   return (
-    <div className="lane">
+    <div className="lane" role="radiogroup" aria-label={label}>
       {STOPS_TOP_DOWN.map((t) => (
-        <button
+        <input
           key={t}
+          type="radio"
+          name={group}
           className={`tier-zone tier-${t}`}
+          checked={tier === t}
           disabled={disabled}
-          onClick={() => place(t)}
-          aria-label={`bag ${t}`}
+          onChange={() => place(t)}
+          aria-label={t}
         />
       ))}
       <div
@@ -132,6 +139,8 @@ function TeamLanes({ team, name, positions, color, disabled, onSet, celebrateKey
           <Lane
             key={i}
             tier={tier}
+            label={`${name}, bag ${i + 1}`}
+            group={`bag-${team}-${i}`}
             color={color}
             holeCount={holeCount}
             vibe={vibe}
