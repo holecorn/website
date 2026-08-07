@@ -5,7 +5,8 @@
 #include <ArduinoJson.h>
 #include <stddef.h>
 
-// Mirrors REORDER_WINDOW in src/useScoreboard.js.
+// Mirrors REORDER_WINDOW in src/scoreboard.js, and tools/test-firmware.mjs holds the two
+// equal — this cited the wrong file for a while with nothing to notice.
 static const long long REORDER_WINDOW_MS = 60000;
 
 struct Rgb {

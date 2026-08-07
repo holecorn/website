@@ -139,7 +139,10 @@ struct PanelCanvas {
   }
 };
 
-// The app's four team colours (PALETTE in src/App.jsx), which the splash draws two of.
+// The app's four team colours (PALETTE in src/scoring.js), which the splash draws two of.
+// tools/test-firmware.mjs holds the two equal: this is in the sketch rather than render.h,
+// so the pixel check never reaches it and a colour changed on the phone would leave the
+// board booting into the old one. This cited App.jsx until the palette moved.
 const Rgb SPLASH_PALETTE[] = {
     {0x2f, 0x80, 0xed}, {0xeb, 0x57, 0x57}, {0x27, 0xae, 0x60}, {0xf2, 0xc9, 0x4c}};
 const uint8_t SPLASH_PALETTE_N = sizeof SPLASH_PALETTE / sizeof SPLASH_PALETTE[0];

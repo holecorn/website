@@ -417,14 +417,14 @@ What constrains code outside those files:
   the app and the board both need them and two definitions would let them disagree.
   `sideLabel` collapsing the spaces around an ampersand *inside* a name is what makes
   reading the join exact rather than a guess.
-  - **A team colour is written once on the app side.** `PALETTE` and `DEFAULT_COLORS` in
-    `scoring.js` are the only literals left — `newGame`, `Logo.jsx` and `Display.jsx`
-    derive their defaults rather than repeating the hex, which they used to, so a colour
-    changed here left the wordmark and the board's cold start on the old one. The
-    firmware's `SPLASH_CONNECT` is held by the pixel check. **The reds in `App.css`,
-    `Stats.css` and `Tournament.css` are a UI accent that shares `#eb5757` by
-    coincidence** and must not move with the team colour — which is why this is not one
-    variable across the whole app.
+  - **A team colour is written once in JS and once in C++, and `test:firmware` holds the
+    two equal.** `PALETTE` and `DEFAULT_COLORS` in `scoring.js` are the only literals left
+    on the app side — `newGame`, `Logo.jsx` and `Display.jsx` derive their defaults rather
+    than repeating the hex, which they used to. The firmware's `SPLASH_PALETTE` is checked
+    against `PALETTE` by the mirrored-constants step, and `SPLASH_CONNECT` by the pixel
+    check. **The reds in `App.css`, `Stats.css` and `Tournament.css` are a UI accent that
+    shares `#eb5757` by coincidence** and must not move with the team colour — which is
+    why this is not one variable across the whole app.
 - **The MQTT chunk is excluded from the PWA precache** (`globIgnores` in
   `vite.config.js`) — useless without a network, and it cost every install ~100kB
   gzipped.

@@ -165,6 +165,16 @@ checks the page rendered *before* clicking anything: the failure is a blank page
 and waiting on a button that will never appear times out the whole run instead
 of reporting.
 
+It also holds the two constants that cross the language boundary with **only a comment**
+behind them — `REORDER_WINDOW` against `REORDER_WINDOW_MS`, and `PALETTE` against
+`SPLASH_PALETTE`. Everything else shared with the firmware is pinned by construction (one
+generator run for the glyphs, a source hash for the masks, the framebuffer for all of
+`render.h`); these two sit outside all three, in `board_logic.h` and in the sketch itself.
+Both comments had already gone stale in the same way, naming the wrong file for the value
+they mirror — so the step checks the *value*, since the file reference is the part that
+rots. Verified by mutation: a team colour changed on one side fails it and prints both.
+**A new mirrored constant goes in `MIRRORED`**; there is no third place to look.
+
 `npm run test:firmware` compiles and runs both host C++ suites, checks that
 `glyphs.h` and `src/panelGlyphs.js` still match `src/segments.js`, and compares
 `src/panelRender.js` against the framebuffers `test_render.cpp` just produced.

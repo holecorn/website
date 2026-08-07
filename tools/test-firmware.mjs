@@ -101,6 +101,63 @@ step('the generated logo masks match public/logo.svg', () => {
   process.stdout.write(`   logo.h and src/panelLogo.js built from ${sha.slice(0, 12)}\n`);
 });
 
+// Two values cross the language boundary with **only a comment** holding them together,
+// which is the one shape of drift nothing else here can see: the glyphs are generated
+// from one run, the masks carry a hash, and everything in render.h is pinned by the pixel
+// check — but these two sit outside all three, in board_logic.h and in the sketch itself.
+//
+// Both comments had already gone stale, in the same way and without a symptom: they named
+// the wrong file for the value they mirror (`REORDER_WINDOW` was cited in useScoreboard.js
+// and lives in scoreboard.js; `PALETTE` in App.jsx and lives in scoring.js). A comment
+// naming a file is the part that rots — so this checks the *value*, and the file reference
+// becomes decoration that cannot mislead about anything load-bearing.
+//
+// Adding a mirrored constant means adding it here. There is no third place to look.
+const MIRRORED = [
+  {
+    what: 'the reorder window',
+    // A retained score stamped by a fast clock locks every display out until real time
+    // catches up, so both ends have to forgive the same span or one recovers and the
+    // other does not.
+    js: ['src/scoreboard.js', /export const REORDER_WINDOW = ([\d_]+)/, (m) => m[1].replace(/_/g, '')],
+    cpp: ['firmware/hub75/board_logic.h', /REORDER_WINDOW_MS = (\d+)/, (m) => m[1]],
+  },
+  {
+    what: 'the team colours',
+    // The splash paints two of the app's four. Nothing else compares them: SPLASH_PALETTE
+    // is in the .ino rather than render.h, so the pixel check never reaches it, and a
+    // team colour changed on the phone would leave the board booting into the old one.
+    js: [
+      'src/scoring.js',
+      /export const PALETTE = \[([\s\S]*?)\]/,
+      (m) => [...m[1].matchAll(/'#([0-9a-f]{6})'/g)].map((x) => x[1]).join(','),
+    ],
+    cpp: [
+      'firmware/hub75/hub75.ino',
+      /const Rgb SPLASH_PALETTE\[\] = \{([\s\S]*?)\};/,
+      (m) =>
+        [...m[1].matchAll(/\{0x([0-9a-f]{2}), 0x([0-9a-f]{2}), 0x([0-9a-f]{2})\}/g)]
+          .map((x) => x[1] + x[2] + x[3])
+          .join(','),
+    ],
+  },
+];
+
+step('the constants mirrored across the language boundary agree', () => {
+  const read = ([file, pattern, take]) => {
+    const found = pattern.exec(readFileSync(resolve(root, file), 'utf8'));
+    if (!found) throw new Error(`${file} no longer matches ${pattern} — the mirror moved`);
+    return take(found);
+  };
+  for (const { what, js, cpp } of MIRRORED) {
+    const [a, b] = [read(js), read(cpp)];
+    if (a !== b) {
+      throw new Error(`${what}: ${js[0]} has ${a}, ${cpp[0]} has ${b}`);
+    }
+    process.stdout.write(`   ${what}: ${a}\n`);
+  }
+});
+
 // The suites sit in host/ rather than beside the sketch because Arduino compiles
 // every source file in a sketch folder: two main()s collide at link, and the
 // vendored ArduinoJson.h shadows the real 7.4.3 library. Arduino ignores
