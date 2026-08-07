@@ -62,6 +62,7 @@ import {
 } from './tournament.js';
 import { loadInactive, offerableNames } from './inactive.js';
 import { NAME_FIELD } from './nameField.js';
+import { useWakeLock } from './useWakeLock.js';
 import './App.css';
 
 const STORAGE_KEY = 'holecorn.game.v3';
@@ -493,6 +494,10 @@ export default function App() {
     if (confirm && !dialog.open) dialog.showModal();
     if (!confirm && dialog.open) dialog.close();
   }, [confirm]);
+
+  // The lanes only. A phone on setup or reading career stats indoors should sleep like
+  // any other page; it is the round-by-round unlocking that this is for.
+  useWakeLock(screen === 'play');
 
   // Must stay identical to the wide tier's query in App.css: this decides whether
   // the rail's panels render at all, and that file decides where they go. The

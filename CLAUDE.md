@@ -123,6 +123,9 @@ project dependency. It starts and stops its own preview server.
   `mqtt` so the client is a separate chunk.
 - `src/useScoreboard.js` — the React glue (`useScoreboardPublisher` for the
   scoring phone, `useScoreboardDisplay` for the board).
+- `src/useWakeLock.js` — keeps a screen awake. Two callers: `?display=1` for the
+  whole game, and `App.jsx` for the play screen only. `tools/verify-wakelock.mjs`
+  covers both.
 - `src/Display.jsx` / `src/Display.css` — the `?display=1` view, routed in
   `src/main.jsx`. `src/ScoreboardSettings.jsx` is its settings UI on the setup
   screen.

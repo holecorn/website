@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 
-const URL = 'http://localhost:4173/?display=1';
+const DISPLAY = 'http://localhost:4173/?display=1';
+const APP = 'http://localhost:4173/';
 let failures = 0;
 const check = (label, cond, detail = '') => {
   console.log(`  ${cond ? 'ok  ' : 'FAIL'} ${label}${detail ? `  (${detail})` : ''}`);
@@ -36,14 +37,14 @@ window.__wake.systemRelease = () => {
 `;
 
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
-const open = async (extra) => {
+const open = async (extra, url = DISPLAY) => {
   const page = await browser.newPage();
   await page.addInitScript(MOCK);
   // Init scripts run in order, so this lands after the mock is installed and
   // survives the navigation — unlike setting the flag then reloading.
   if (extra) await page.addInitScript(extra);
   page.on('pageerror', (e) => { console.log('  PAGE ERROR', e.message); failures++; });
-  await page.goto(URL);
+  await page.goto(url);
   return page;
 };
 const count = (page) => page.evaluate(() => window.__wake.requests);
@@ -94,6 +95,33 @@ console.log('does not re-acquire while the page is hidden');
   });
   await page.waitForTimeout(400);
   check('re-acquires on becoming visible', (await count(page)) === 2, `got ${await count(page)}`);
+  await page.close();
+}
+
+// The scoring phone, which is the screen unlocked most often — roughly once a round.
+// Two-sided on purpose: holding it everywhere would keep a phone left on setup or
+// reading career stats awake, so the absences are what say the scope is real.
+console.log('the scoring phone holds it on the play screen and nowhere else');
+{
+  const page = await open(undefined, APP);
+  await page.waitForTimeout(400);
+  check('nothing requested on setup', (await count(page)) === 0, `got ${await count(page)}`);
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.waitForTimeout(400);
+  check('requested on the play screen', (await count(page)) === 1, `got ${await count(page)}`);
+  // Nothing has been thrown, so this is `New game` rather than `Abandon game` and asks
+  // nothing. Back on setup the lock has to go, through the effect's own cleanup.
+  await page.getByRole('button', { name: 'New game', exact: true }).click();
+  await page.waitForTimeout(400);
+  // Counted as well as tested: `[].every()` is true, so a phone that never took the
+  // lock would pass this while proving nothing — the file's own recorded trap.
+  const held = await page.evaluate(() => window.__wake.sentinels.map((s) => s.released));
+  check(
+    'released on the way back to setup',
+    held.length > 0 && held.every((r) => r),
+    `${held.filter((r) => r).length} of ${held.length} released`,
+  );
+  check('and not re-taken there', (await count(page)) === 1, `got ${await count(page)}`);
   await page.close();
 }
 

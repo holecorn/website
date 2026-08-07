@@ -209,7 +209,10 @@ the broker on the LAN.
   shared transport, so it changes `?display=1` too — deliberately left alone.
   **Chrome also throttles `setTimeout` in a hidden tab**, so a backgrounded
   emulator can hold the last frame past its own grace until you look at it.
-- **The display's wake lock is re-acquired, not requested once.** The browser
+- **The wake lock is re-acquired, not requested once, and the hook is `src/useWakeLock.js`
+  now** — shared with the scoring phone, which takes it on the play screen only and
+  releases it everywhere else (see `.claude/rules/scoring.md`). The display passes no
+  argument and so holds it for as long as it is open. The browser
   drops it whenever the page is hidden, and the system can reclaim it (low
   battery). An outright refusal is not retried — it would only be refused again —
   but a *release* after a successful grab schedules one retry a second later, so a

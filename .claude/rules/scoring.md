@@ -10,6 +10,7 @@ paths:
   - "src/GameStats.jsx"
   - "src/GameStats.css"
   - "src/App.jsx"
+  - "src/useWakeLock.js"
   - "tools/verify-positions.mjs"
 ---
 
@@ -438,6 +439,34 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
   because that is the failure where every doubles stat is silently re-credited and
   nothing fails. Note that a *boolean* prop would be a runtime guard rather than a
   structural one: the absent handler is the gate.
+
+## The phone stays awake while the lanes are up
+
+- **`useWakeLock(screen === 'play')` in `App.jsx` is the whole of it.** Before it the
+  scoring phone made no request at all, so the scorer unlocked it roughly once a round —
+  the committed sample archive averages **11.9 rounds** over its 105 played games —
+  one-handed and outdoors. Nothing is lost when the phone sleeps, so there was never a
+  symptom to notice: it is pure friction, and the friction paid most often.
+  - **Scoped to the lanes and not to the app.** A phone left on setup while everyone
+    walks to the boards, or reading career stats indoors, must sleep like any other page.
+    A hook cannot be called conditionally, so the scope is an **argument** and going
+    inactive releases through the effect's own cleanup — there is no second teardown path
+    to keep in step with the first.
+  - **`src/useWakeLock.js`, not a copy and not an export from `Display.jsx`.** Two callers
+    want it, which is `shared.test.js`'s rule for where a helper lives; and the root
+    `CLAUDE.md` wants code moving *out* of `App.jsx`, so a hook defined there would have
+    been the wrong direction twice over. `?display=1` passes nothing and holds it for the
+    whole game — **its half is in `.claude/rules/scoreboard.md`**, including why a
+    *release* is retried once a second where an outright refusal is not, and which iOS
+    versions the API is broken on. Read that before touching the retry.
+  - **The early return on an absent `navigator.wakeLock` is load-bearing**, because the
+    API is secure-context only and a dev server reached by LAN IP is not one — see
+    **Conventions & gotchas** in the root `CLAUDE.md`. That is the origin the app is
+    tested from on a phone, so the guard is the ordinary path there rather than an edge.
+  - **`verify-wakelock.mjs` covers both sides of the scope**, and it has to: nothing below
+    `App.jsx` can see which screen is up, so a hook wired unconditionally and a hook not
+    wired at all are both invisible to every unit test. It asserts the request on the play
+    screen *and* its absence on setup, which is what tells those two apart.
 
 ## A save the app cannot play
 
