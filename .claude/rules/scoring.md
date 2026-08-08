@@ -63,9 +63,13 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     flipping it after a win would strand a record the archive effect can no longer
     see to remove.
   - **The play screen says `not recorded`**, and it has to: a game you meant to
-    record and didn't has no other symptom. Measured, it costs no layout — the
-    header stays 94px and the lanes 61px, because `.center-readout` is shorter than
-    the team score blocks either side of it.
+    record and didn't has no other symptom. Measured at 390x844, it costs no height —
+    the header stays 94px and the lanes 168px whether or not the note is drawn, because
+    `.center-readout` is shorter than the team score blocks either side of it. It does
+    cost width, and it is the *widest* thing in that column at 87px against the
+    projection's 65px, so a casual game is the case where the header names are tightest —
+    which is also the case where they are colour names. See **The header's big figure is
+    the committed score**.
   - **The toggle shares `.setup-top` with the mode and `Start`, and that row is the
     tightest space on the screen.** It started as its own row below and cost 58px of
     height for a control that is off almost always. Three things bought the space and
@@ -153,6 +157,57 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     its third of the lane, and the focus ring is declared rather than left to the UA:
     the zones touch, so an outset ring on the middle one is drawn over its neighbours
     and reads as the wrong band being focused.
+
+## The header's big figure is the committed score
+
+- **The 56px number is `totals(game)`, and the round in progress is reported between the
+  two cards as `PROJECTED 4 – 12`.** It used to be the other way round — `TeamScore` was
+  handed `totals + roundNets(current)` — so a phone mid-round with four in the hole read
+  **Neil 0 · Sigma 12 at 56px/800 for a game that was 0–0**, with the committed pair at
+  18px behind a 10px `LOGGED` caption. The biggest thing on the screen was a hypothesis,
+  and the smallest was the only thing saying so.
+  - **The centre column lost its score and got the projection instead**, which is why
+    this stayed a small change: once the headline is the committed figure, `LOGGED 8–4`
+    was the same number twice, and the projection is the readout that column has room
+    for. `.center-cap`, `.logged` and `.logged-sep` are gone. **Both readouts of one
+    round is the fault to watch for here** — the first attempt put a `+12 to score` line
+    under the leading team's score *as well*, which is the projection minus one addition.
+  - **It sits under `to 21` because that is the number it has to be read against.** What
+    the projection buys over a bare net is the comparison with the target — whether this
+    end wins the game — and the two are one glance apart.
+  - **It also puts the phone back in agreement with everything else.** `roundReport`,
+    `?display=1` and the LED panel have always reported committed rounds only
+    (`scoreboardPayload` calls `totals`), so the scorer's own screen was the one surface
+    quoting a different number — the seen half and the spoken half of the same header
+    disagreeing. The projection is the phone's alone and deliberately not published: a
+    board is watched from the far end of the lawn, where a second pair of numbers is the
+    D5 confusion again with none of the size hierarchy that resolves it here.
+  - **Each figure names its side in `visually-hidden` text.** Two numbers told apart by
+    colour and column is exactly the round history's old fault; spoken it reads
+    `projected Rho 4 Sigma 12`.
+  - **It is hidden, never unmounted, and that reserves a *width* rather than a height.**
+    The centre column is far shorter than the team cards, so it costs no height either
+    way — but dropping it moved both cards 25px on the first bag of every round, taking
+    a name from 12 characters to 10 and back. Reserving by rendering the real content
+    means the width is measured in the device's own font rather than guessed at in CSS,
+    which matters because the deploy runner's `system-ui` is not a Mac's.
+  - **The caption is held to about the width of the pair below it** — measured, 64.9px
+    for `PROJECTED` against 62.5px for two two-digit scores, and 87.4px for the
+    `IF IT ENDS NOW` it was first written as. Above that the caption sets the column's
+    width and the difference comes straight out of the two names either side: measured
+    at 390px, the longest header name that fits goes 12 characters to 11 as it stands,
+    and to 10 with the longer caption. Casual games already spend 87px on
+    `not recorded`, so they are unaffected either way.
+  - **It must not say "this round".** `Board.jsx`'s lane header already uses that phrase
+    for a side's **raw** points (`7 pts this round`), where this is the cancelled net —
+    two different numbers under one phrase, on one screen.
+  - **`verify-positions.mjs` is the only thing that can see it**, and none of the three
+    checks already reading this score could: `verify-tabs`, `verify-recovery` and
+    `verify-stats` all read it *after* a commit, where `current` is empty and the
+    projected and committed figures are the same number. Its block reads mid-round with
+    the trailing side four in the hole, so the two differ. Verified by mutation —
+    restoring `live` fails exactly one assertion and nothing else. Those three now read
+    `.scoreboard .score`, which is the committed score by construction.
 
 ## `roundReport` is the only thing that says a round happened
 

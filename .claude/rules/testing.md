@@ -95,7 +95,14 @@ fail only here. **Which screen the court is on is the same kind of gap**: nothin
 below `App.jsx` can see it, so the `setup` prop passed at neither call site or at
 both is invisible to the unit tests either way round. Verified by mutation — each
 fails only its own half, the missing prop on the setup assertions and the extra one
-on `singles leaves the far end empty`. The toss is covered there too, and only *properties* can be —
+on `singles leaves the far end empty`. **The header's big figure is a fourth of these,
+with a trap of its own**: `verify-tabs`, `verify-recovery` and `verify-stats` all read
+that score, and all three read it *after* a commit, where `current` is empty and the
+committed and projected figures are the same number — so none of them could tell
+`totals` from `totals + roundNets(current)`, which is how the projected value stood as
+the biggest thing on the screen. That block reads mid-round with the trailing side four
+in the hole, and restoring the projected value fails exactly one of its assertions.
+The toss is covered there too, and only *properties* can be —
 the draw is random, so it asserts that both start-board players come up over 20
 presses, that no far partner ever does, and that the four names never move. It also
 holds the pause: the result faded out inside the window, the marker still where it

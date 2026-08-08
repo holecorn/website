@@ -49,7 +49,7 @@ you hand out and press **Start**.
 
 It stays on until you turn it off, since guests tend to arrive in runs, and the
 toggle sits beside **Start** so it's in front of you every time you begin a game.
-While one is in play the score reads **not recorded** under the running total. In
+While one is in play the scoreboard reads **not recorded** under the target. In
 doubles the two partners share the one label, so which of them is up is shown by
 the court diagram rather than by name.
 
@@ -88,8 +88,12 @@ setup — and a name you
 only notice is wrong after the game can be put right on the stats screen, which
 moves that player's numbers with it.
 
-Both teams stay on screen with live running totals and each team's points so far
-this round, so you can read the score mid-round. **End round** stays disabled
+Both teams stay on screen with the score as it stands — committed rounds only, so
+the big figures are what you'd write down if you stopped now. Between them, under
+the target, the **projected** pair is where the round in progress would leave the
+score, so you can see what an end is worth against what it takes to win without
+doing the sum. Commit the round and it becomes the big figures. Each lane card also
+shows its own team's raw points so far this round, before cancellation. **End round** stays disabled
 until every bag has been placed (a bag on the floor counts); a hint shows how
 many are still to place. Press it to commit the round and update the totals.
 **Undo round** rolls back the last committed round and restores its bags to the

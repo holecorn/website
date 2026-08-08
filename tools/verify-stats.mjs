@@ -1800,7 +1800,8 @@ if (rendered) {
       (await stuck.locator('.team-lanes').count()) === 2 && boom.length === 0,
       boom.join(' | '),
     );
-    const logged = (await stuck.locator('.logged').innerText()).replace(/\s/g, '');
+    // The two headline figures are the committed score; the in-round net is `.pending`.
+    const logged = (await stuck.locator('.scoreboard .score').allInnerTexts()).join('–');
     check('and the round was still scored', logged === '12–0', logged);
   }
   await full.close();

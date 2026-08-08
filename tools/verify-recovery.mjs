@@ -29,6 +29,9 @@ const check = (label, cond, detail = '') => {
   if (!cond) failures++;
 };
 
+// The two headline figures are the committed score; the in-round net is `.pending`.
+const logged = (page) => page.locator('.scoreboard .score').allInnerTexts().then((s) => s.join('–'));
+
 const round = {
   a: ['hole', 'board', 'floor', 'floor'],
   b: ['board', 'floor', 'floor', 'floor'],
@@ -124,8 +127,8 @@ console.log('\nand a save it can play is still played, not thrown away');
   check('it opens on the play screen', drew && (await page.locator('.setup').count()) === 0);
   check(
     'with the round that was saved',
-    (await page.locator('.logged').innerText()).replace(/\s/g, '') === '3–0',
-    (await page.locator('.logged').innerText()).replace(/\s/g, ''),
+    (await logged(page)) === '3–0',
+    await logged(page),
   );
   await context.close();
 }
@@ -143,7 +146,7 @@ console.log('\nand a save from before a field existed still loads');
     'four fields younger than the save',
     drew &&
       (await page.locator('.setup').count()) === 0 &&
-      (await page.locator('.logged').innerText()).replace(/\s/g, '') === '3–0',
+      (await logged(page)) === '3–0',
   );
   check(
     'and it is given an id, so it can be archived',

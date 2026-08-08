@@ -674,28 +674,42 @@
   gap: 2px;
 }
 
-.center-cap {
-  color: var(--muted);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.logged {
-  font: 700 18px system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
-}
-
-.logged-sep {
-  color: var(--muted);
-  margin: 0 3px;
-}
-
 .target {
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* Hidden rather than unmounted, so the width it asks for is measured in whatever
+   font the device has rather than guessed at here. It costs no height: the centre
+   column is far shorter than the team cards either side of it. */
+.projection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.projection.is-idle {
+  visibility: hidden;
+}
+
+.projection-cap {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.projection-score {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--muted);
+  font: 700 17px/1.1 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
 .casual-note {

@@ -26,6 +26,8 @@ const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' 
 
 const stored = (page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), KEY);
 const onSetup = (page) => page.locator('.setup').count().then((n) => n === 1);
+// The two headline figures are the committed score; the in-round net is `.pending`.
+const logged = (page) => page.locator('.scoreboard .score').allInnerTexts().then((s) => s.join('–'));
 
 // Count what each tab writes for the game key, so a tab that adopts another's
 // game can be shown to write nothing back — the property that stops two tabs
@@ -91,7 +93,7 @@ console.log('a stale tab does not overwrite the game the other tab is playing');
   check('storage holds the three rounds that were played', (await stored(playing)).rounds.length === 3);
   check(
     'the stale tab followed the game onto the play screen',
-    !(await onSetup(stale)) && (await stale.locator('.logged').innerText()).replace(/\s/g, '') === '12–0',
+    !(await onSetup(stale)) && (await logged(stale)) === '12–0',
   );
   check(
     'and wrote nothing back, so the two tabs do not echo at each other',

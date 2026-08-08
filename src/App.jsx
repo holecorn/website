@@ -522,7 +522,6 @@ export default function App() {
   const laneName = (team) => playerLabel(game, team, doubles ? activeIdx : 0);
   const t = totals(game);
   const preview = roundNets(game.current.a, game.current.b);
-  const live = { a: t.a + preview.a, b: t.b + preview.b };
   const remaining = unthrownCount(game);
   const complete = roundComplete(game);
   const currentRoundStarted = [...game.current.a, ...game.current.b].some(
@@ -814,19 +813,39 @@ export default function App() {
         <TeamScore
           players={teamPlayers('a')}
           activeIdx={activeIdx}
-          score={live.a}
+          score={t.a}
           color={colors.a}
           winner={game.winner === 'a'}
           first={game.nextFirst === 'a'}
         />
         <div className="center-readout">
-          <span className="center-cap">logged</span>
-          <div className="logged">
-            <span style={{ color: colors.a }}>{t.a}</span>
-            <span className="logged-sep">–</span>
-            <span style={{ color: colors.b }}>{t.b}</span>
-          </div>
           <span className="target">to {game.target}</span>
+          {/* Sits under the target, because the pair that answers "does this win
+              it?" has to be read against the number it needs. Always mounted and
+              hidden rather than dropped, so the column it widens is a fixed width:
+              the alternative moved the two team cards 25px on the first bag of
+              every round, which took a name from 12 characters to 10 and back. */}
+          <div className={`projection${currentRoundStarted ? '' : ' is-idle'}`}>
+            {/* Kept to about the width of the pair below it (measured: 64.9px
+                against 62.5px for two two-digit scores). Any longer and the
+                caption sets this column's width instead, which comes straight out
+                of the two names either side — "if it ends now" cost 25px, two
+                characters off every name in the header. */}
+            <span className="projection-cap">projected</span>
+            {/* Two numbers told apart by colour and column is the round history's
+                old fault, so each says whose it is for a reader. */}
+            <span className="projection-score">
+              <span style={{ color: colors.a }}>
+                <span className="visually-hidden">{teamLabel(game, 'a')} </span>
+                {t.a + preview.a}
+              </span>
+              <span aria-hidden="true">–</span>
+              <span style={{ color: colors.b }}>
+                <span className="visually-hidden">{teamLabel(game, 'b')} </span>
+                {t.b + preview.b}
+              </span>
+            </span>
+          </div>
           {/* The header already reads "Blue" rather than a name, so this only has
               to confirm what that implies — but it does have to be said, because a
               game you meant to record and didn't has no other symptom. */}
@@ -835,7 +854,7 @@ export default function App() {
         <TeamScore
           players={teamPlayers('b')}
           activeIdx={activeIdx}
-          score={live.b}
+          score={t.b}
           color={colors.b}
           winner={game.winner === 'b'}
           first={game.nextFirst === 'b'}
@@ -1244,6 +1263,12 @@ function Confetti({ count, colors }) {
 // changed once a game is under way — the play screen deals only with scoring — so
 // the bag is an indicator here and the name is text. Both are still needed:
 // after round one the bag follows whoever scored last.
+// The big number is the *committed* score, and the round in progress is reported
+// between the two cards instead. It used to be the other way round: the 56px figure
+// was `totals + roundNets(current)`, so four in the hole read "Neil 0 · Sigma 12"
+// for a game that was 0–0, with the caption resolving it the smallest text on the
+// screen. This also puts the phone back in agreement with `roundReport`,
+// `?display=1` and the LED panel, all three of which report committed rounds only.
 function TeamScore({ players, activeIdx, score, color, winner, first }) {
   return (
     <div className={`team-score${winner ? ' is-winner' : ''}`}>

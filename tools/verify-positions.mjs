@@ -303,6 +303,70 @@ console.log('\nthe play screen deals only with scoring');
   await page.close();
 }
 
+console.log('\nthe biggest figure in the header is the committed score');
+{
+  // The header used to lead with `totals + roundNets(current)`, so four in the hole
+  // read "Rho 0 · Sigma 12" at 56px for a game that was 0–0 and the caption saying so
+  // was the smallest text on the screen. Nothing below `App.jsx` can see which value
+  // reaches `TeamScore`, and none of the three checks reading this score can either:
+  // all of them read it *after* a commit, where the round is empty and the projected
+  // and committed figures are the same number.
+  const page = await open(PHONE, { mode: 'Singles', names: ['Rho', 'Sigma'] });
+  const lanes = await page.locator('.lane').all();
+  for (let i = 0; i < 4; i += 1) await lanes[i].locator('.tier-board').click();
+  for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-floor').click();
+  await page.locator('.end-round').click();
+  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+    timeout: 5000,
+  });
+  const settled = await page.locator('.scoreboard').boundingBox();
+  const settledCard = await page.locator('.team-score').first().boundingBox();
+  check(
+    'between rounds the projection is not drawn',
+    !(await page.locator('.projection').isVisible()),
+    `visible: ${await page.locator('.projection').isVisible()}`,
+  );
+
+  // Mid-round, with the side that is behind four in the hole: the projected score is
+  // 4–12 and the committed one is 4–0.
+  for (let i = 0; i < 4; i += 1) await lanes[i].locator('.tier-floor').click();
+  for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-hole').click();
+  const headline = await page.locator('.scoreboard .score').allInnerTexts();
+  check('mid-round it reads the committed score, not the projected one', headline.join('–') === '4–0', headline.join('–'));
+  // The two figures are told apart by colour and by column, which is the round
+  // history's old fault, so the names have to be in the text as well.
+  const projected = (await page.locator('.projection-score').textContent()).replace(/\s+/g, ' ').trim();
+  check(
+    'the score the round would end on is between them, naming both sides',
+    projected === 'Rho 4–Sigma 12',
+    JSON.stringify(projected),
+  );
+  const sizes = await page.evaluate(() => [
+    parseFloat(getComputedStyle(document.querySelector('.score')).fontSize),
+    parseFloat(getComputedStyle(document.querySelector('.projection-score')).fontSize),
+  ]);
+  check('with the committed figure the larger of the two', sizes[0] > sizes[1], sizes.join(' vs '));
+  const midRound = await page.locator('.scoreboard').boundingBox();
+  const midCard = await page.locator('.team-score').first().boundingBox();
+  check(
+    'and reserving it keeps the header from jumping on the first bag',
+    Math.abs(midRound.height - settled.height) < 0.5 && Math.abs(midCard.width - settledCard.width) < 0.5,
+    `${settled.height}x${settledCard.width} then ${midRound.height}x${midCard.width}`,
+  );
+
+  await page.locator('.end-round').click();
+  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+    timeout: 5000,
+  });
+  const committed = await page.locator('.scoreboard .score').allInnerTexts();
+  check(
+    'committing moves it into the headline and puts the projection away',
+    committed.join('–') === '4–12' && !(await page.locator('.projection').isVisible()),
+    committed.join('–'),
+  );
+  await page.close();
+}
+
 console.log('\nevery control is a real button, with nothing hidden to stand in for it');
 {
   // What the drawing used to need: it was aria-hidden with a parallel set of
