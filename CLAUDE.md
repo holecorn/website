@@ -292,6 +292,14 @@ project dependency. It starts and stops its own preview server.
   two byte-identical cells told apart by hue alone. **Anything new that distinguishes the
   teams has to say which is which in text**, and if the visible text is glyphs it needs
   the spoken half too — see `.claude/rules/scoring.md`.
+  - **A colour is also a *fill*, and white ink clears none of the four** — measured, 2.87:1
+    on the green, 3.48:1 on the red and 1.59:1 on the yellow, against the 4.5:1 small text
+    needs. `--on-accent` in `index.css` clears all four and is the only ink an accent fill
+    may take, which is what lets the winner banner wear whatever colour won. **A new filled
+    control, or a new element handed `colors[team]` as an inline background, has to use
+    it** — `src/css.test.js` refuses both. `PALETTE`'s blue is set by the same constraint
+    from the other side: a team colour is *text* on `--panel` at 10–13px, which is why it
+    is `#448def` rather than the `#2f80ed` it was. See `.claude/rules/layout.md`.
 - **Custom domain served from root**, so Vite `base` stays `/` and the PWA
   `scope`/`start_url` are `/`. Don't add a base path.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone

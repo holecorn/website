@@ -850,7 +850,7 @@ button.tie {
   border: none;
   border-radius: 12px;
   background: #27ae60;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 16px;
   font-weight: 700;
 }
@@ -958,7 +958,7 @@ button.tie {
   border: none;
   border-radius: 12px;
   background: #27ae60;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 18px;
   font-weight: 700;
 }

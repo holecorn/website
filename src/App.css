@@ -94,7 +94,7 @@
   border: none;
   border-radius: 10px;
   background: #27ae60;
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 15px;
   white-space: nowrap;
@@ -713,7 +713,9 @@
   border-radius: 12px;
   font-weight: 700;
   font-size: 20px;
-  color: #fff;
+  /* Background is the winning team's colour, so this is the one surface that has to
+     read on all four — which is exactly what white could not do. */
+  color: var(--on-accent);
 }
 
 /* Scoring lanes */
@@ -1129,7 +1131,7 @@
   border: none;
   border-radius: 12px;
   background: #27ae60;
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 17px;
 }
@@ -1210,13 +1212,13 @@
 .confirm-actions .confirm-danger {
   background: #eb5757;
   border-color: #eb5757;
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .confirm-actions .confirm-primary {
   background: #27ae60;
   border-color: #27ae60;
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .setup-stats {

@@ -90,7 +90,7 @@
   bottom: 0;
   padding: 1.4vmin;
   text-align: center;
-  color: #0b1116;
+  color: var(--on-accent);
   font-family: 'Bebas Neue', system-ui, sans-serif;
   font-size: clamp(18px, 4vmin, 44px);
   letter-spacing: 0.08em;

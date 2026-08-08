@@ -47,8 +47,15 @@ export function roundNets(a, b) {
 // The colours a team can take. Here rather than in App.jsx because the panel
 // emulator's splash picks two of them and the setup screen offers all four, so it is
 // game data with two readers rather than one screen's list.
+//
+// Blue is lighter than the #2f80ed it started as. A team colour is also *text* — the
+// lane header, the name input, the history cells, the toss line — and at those sizes
+// it needs 4.5:1 against `--panel`, where the old value sat at 4.15. #448def is 4.81
+// and is the smallest step that clears it. The other three already do. Changing one
+// costs a matching edit to SPLASH_PALETTE in hub75.ino, which `npm run test:firmware`
+// refuses to let you skip.
 export const PALETTE = [
-  { name: 'blue', value: '#2f80ed' },
+  { name: 'blue', value: '#448def' },
   { name: 'red', value: '#eb5757' },
   { name: 'green', value: '#27ae60' },
   { name: 'yellow', value: '#f2c94c' },

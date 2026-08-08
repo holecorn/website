@@ -60,6 +60,28 @@ property and the tier; adding `.history { letter-spacing }`, which no base rule 
 correctly passes. The positional version would have failed on 47 harmless rules and still
 not said which one mattered.
 
+**That file now holds a second thing only the stylesheets know: what colour is drawn on
+what.** Contrast is invisible from both directions — `environment: 'node'` and nothing
+imports a `.jsx`, so no unit test reaches a rendered colour, and a browser check cannot
+help either, because a 1.59:1 button renders perfectly and screenshots clean. It asserts
+three properties: that `--on-accent` clears 4.5:1 on every `PALETTE` colour, that every
+`PALETTE` colour clears it as text on `--panel` and `--bg`, and that no rule setting both
+a fill and an ink pairs them under 4.5:1. Verified by mutation, each killed by the
+assertion aimed at it and no other — the old blue fails only the text one and names the
+figure (4.15), and white ink restored on `.end-round` or `.ceremony-pull` fails only its
+own file's rule check, naming the selector, the pair and the ratio.
+- **The winner banner needs a fourth assertion, because the first three cannot see it.**
+  Its fill is an inline `colors[winner]`, so the stylesheet holds an ink with no
+  background beside it — and it is the rule with the worst figure. That one reads the
+  filled classes out of `App.jsx` and requires their ink to be `--on-accent`, since a
+  class that could be wearing any of four colours cannot pick an ink for one. Elements
+  with no text of their own — the swatches, the confetti — declare no `color` and are
+  left alone; a *new* text-bearing one that declares none would inherit `--text` and
+  slip through, which is the known hole.
+- **The fill/ink check is deliberately blind to a rule that sets only one of them.**
+  What an ink lands on then depends on the DOM, which no parse can know, so widening it
+  would mean guessing. The defect was in controls that declare both together.
+
 `tools/verify-positions.mjs` covers the court and in-game stats panels, and the
 assertion it exists for is that **the court names the same thrower the scoring
 lanes do**. Both sides derive the parity correctly and are unit tested; nothing

@@ -115,6 +115,39 @@ source-order traps themselves — read those first, they bite hardest.
   The `.first-bag` glyph *is* shared on purpose — nothing redeclares it, only
   `.field-row .first-bag::before` adds a target.
 
+## Ink on a fill
+
+- **`--on-accent` is the only ink a filled accent may take, and white is never it.**
+  Measured against the four colours the app fills with: white is **2.87:1** on `#27ae60`,
+  **3.48:1** on `#eb5757` and **1.59:1** on `#f2c94c`, where small text needs 4.5:1.
+  `#0b1116` clears all four (6.61, 5.46, 4.91, 11.97). Seven rules were affected —
+  `.start-game`, `.end-round`, `.confirm-primary`, `.confirm-danger`, `.draw-go`,
+  `.ceremony-pull` and `.winner-banner` — and the review that found it named two, because
+  the other five are on screens it sampled less.
+  - **`Display.css` reached the same value first and held it as a literal**, which is how
+    the phone and the board came to disagree about the same fact: the board's banner was
+    11.97:1 on yellow while the phone's was 1.59:1. It reads through the variable now.
+  - **Darkening the green instead was measured and rejected.** White reaches 4.5:1 only at
+    about `#1d8348`, which drops the button's own contrast against the page from 6.44:1 to
+    **3.87:1** — a primary button starting to sink into the background — and gives the app
+    a second green, since `#27ae60` is also the `.recent-mark` bar and the
+    `.tie.is-playable` border, where darkening costs contrast rather than buying it.
+  - **The winner banner is the rule nothing in the stylesheets can see.** Its fill is an
+    inline style off `colors[winner]`, so the CSS holds an ink with no background beside
+    it and the pairing exists only at runtime — and it is the rule with the worst figure,
+    because it wears the yellow whenever the yellow team wins.
+- **`PALETTE`'s blue is set by contrast, not by taste.** A team colour is text as well as
+  fill — the lane header, the name input, the history cells, the toss line — at 10–13px,
+  so it needs 4.5:1 on `--panel`. `#2f80ed` sat at **4.15**; `#448def` is **4.81** and is
+  the smallest step that clears it. The other three already did. **Changing one costs a
+  matching edit to `SPLASH_PALETTE` in `hub75.ino`**, which the mirrored-constants step in
+  `npm run test:firmware` will not let you skip, and it raises that colour's LED duty
+  (0.539 → 0.586 channel-mean) — well inside `DUTY_CEILING`, but not free.
+  - **Existing saves and archived records keep the old hex.** Nothing breaks: a stored
+    `#2f80ed` simply matches no swatch and, in a *casual* game only, falls back to
+    `Team A` rather than `Blue`. `New game` resets it. Worth knowing before assuming a
+    fixture with the old blue is stale.
+
 ## The stats screen's caps
 
 - **The stats screen caps at 1040px, the same number the play screen's wide tier uses**, so

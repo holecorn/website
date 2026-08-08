@@ -26,6 +26,15 @@
   --muted: #8b98a5;
   --border: #2b3642;
 
+  /* Ink for anything drawn on a filled accent or team colour. White clears none of
+     the four — measured, 2.87:1 on the green, 3.48:1 on the red and 1.59:1 on the
+     yellow, all under the 4.5:1 small text needs. This one clears all four (green
+     6.61, red 5.46, blue 4.91, yellow 11.97), which is why the winner banner can
+     take the winner's colour whatever it is. `Display.css` reached it first and held
+     it literally; a second literal is how the phone and the board came to disagree
+     about the same fact. */
+  --on-accent: #0b1116;
+
   font: 16px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
   color: var(--text);

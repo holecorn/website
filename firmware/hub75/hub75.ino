@@ -144,7 +144,7 @@ struct PanelCanvas {
 // so the pixel check never reaches it and a colour changed on the phone would leave the
 // board booting into the old one. This cited App.jsx until the palette moved.
 const Rgb SPLASH_PALETTE[] = {
-    {0x2f, 0x80, 0xed}, {0xeb, 0x57, 0x57}, {0x27, 0xae, 0x60}, {0xf2, 0xc9, 0x4c}};
+    {0x44, 0x8d, 0xef}, {0xeb, 0x57, 0x57}, {0x27, 0xae, 0x60}, {0xf2, 0xc9, 0x4c}};
 const uint8_t SPLASH_PALETTE_N = sizeof SPLASH_PALETTE / sizeof SPLASH_PALETTE[0];
 
 // esp_random() rather than random(), which is seeded identically every boot and would

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, setBag, endRound, setFirst, undoRound } from './scoring.js';
+import { DEFAULT_COLORS, newGame, setBag, endRound, setFirst, undoRound } from './scoring.js';
 import {
   LAYOUT_LABELS,
   REORDER_WINDOW,
@@ -60,8 +60,10 @@ describe('scoreboardPayload', () => {
       first: 'b',
       teamA: 'Neil & Psi',
       teamB: 'Iota & Zeta',
-      colorA: '#2f80ed',
-      colorB: '#eb5757',
+      // Off `newGame`, so read from the palette rather than written again — the hexes
+      // spelled here went stale the first time a team colour moved.
+      colorA: DEFAULT_COLORS.a,
+      colorB: DEFAULT_COLORS.b,
     });
   });
 
@@ -83,8 +85,8 @@ describe('scoreboardPayload', () => {
       first: 'a',
       teamA: 'Blue',
       teamB: 'Red',
-      colorA: '#2f80ed',
-      colorB: '#eb5757',
+      colorA: DEFAULT_COLORS.a,
+      colorB: DEFAULT_COLORS.b,
     });
   });
 
