@@ -71,6 +71,13 @@ board can still be knocked into the hole or off onto the floor, you can move a
 thrown bag between those stops at any time during the round — but once a bag has
 been thrown it can't return to the unthrown state.
 
+Every bag has to be accounted for before a round can be committed, and most of
+them end up on the floor. The button below the lanes offers to do that for you:
+while bags are still out it reads **Remaining 5 on the floor** and puts the rest
+of them down in one press, and once every bag is placed it reads **End round**. The
+first press only moves bags, so a bag you meant to score can still be tapped up
+to the board or the hole; the second is the one that commits.
+
 Committing a round can flash a cornhole callout: **WASH** on a tied round, and,
 on the winning throw, **GAME** (or **SKUNK** when the loser is left on zero) with
 a confetti burst in the winner's colours.

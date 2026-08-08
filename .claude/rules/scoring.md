@@ -158,6 +158,58 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     the zones touch, so an outset ring on the middle one is drawn over its neighbours
     and reads as the wrong band being focused.
 
+## The rest go on the floor in one press
+
+- **`End round` does two things now, and the incomplete half is `restOnFloor`.** Every
+  bag lying on the grass has to be tapped before a round can be committed, so a game is
+  eight taps a round plus the commit — and the taps carrying no points cost exactly what
+  the ones that matter do. The button that counted them (`5 bags still to place`,
+  disabled) now offers to put them down: `Remaining 5 on the floor`, then `End round`.
+  - **Measured, it is a guest-game win rather than this group's.** The sample archive is
+    1,246 rounds at **5.58 non-floor bags a round** and *no* round where all eight sat on
+    the floor, so a fill takes 107 taps a game to 89 — **16%**, not the third the review
+    claimed. It reaches a third at a 50% floor rate and 42% at 60%, which is the game
+    with strangers in it. **Don't re-derive "roughly a third" from the review**; the
+    fixture's throw model is 0.19–0.30 hole and 0.40–0.46 board by construction, so its
+    floor rate is a modelled regular's. The better argument is *which* taps go: five or
+    six of them land at the end of a round, one-handed, walking back from the boards.
+  - **It fills and it does not commit, and that separation is the whole safety of it.**
+    Today the app makes you account for all eight bags, so a bag you forgot stops you;
+    after this a forgotten hole bag is one press from scoring 0. What keeps that
+    recoverable is that the press only moves bags — they stay visible and tappable until
+    you end the round yourself. **A single press that filled *and* committed was the
+    tempting version** (one tap a round) and is refused: the only way back from it is
+    `Undo round`, which also un-archives a win.
+  - **One control rather than a second button beside it.** `.controls` holds one
+    full-width button, `verify-lanes.mjs` asserts it matches the card at every
+    non-landscape size, and the landscape tier makes it content-sized — so a second
+    button is a new element in the one row that is measured. The incomplete state was
+    dead weight, which is what made the two-state button cheaper than adding anything.
+    The cost, and it is real: both presses land on the same pixels, so a thumb bounce
+    fills and commits.
+  - **Its own label is the only announcement the press gets.** Eight radios changing
+    while focus sits on the button is silent, so the accessible name changing from
+    `Remaining 5 on the floor` to `End round` is what says the press did something.
+  - **The word `bags` does not fit, and only `act` can say so.** At 320px `.end-round` is
+    `flex: 1` at 288px, so the label has 248px: `Remaining 8 bags on the floor` is 242px
+    on a Mac's SF Pro — **6px of slack**, the `.setup-top` near-miss again. So it passes
+    every check locally and **wraps to two lines under `act`, at 360px as well as 320px**
+    — a small Android, not only an SE1. Dropping the one word buys 44px and leaves 50px;
+    `Rest 8 bags on the floor` (55px) is the version that keeps it.
+  - **`verify-lanes.mjs` measures the label now**, because nothing did: `.end-round` is
+    `flex: 1`, so a label too long wraps rather than overflowing and the button simply
+    gets taller — no check fails and the screen still looks deliberate. It counts the
+    label's client rects at every device plus 320px, which is in that block alone and not
+    in `DEVICES`, since this screen's other assertions have never held at that width.
+  - **Six browser checks used to read a commit off `.end-round` being disabled**, which
+    is now only true of a won game. They read `.lane input:checked` instead — the lanes
+    resetting is the commit, and it stays true on a win.
+  - **`verify-a11y.mjs` is the only thing that can see any of it**, and it needs all
+    three assertions: filling one team, filling bags that were already scored, and
+    committing instead of filling each pass every unit test. Verified by mutation —
+    each fails the assertion aimed at it, and the commit one prints `3-0` beside a
+    round report that should not exist yet.
+
 ## The header's big figure is the committed score
 
 - **The 56px number is `totals(game)`, and the round in progress is reported between the

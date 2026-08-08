@@ -83,6 +83,14 @@ async function measure(width, height) {
       slack: Math.round((inner - used) * 10) / 10,
       main: Math.round(box('.main').width),
       button: Math.round(box('.end-round').width),
+      // `.end-round` is `flex: 1`, so a label too long wraps rather than
+      // overflowing anything: the button just gets taller and nothing fails.
+      buttonLines: (() => {
+        const r = document.createRange();
+        r.selectNodeContents(document.querySelector('.end-round'));
+        return r.getClientRects().length;
+      })(),
+      buttonText: document.querySelector('.end-round').textContent.trim(),
       card: Math.round(card.width),
       tierZone: Math.round(box('.tier-zone').width),
       lanesOverflow: grid.scrollWidth > grid.clientWidth + 1,
@@ -120,6 +128,11 @@ for (const [label, w, h] of DEVICES) {
 console.log('\nthe card, header and buttons share one width');
 for (const [label, w, h] of DEVICES) {
   const m = await measure(w, h);
+  check(
+    `${label} ${w}x${h}: the primary button's label is one line`,
+    m.buttonLines === 1,
+    `${m.buttonLines} lines: ${m.buttonText}`,
+  );
   // The compact tier is exempt: it puts two cards in a row under a full-width
   // button on purpose.
   if (m.scoringRow) continue;
@@ -129,6 +142,21 @@ for (const [label, w, h] of DEVICES) {
     `button ${m.button} vs card ${m.card}`,
   );
   check(`${label} ${w}x${h}: no dead space in the card`, m.slack <= 6, `slack ${m.slack}px`);
+}
+// 320px is not in DEVICES because this screen's other assertions do not hold there —
+// it has never fitted, and that is recorded rather than a regression. The wording is a
+// different question: it is the narrowest phone the label has to survive, and nothing
+// else measures it. Measured at 320px, where `.end-round` gives its label 248px:
+// `Remaining 8 on the floor` is 198px and `Remaining 8 bags on the floor` is 242px —
+// 6px of slack on a Mac, so **the wider label passes every check here and wraps under
+// `act`**, and at 360px as well as this one. A local run says nothing about it.
+{
+  const m = await measure(320, 568);
+  check(
+    'narrowest phone 320x568: the primary button\'s label is one line',
+    m.buttonLines === 1,
+    `${m.buttonLines} lines: ${m.buttonText}`,
+  );
 }
 
 console.log('\nthe wide tier and the compact tier are mutually exclusive');

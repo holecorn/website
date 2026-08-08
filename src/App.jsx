@@ -31,6 +31,7 @@ import {
   nameKey,
   newGame,
   playerLabel,
+  restOnFloor,
   setBag,
   throwFirst,
   swapEnds,
@@ -153,6 +154,8 @@ function reducer(game, action) {
   switch (action.type) {
     case 'set':
       return setBag(game, action.team, action.index, action.tier);
+    case 'restFloor':
+      return restOnFloor(game);
     case 'throwFirst':
       return throwFirst(game, action.team, action.slot);
     case 'setStartSide':
@@ -886,14 +889,14 @@ export default function App() {
       />
 
       <div className="controls">
+        {/* Two actions on one control: filling is reversible by tapping a bag and
+            ending the round is not, which is why they are not one press. */}
         <button
           className="end-round"
-          disabled={!!game.winner || !complete}
-          onClick={() => dispatch({ type: 'endRound' })}
+          disabled={!!game.winner}
+          onClick={() => dispatch({ type: complete ? 'endRound' : 'restFloor' })}
         >
-          {game.winner || complete
-            ? 'End round'
-            : `${remaining} bag${remaining === 1 ? '' : 's'} still to place`}
+          {complete ? 'End round' : `Remaining ${remaining} on the floor`}
         </button>
       </div>
 

@@ -166,6 +166,49 @@ console.log('\nand a round can be played on the keyboard alone');
   );
 }
 
+// Nine taps a round, and the ones that carry no points cost the same as the ones
+// that do — so the button that was a disabled count of what was missing now offers
+// to put the rest of them down. Two things have to hold, and neither is reachable
+// from a unit test: the press must reach all eight lanes (filling one team is the
+// plausible half-fix) and it must not commit, because a bag you forgot to score has
+// to stay correctable until you end the round yourself. Its own label is also the
+// only announcement the press gets — eight radios changing while focus sits on the
+// button is silent — so the name has to change with what the next press will do.
+console.log('\nand the bags still on the grass go down in one press');
+{
+  const tiers = () =>
+    page
+      .locator('.lane')
+      .evaluateAll((els) =>
+        els.map((el) => el.querySelector('input:checked')?.getAttribute('aria-label') ?? 'unthrown'),
+      );
+  const button = page.locator('.end-round');
+  const before = await tiers();
+  const out = before.filter((t) => t === 'unthrown').length;
+  check(
+    'the button offers it rather than only counting what is missing',
+    (await button.innerText()) === `Remaining ${out} on the floor` && !(await button.isDisabled()),
+    `${await button.innerText()}, ${out} unthrown`,
+  );
+  await button.click();
+  const after = await tiers();
+  check(
+    'one press reaches every lane, and only the empty ones',
+    after.join(',') === before.map((t) => (t === 'unthrown' ? 'floor' : t)).join(','),
+    `${before.join(' ')} -> ${after.join(' ')}`,
+  );
+  check(
+    'and it has not ended the round',
+    (await page.locator('.scoreboard .score').allInnerTexts()).join('-') === '0-0' && (await spoken()) === '',
+    `${(await page.locator('.scoreboard .score').allInnerTexts()).join('-')}, ${JSON.stringify(await spoken())}`,
+  );
+  check(
+    'the same button now names the commit, which is what says the press changed',
+    (await button.innerText()) === 'End round',
+    await button.innerText(),
+  );
+}
+
 // The controlled-radio trap, and the one failure here that would not be a wrong
 // announcement but a game that cannot be scored: if the reset left the DOM checked,
 // choosing the same tier again fires no change event and the bag is never placed.
@@ -177,7 +220,7 @@ console.log('\nand committing a round clears every choice');
     for (let i = 0; i < 4; i += 1) await lanesOf(team).nth(i).locator('.tier-board').click();
   }
   await page.locator('.end-round').click();
-  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true);
+  await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0);
   check('nothing is left checked', (await page.getByRole('radio', { checked: true }).count()) === 0);
   await lanesOf(0).nth(0).locator('.tier-board').click();
   check(

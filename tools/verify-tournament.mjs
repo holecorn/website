@@ -115,7 +115,7 @@ async function winIt(page) {
     for (let i = 0; i < 4; i += 1) await lanes[i].locator('.tier-hole').click();
     for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-floor').click();
     await page.locator('.end-round').click();
-    await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+    await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0, null, {
       timeout: 5000,
     });
   }

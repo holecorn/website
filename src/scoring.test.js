@@ -24,6 +24,7 @@ import {
   undoRound,
   unthrownCount,
   roundComplete,
+  restOnFloor,
   roundReport,
   roundLine,
   validGame,
@@ -374,6 +375,39 @@ describe('round completeness', () => {
     g = place(g, 'b', ['floor', 'floor', 'floor', 'floor']);
     expect(unthrownCount(g)).toBe(0);
     expect(roundComplete(g)).toBe(true);
+  });
+});
+
+describe('restOnFloor', () => {
+  it('places every unthrown bag and leaves the thrown ones where they are', () => {
+    let g = place(newGame(), 'a', ['hole', 'board']);
+    g = restOnFloor(g);
+    expect(g.current.a).toEqual(['hole', 'board', 'floor', 'floor']);
+    expect(g.current.b).toEqual(['floor', 'floor', 'floor', 'floor']);
+    expect(roundComplete(g)).toBe(true);
+  });
+
+  it('does not commit the round', () => {
+    const g = restOnFloor(newGame());
+    expect(g.rounds).toEqual([]);
+    expect(totals(g)).toEqual({ a: 0, b: 0 });
+  });
+
+  // Both are the same fact: nothing to place means nothing to do, and the
+  // reducer bails on an unchanged state rather than re-rendering.
+  it('is the same game when every bag is already placed', () => {
+    const g = place(place(newGame(), 'a', ['floor', 'floor', 'floor', 'floor']), 'b', [
+      'hole',
+      'hole',
+      'board',
+      'floor',
+    ]);
+    expect(restOnFloor(g)).toBe(g);
+  });
+
+  it('is the same game once it is won', () => {
+    const g = { ...newGame(), winner: 'a' };
+    expect(restOnFloor(g)).toBe(g);
   });
 });
 

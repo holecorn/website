@@ -514,3 +514,12 @@ export function unthrownCount(game) {
 export function roundComplete(game) {
   return unthrownCount(game) === 0;
 }
+
+// Deliberately not a commit: a bag you forgot to score has to stay visible and
+// movable until you end the round yourself. Unchanged when there is nothing to
+// place, so the reducer bails rather than re-rendering.
+export function restOnFloor(game) {
+  if (game.winner || unthrownCount(game) === 0) return game;
+  const fill = (positions) => positions.map((t) => (t === 'unthrown' ? 'floor' : t));
+  return { ...game, current: { a: fill(game.current.a), b: fill(game.current.b) } };
+}

@@ -46,11 +46,12 @@ async function playRound(page, aTiers = ['board', 'board', 'board', 'board']) {
   for (let i = 0; i < 4; i += 1) await lanes[i].locator(`.tier-${aTiers[i]}`).click();
   for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-board').click();
   await page.locator('.end-round').click();
-  // Committed once the lanes have reset, which disables End round again until
-  // every bag of the next round is placed. This used to sleep 2.6s "so the
+  // Committed once the lanes have reset. Read off the lanes rather than off the
+  // button, which is enabled through the whole round now — until every bag is
+  // placed it offers the floor to the ones that aren't. This used to sleep 2.6s "so the
   // callout can't swallow a later click" — `.callout` is `pointer-events: none`,
   // so it never could, and the sleep was 2.6s per round of nothing.
-  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+  await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0, null, {
     timeout: 5000,
   });
 }
@@ -294,7 +295,7 @@ console.log('\nthe play screen deals only with scoring');
   );
   check(
     'and the buttons that remain are all scoring or navigation',
-    controls.every((t) => /End round|bags still to place|Undo round|Abandon game|New game|Panel/.test(t)),
+    controls.every((t) => /End round|on the floor|Undo round|Abandon game|New game|Panel/.test(t)),
     controls.join(' | '),
   );
   // The bag carries its meaning by shape and colour, so it has to be spoken too.
@@ -316,7 +317,7 @@ console.log('\nthe biggest figure in the header is the committed score');
   for (let i = 0; i < 4; i += 1) await lanes[i].locator('.tier-board').click();
   for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-floor').click();
   await page.locator('.end-round').click();
-  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+  await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0, null, {
     timeout: 5000,
   });
   const settled = await page.locator('.scoreboard').boundingBox();
@@ -355,7 +356,7 @@ console.log('\nthe biggest figure in the header is the committed score');
   );
 
   await page.locator('.end-round').click();
-  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true, null, {
+  await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0, null, {
     timeout: 5000,
   });
   const committed = await page.locator('.scoreboard .score').allInnerTexts();

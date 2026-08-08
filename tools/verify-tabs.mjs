@@ -73,7 +73,7 @@ const playRound = async (page, tier = 'board') => {
   for (let i = 0; i < 4; i += 1) await lanes[i].locator(`.tier-${tier}`).click();
   for (let i = 4; i < 8; i += 1) await lanes[i].locator('.tier-floor').click();
   await page.locator('.end-round').click();
-  await page.waitForFunction(() => document.querySelector('.end-round')?.disabled === true);
+  await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0);
 };
 
 console.log('a stale tab does not overwrite the game the other tab is playing');
