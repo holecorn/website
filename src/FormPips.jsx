@@ -25,8 +25,8 @@ export default function FormPips({ results, color }) {
           key={i}
           className={`form-line-pip${won ? ' is-win' : ''}`}
           // A team colour where there is one. The career table has no teams, so
-          // the default in the stylesheet stands.
-          style={won && color ? { background: color } : undefined}
+          // `--team` goes unset and `--team-accent` falls back in the stylesheet.
+          style={won && color ? { '--team': color } : undefined}
           aria-hidden="true"
         />
       ))}

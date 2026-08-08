@@ -23,26 +23,20 @@
 // instead: generate_logo.mjs fits each box to its own letters, and at 5 mm pitch the
 // quantisation swamps a nudge this size.
 
-import { DEFAULT_COLORS } from './scoring.js';
+// The chalk tint — a colour softened toward white so it reads as powder rather than ink —
+// lives in `App.css` as `--chalk` now, because it only works one way round. Tinting toward
+// white is what keeps the mark legible on the dark scheme and is exactly what erased it on
+// the light one, where the same wordmark measured 1.19:1 against the page. So each word
+// carries its team colour as `--team` and the stylesheet decides, the way every other
+// team-coloured surface in the app does.
 
-// Tint a colour toward white so it reads as powdery chalk and stays legible on
-// the dark background.
-function chalk(hex, amount = 0.28) {
-  const n = parseInt(hex.slice(1), 16);
-  const mix = (c) => Math.round(c + (255 - c) * amount);
-  const r = mix((n >> 16) & 255);
-  const g = mix((n >> 8) & 255);
-  const b = mix(n & 255);
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
+import { DEFAULT_COLORS } from './scoring.js';
 
 export default function Logo({
   colorA = DEFAULT_COLORS.a,
   colorB = DEFAULT_COLORS.b,
   className,
 }) {
-  const chalkA = chalk(colorA);
-  const chalkB = chalk(colorB);
   return (
     <svg
       className={className}
@@ -71,15 +65,15 @@ export default function Logo({
         letterSpacing="7"
         textAnchor="middle"
       >
-        <g transform="translate(156 78) rotate(8)">
-          <rect x="-58" y="-24" width="116" height="48" rx="3" stroke={chalkA} strokeWidth="4" />
-          <text x="1" y="2" dominantBaseline="central" fill={chalkA} stroke="none">
+        <g className="logo-word" style={{ '--team': colorA }} transform="translate(156 78) rotate(8)">
+          <rect x="-58" y="-24" width="116" height="48" rx="3" strokeWidth="4" />
+          <text x="1" y="2" dominantBaseline="central" stroke="none">
             HOLE
           </text>
         </g>
-        <g transform="translate(284 78) rotate(-8)">
-          <rect x="-58" y="-24" width="116" height="48" rx="3" stroke={chalkB} strokeWidth="4" />
-          <text x="1" y="2" dominantBaseline="central" fill={chalkB} stroke="none">
+        <g className="logo-word" style={{ '--team': colorB }} transform="translate(284 78) rotate(-8)">
+          <rect x="-58" y="-24" width="116" height="48" rx="3" strokeWidth="4" />
+          <text x="1" y="2" dominantBaseline="central" stroke="none">
             CORN
           </text>
         </g>

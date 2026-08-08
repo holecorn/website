@@ -14,7 +14,10 @@ paths:
   - "src/Logo.jsx"
   - "src/Logo.test.js"
   - "src/App.jsx"
+  - "src/main.jsx"
+  - "src/css.test.js"
   - "tools/verify-lanes.mjs"
+  - "tools/verify-schemes.mjs"
 ---
 
 # Layout, responsive tiers and the wordmark
@@ -114,6 +117,111 @@ source-order traps themselves — read those first, they bite hardest.
   was grepped; **a new row-shaped surface needs a new class or the two-class form.**
   The `.first-bag` glyph *is* shared on purpose — nothing redeclares it, only
   `.field-row .first-bag::before` adds a target.
+
+## The two colour schemes
+
+The app was dark-only, and the phone is the thing held in the sun. Measured before this,
+the play screen's mean luminance was **33.6/255** with 0.4% of pixels above mid-grey —
+about 13% of what a light UI emits at the same backlight, where outdoors the limit is
+emitted light against reflected glare. It is 230.7 on the light scheme now.
+
+- **There is no in-app toggle, and that is the design rather than a stage it hasn't
+  reached.** The trigger for this is sunlight, and the OS already has the control: on iOS
+  the Appearance switch sits under the brightness slider in Control Centre, which is the
+  same gesture as putting sunglasses on. A second switch in the app is a preference to
+  persist, a place on a screen to put it, and a frame of the wrong scheme on every load,
+  all to duplicate something people already know how to do. `prefers-color-scheme` covers
+  both the person who runs their phone light and the person who flips it in the field.
+- **Every colour is one `light-dark(light, dark)` declaration in `index.css`, and nothing
+  re-declares a palette anywhere.** That is what lets the board opt out for free — see
+  below — where a `@media (prefers-color-scheme: light)` block would have to be undone
+  with a second copy of the dark values.
+- **A team colour is *derived* for the light scheme, not re-picked.** `PALETTE` is chosen
+  to be read on a dark panel and all four are too pale for a white one: measured as text
+  on `--panel`, green is **2.61:1** and yellow **1.44:1** against the 4.5 small text needs.
+  `--team-accent` scales OKLCH lightness by 0.62, which keeps the hue and clears it — 4.8
+  at worst — so there is no second palette, no second constant to mirror into the
+  firmware, and archived records keep meaning what they said. Chrome's painted output
+  matches the arithmetic in `css.test.js` to within one channel step.
+  - **Scaled and not clamped, and that distinction is the whole of it.** `min(l, 0.5)` was
+    the obvious form and shipped first: it flattens all four to one lightness, which is
+    the only channel a red-green dichromat has left. Measured as CIEDE2000 under
+    deuteranopia, **red against yellow fell from 17.1 to 2.6** — closer than the red/green
+    pair this file's two-channel note already calls "the same colour" — while in normal
+    vision the two stayed 32 apart, so nothing looked wrong. Scaling keeps the ordering
+    (yellow stays lightest, L 0.53 to red's 0.41) and puts red/yellow back to 10.2.
+  - **Some loss is structural and is accepted.** A light page forces every colour *down*,
+    so the range the four can spread over is smaller: the worst pair is **5.5 against the
+    dark scheme's own 7.5**, and matching 7.5 needs a factor near 0.72, which drops the
+    contrast floor to 3.4:1. 0.62 is the largest factor clearing 4.5:1 on `--bg` — 4.81
+    against 4.49 at 0.64 — so the four are as far apart as legibility allows. Both bounds
+    are asserted, and they pull against each other: loosen one and the other fails.
+  - **The separation floor is 5, and it is set to catch a collapse rather than the
+    squeeze.** Asserting light ≥ dark was the first form and is unreachable for the reason
+    above. `css.test.js` carries CIEDE2000 and the Brettel/Viénot dichromat projections
+    for this; the factor is read out of `index.css` rather than written down twice, and
+    both the scale and the clamp forms are parsed, so putting the clamp back fails the
+    floor by name instead of killing the file at import.
+  - **Yellow becomes a dark gold and that is accepted.** The four stay well apart in hue,
+    and per the two-channel rule the *name* carries the meaning everywhere anyway.
+  - **Declared on `*`, not on a list of the classes that set `--team`.** Such a list is a
+    thing to keep in step and this is not: an element handed `--team` simply has
+    `--team-accent`, and its descendants inherit it. Where `--team` is unset the
+    declaration is invalid at computed-value time, so `var(--team-accent, …)` takes its
+    fallback — `FormPips` relies on exactly that for the career table, which has no teams.
+- **An inline style beats every stylesheet, so a team colour written into `color` or
+  `background` could never be re-derived** — which is how all of this stood before, at
+  ~25 sites across six components. They hand the raw value over as `--team` and
+  `.team-ink`/`.team-fill` (or the element's own rule) derive from it.
+  `css.test.js` refuses a `style={{ … }}` that names a paint at all, in any of its three
+  shapes; the one real miss when this was written was `style={cond ? { background } : …}`,
+  which is not `style={{` and had survived a grep.
+- **`--on-accent` flips with the fill it lands on.** Near-black on the dark scheme, where
+  white clears none of the four; white on the light one, where every accent has darkened
+  to reach the page and near-black would clear none of them. One rule either way round:
+  an accent fill takes `--on-accent` and never a colour of its own.
+- **The three UI accents became variables here** — `--go`, `--warn`, `--caution`, which
+  were 28 loose literals across four stylesheets. They are ink as often as fill, so each
+  clears 4.5:1 as text on both `--bg` and `--panel` *and* carries `--on-accent` at 4.5:1
+  when filled. They share hexes with `PALETTE`'s red and green on the dark scheme **by
+  coincidence** and must not be made to move with them.
+- **A surface tint has one base, `--lift`, and each site keeps its own alpha.** White on
+  the dark scheme and black on the light one, mixed with `color-mix(… , transparent)`, so
+  only the direction is themed. Note that a tint mixed towards `transparent` is not a
+  fill: the panel behind it is what ink actually lands on, which is why `css.test.js`
+  resolves such a value to null rather than measuring against a solid white.
+- **The lane's three bands needed their own light values, and the reason is the bag.**
+  The bands are a wash over the card, so on a light page they can only go *down*, and the
+  dark scheme's alphas are a far bigger step on white than on `--panel`: measured, they
+  took the worst bag-against-its-band contrast to **2.73:1**, under the 3:1 a graphic that
+  size wants, with the hole band spending it. 0.14/0.02/0.09 puts it back to 3.91 against
+  the dark scheme's own 4.11, with the track still clearly a track at 1.38:1.
+- **The wordmark's chalk tint only works one way round.** Tinting toward white is what
+  makes it read as powder on the dark scheme and is exactly what erased it on the light
+  one — measured, **1.19:1** against `--bg`. So `--chalk` drops the tint on light rather
+  than reversing it: the derived team colour is already a mid-dark pigment, and mixing
+  toward black instead just reads as a different, muddier ink. This is why `Logo.jsx` no
+  longer computes `chalk()` itself.
+- **The board opts back out, in `main.jsx`, by pinning `color-scheme: dark`.** A tablet
+  propped against a fence is emissive and is not held in the sun, and `Display.css` paints
+  its own near-black either way — so what a light scheme actually does there is flip
+  `--text` and `--muted` to near-black *on* that near-black. **Measure that as contrast,
+  never as luminance:** dropping the pin barely moves the mean, so a luminance bound
+  passes while the board reads blank. Verified by mutation.
+- **Lightning CSS rewrites `light-dark()` unless `build.cssTarget` says otherwise, and the
+  rewrite is silently one-way.** At the default target every `light-dark(a, b)` becomes a
+  `--lightningcss-light`/`--lightningcss-dark` pair switched by a `prefers-color-scheme`
+  media query. The app still follows the phone and looks exactly right — and nothing
+  answers to `color-scheme` any more, so the board's pin stopped working with nothing
+  failing. The target is named in `vite.config.js` now. It is **not** a new floor:
+  `--team-accent` uses relative colour syntax, which Lightning CSS cannot downlevel and
+  passes straight through, so an older browser was already going to lose the team colours
+  entirely. `tools/verify-schemes.mjs` is what caught it, and holds it.
+- **Playwright defaults to `colorScheme: 'light'`, so every other browser check now
+  measures the light scheme.** Harmless for the geometry ones — layout is scheme
+  independent — but it is why a check may not compare a colour against a literal hex. Two
+  did and both went red on rules that were working; they read the variable through a probe
+  element instead. See `.claude/rules/testing.md`.
 
 ## Ink on a fill
 

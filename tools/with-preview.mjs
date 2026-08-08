@@ -28,6 +28,7 @@ const CHECKS = [
   'verify-recovery.mjs',
   'verify-copy-link.mjs',
   'verify-a11y.mjs',
+  'verify-schemes.mjs',
 ];
 // Three, not more. The other nine checks are 71s of work between them, so two workers
 // clear them in ~36s while the tournament is still running — the wall clock is floored at

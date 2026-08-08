@@ -838,12 +838,12 @@ export default function App() {
             {/* Two numbers told apart by colour and column is the round history's
                 old fault, so each says whose it is for a reader. */}
             <span className="projection-score">
-              <span style={{ color: colors.a }}>
+              <span className="team-ink" style={{ '--team': colors.a }}>
                 <span className="visually-hidden">{teamLabel(game, 'a')} </span>
                 {t.a + preview.a}
               </span>
               <span aria-hidden="true">–</span>
-              <span style={{ color: colors.b }}>
+              <span className="team-ink" style={{ '--team': colors.b }}>
                 <span className="visually-hidden">{teamLabel(game, 'b')} </span>
                 {t.b + preview.b}
               </span>
@@ -872,7 +872,7 @@ export default function App() {
       </p>
 
       {game.winner && (
-        <div className="winner-banner" style={{ background: colors[game.winner] }}>
+        <div className="winner-banner team-fill" style={{ '--team': colors[game.winner] }}>
           {winnerLabel} {winVerb(winnerLabel)}!
         </div>
       )}
@@ -959,8 +959,12 @@ export default function App() {
                   <thead aria-hidden="true">
                     <tr>
                       <th />
-                      <th style={{ color: colors.a }}>{teamLabel(game, 'a')}</th>
-                      <th style={{ color: colors.b }}>{teamLabel(game, 'b')}</th>
+                      <th className="team-ink" style={{ '--team': colors.a }}>
+                        {teamLabel(game, 'a')}
+                      </th>
+                      <th className="team-ink" style={{ '--team': colors.b }}>
+                        {teamLabel(game, 'b')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -975,7 +979,7 @@ export default function App() {
                           {['a', 'b'].map((team) => {
                             const c = tierCounts(r[team]);
                             return (
-                              <td key={team} style={{ color: colors[team] }}>
+                              <td key={team} className="team-ink" style={{ '--team': colors[team] }}>
                                 {/* Glyphs and a colour, so what they carry has to be
                                     said as well — the same split as `.first-bag`. */}
                                 <span aria-hidden="true">
@@ -1025,13 +1029,8 @@ export default function App() {
 
       {callout && (
         <div className="callout" key={callout.key} aria-hidden="true">
-          {callout.win && (
-            <Confetti
-              count={callout.confetti}
-              colors={[callout.color, '#ffffff']}
-            />
-          )}
-          <span className="callout-text" style={{ color: callout.color }}>
+          {callout.win && <Confetti count={callout.confetti} color={callout.color} />}
+          <span className="callout-text team-ink" style={{ '--team': callout.color }}>
             {callout.text}
           </span>
         </div>
@@ -1098,11 +1097,7 @@ function TeamsFields({
                       <button
                         type="button"
                         className={`first-bag${first ? ' is-first' : ''}`}
-                        style={
-                          first
-                            ? { background: game.colors[team], borderColor: game.colors[team] }
-                            : undefined
-                        }
+                        style={first ? { '--team': game.colors[team] } : undefined}
                         onClick={() => onSetFirst(team, i)}
                         aria-label={`${name} throws first`}
                         aria-pressed={first}
@@ -1113,21 +1108,21 @@ function TeamsFields({
                     )}
                     {fixed ? (
                       <span
-                        className="team-name-static"
-                        style={{ color: game.colors[team] }}
+                        className="team-name-static team-ink"
+                        style={{ '--team': game.colors[team] }}
                       >
                         {name}
                       </span>
                     ) : (
                       <input
-                        className="team-name-input"
+                        className="team-name-input team-ink"
                         {...NAME_FIELD}
                         value={name}
                         maxLength={16}
                         list={knownNames.length > 0 ? 'known-names' : undefined}
                         aria-invalid={fault || undefined}
                         aria-describedby={fault ? 'lineup-fault' : undefined}
-                        style={{ color: game.colors[team] }}
+                        style={{ '--team': game.colors[team] }}
                         onChange={(e) =>
                           dispatch({ type: 'rename', team, index: i, name: e.target.value })
                         }
@@ -1162,7 +1157,7 @@ function TeamsFields({
                   key={c.name}
                   type="button"
                   className={`swatch${game.colors[team] === c.value ? ' is-selected' : ''}`}
-                  style={{ background: c.value }}
+                  style={{ '--team': c.value }}
                   disabled={game.colors[other] === c.value}
                   onClick={() => dispatch({ type: 'setColor', team, value: c.value })}
                   aria-label={`${c.name} bags`}
@@ -1216,7 +1211,10 @@ function TossForFirst({ game, dispatch }) {
       <span className={`toss-result${tossing ? ' is-tossing' : ''}`} aria-live="polite">
         {opener && (
           <>
-            <span style={{ color: game.colors[game.nextFirst] }}>{opener}</span> throws first
+            <span className="team-ink" style={{ '--team': game.colors[game.nextFirst] }}>
+              {opener}
+            </span>{' '}
+            throws first
           </>
         )}
       </span>
@@ -1239,18 +1237,20 @@ function Footer({ saveFailed = false }) {
   );
 }
 
-function Confetti({ count, colors }) {
+// Alternating the winner's colour with `--text` rather than with white, which was the
+// half that stopped working on the light scheme: white confetti over a white page is the
+// celebration not happening. Both come from the stylesheet now, off the `--team` set here.
+function Confetti({ count, color }) {
   return (
-    <div className="confetti" aria-hidden="true">
+    <div className="confetti" aria-hidden="true" style={{ '--team': color }}>
       {Array.from({ length: count }, (_, i) => (
         <span
           key={i}
-          className="confetti-piece"
+          className={`confetti-piece${i % 2 ? ' is-pale' : ''}`}
           style={{
             left: `${Math.random() * 100}%`,
             width: `${6 + Math.round(Math.random() * 6)}px`,
             height: `${9 + Math.round(Math.random() * 9)}px`,
-            background: colors[i % colors.length],
             '--drift': `${Math.round((Math.random() * 2 - 1) * 90)}px`,
             '--rot': `${Math.round(Math.random() * 720 - 360)}deg`,
             animationDuration: `${1000 + Math.round(Math.random() * 700)}ms`,
@@ -1284,14 +1284,14 @@ function TeamScore({ players, activeIdx, score, color, winner, first }) {
               {active ? (
                 <span
                   className={`first-bag${first ? ' is-first' : ''}`}
-                  style={first ? { background: color, borderColor: color } : undefined}
+                  style={first ? { '--team': color } : undefined}
                   aria-hidden="true"
                   title="Throws first"
                 />
               ) : (
                 <span className="first-bag-spacer" aria-hidden="true" />
               )}
-              <span className="team-name" style={{ color }}>
+              <span className="team-name team-ink" style={{ '--team': color }}>
                 {name}
               </span>
               {/* The bag is shape and colour only, so the fact it carries has to
@@ -1301,7 +1301,7 @@ function TeamScore({ players, activeIdx, score, color, winner, first }) {
           );
         })}
       </div>
-      <div className="score" style={{ color }}>
+      <div className="score team-ink" style={{ '--team': color }}>
         {score}
       </div>
     </div>

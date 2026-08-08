@@ -21,9 +21,9 @@
   background: var(--border);
 }
 
-/* Only where no team colour was handed in — on the setup screen an inline style
-   overrides this with the team's own, which is what tells the two rows apart
-   there. The career table has no teams. */
+/* The team's own colour on the setup screen, which is what tells the two rows apart
+   there, and `--text` in the career table, which has no teams — the fallback fires
+   because `--team-accent` is invalid at computed-value time with no `--team` set. */
 .form-line-pip.is-win {
-  background: var(--text);
+  background: var(--team-accent, var(--text));
 }

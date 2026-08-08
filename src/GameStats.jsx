@@ -33,7 +33,7 @@ export default function GameStats({ game, colors }) {
         <tbody>
           {rows.map((p) => (
             <tr key={`${p.team}${p.slot}`}>
-              <th scope="row" style={{ color: colors[p.team] }}>
+              <th scope="row" className="team-ink" style={{ '--team': colors[p.team] }}>
                 <span className="game-stats-player">
                   <span className="game-stats-name">{p.name}</span>
                   {p.fourBaggers > 0 && (

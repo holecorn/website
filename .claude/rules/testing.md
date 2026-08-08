@@ -82,6 +82,60 @@ own file's rule check, naming the selector, the pair and the ratio.
   What an ink lands on then depends on the DOM, which no parse can know, so widening it
   would mean guessing. The defect was in controls that declare both together.
 
+**That file also asks every contrast question of *both* colour schemes**, since `index.css`
+declares each value as `light-dark(light, dark)` and a single-scheme check leaves the half
+that exists for the harder case unmeasured. It reimplements the `oklch(from … min(l, 0.5)
+c h)` derivation to do it — the one thing in that stylesheet that is not a literal, and the
+thing the light scheme's whole legibility rests on. Checked against what Chrome paints,
+which agrees to within one channel step. Its fourth assertion changed shape with the
+schemes: where it used to require anything *filled* with a team colour from JSX to ink
+itself `--on-accent`, it now refuses an inline paint at all, because an inline style beats
+every stylesheet and so a painted team colour could never be re-derived for a light page.
+**Three shapes had to be caught and two of them slipped through first** — `{ color: c }`
+names its key with a colon, `{ color }` is ES6 shorthand with no colon (a regex for the
+first passes the second silently), and `style={cond ? { … } : undefined}` does not begin
+`style={{`. That third one was a *real* miss sitting in `App.jsx`, found the moment the
+check could see it. Matching inner `{…}` pairs fails a fourth way: a value holding a
+template literal makes the template's own braces the innermost pair, so the object's keys
+are never read. Verified by mutation, each naming its file and its key.
+
+`tools/verify-schemes.mjs` covers what none of that can: whether the light scheme *fires*,
+and whether the browser understands the derivation. Both fail silently and in opposite
+directions — the app renders perfectly with the light values simply never reached, and an
+unsupported `oklch(from …)` makes the whole declaration invalid at parse time, so every
+team name inherits `--text` on **both** schemes and the app quietly loses its second
+channel while staying perfectly legible. It measures the play screen's mean luminance
+(33.6/255 before this existed, 230.7 now), that the two team inks differ from each other
+and from the body ink, and a bag against the band it is resting on, which is a gradient
+stop against a derived colour and therefore exists only once a browser has resolved both.
+- **Never parse a computed colour in a browser check.** On the light scheme a derived ink
+  serialises as `oklch(0.5 0.164089 256.69)`, and pulling three numbers out of that yields
+  `[0.5, 0.164, 256.69]` as if they were channels — which is not a visible failure but a
+  worse one: every contrast figure came out plausible, wrong, and green. Colours are
+  resolved by painting them into a 1x1 canvas, which also gets the browser's own gamut
+  mapping rather than a second implementation of it.
+- **The board's opt-out is measured as contrast, not as luminance.** `Display.css` and
+  `Panel.css` paint their own near-black as literals, so dropping the `color-scheme` pin in
+  `main.jsx` barely moves the mean — a luminance bound passed with the pin deleted. What
+  actually breaks is `--text` and `--muted` flipping to near-black *on* that near-black.
+- **It is the only thing that can see `build.cssTarget`.** Lightning CSS rewrites
+  `light-dark()` into a `prefers-color-scheme` switch at the default target, which still
+  follows the phone — so the app looks right — and answers to `color-scheme` not at all.
+  Found by this check and now held by it: removing the target fails exactly the two board
+  assertions.
+- **The bag is read a full second after the tap**, past the 280ms slide *and* the 620ms
+  spark burst a hole bag sets off, whose dots land over the token's own centre. At 400ms it
+  sampled a spark instead of the bag and the file failed about one run in three.
+
+**Playwright defaults to `colorScheme: 'light'`, so every other browser check now exercises
+the light scheme.** That is harmless for the geometry ones and it is why **a check may not
+compare a colour against a literal hex**: two did, and both went red on rules that were
+working perfectly. They read the variable through a probe element instead. The same lesson
+bit once more in `verify-stats.mjs`, where the pip-tint assertion compared a computed
+`rgb(…)` against the raw `--text` token — two strings that can never be equal, so the check
+could not fail and passed with the team colour dropped entirely. That file's standing rule,
+met again: **check what a mutation actually prints.**
+
 `tools/verify-positions.mjs` covers the court and in-game stats panels, and the
 assertion it exists for is that **the court names the same thrower the scoring
 lanes do**. Both sides derive the parity correctly and are unit tested; nothing

@@ -127,6 +127,25 @@ The history comes last in that column because it's the panel that grows with the
 game: the court and the stats keep their size and the history takes whatever
 height is left, scrolling rather than running off the bottom.
 
+### Reading it in the sun
+
+The app follows your phone's **light or dark appearance setting**, and outdoors that
+matters more than it sounds: a dark screen emits a fraction of the light a pale one does,
+so in direct sun the glare bouncing off the glass wins. Switching the phone to Light makes
+the whole app pale, which is far easier to read standing over the boards.
+
+There's no light/dark switch in the app on purpose — your phone already has one, and it's
+quicker to reach. On an iPhone, swipe down from the top-right for Control Centre, press and
+hold the brightness slider, and tap **Appearance**. On Android it's usually a **Dark theme**
+tile in Quick Settings. Set it back when you go indoors, or leave it on Light — nothing in
+the app cares which.
+
+The team colours go a shade deeper on the light setting, so blue, red, green and yellow
+stay readable against a pale background. It's the same four teams and the same bags; only
+the ink changes. The **external scoreboard and the LED panel stay dark whatever your phone
+is set to**, because a board propped in the shade is showing its own light rather than
+fighting the sun.
+
 ## Where everyone stands
 
 **Positions** draws the court from above — both boards, each flanked by its two

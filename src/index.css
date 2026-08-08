@@ -19,27 +19,106 @@
   border: 0;
 }
 
+/* Both schemes are declared, so every `light-dark()` below resolves against whichever
+   the phone is set to. There is no in-app toggle and deliberately so: the constraint
+   this exists for is **sunlight**, and the control for it already exists one swipe away
+   — Appearance sits under the brightness slider in Control Centre. A second switch in
+   the app would be a preference to persist, a place to put it, and a frame of the wrong
+   theme on every load, to duplicate a gesture people already know.
+   Measured dark-only: the play screen's mean luminance was 33.6/255 with 0.4% of pixels
+   above mid-grey — about 13% of what a light UI emits at the same backlight, and
+   outdoors the limit is emitted light against reflected glare.
+   `?display=1` and `?panel=1` opt back out in `main.jsx`: a board propped against a
+   fence is emissive and stays dark whatever the tablet's own setting is. */
 :root {
-  --bg: #0f1419;
-  --panel: #1a222c;
-  --text: #e6edf3;
-  --muted: #8b98a5;
-  --border: #2b3642;
+  color-scheme: light dark;
 
-  /* Ink for anything drawn on a filled accent or team colour. White clears none of
-     the four — measured, 2.87:1 on the green, 3.48:1 on the red and 1.59:1 on the
-     yellow, all under the 4.5:1 small text needs. This one clears all four (green
-     6.61, red 5.46, blue 4.91, yellow 11.97), which is why the winner banner can
-     take the winner's colour whatever it is. `Display.css` reached it first and held
-     it literally; a second literal is how the phone and the board came to disagree
-     about the same fact. */
-  --on-accent: #0b1116;
+  --bg: light-dark(#f0f3f7, #0f1419);
+  --panel: light-dark(#ffffff, #1a222c);
+  --text: light-dark(#101820, #e6edf3);
+  --muted: light-dark(#566370, #8b98a5);
+  --border: light-dark(#ccd5de, #2b3642);
+
+  /* Ink for anything drawn on a filled accent or team colour, and it flips because
+     the fill it lands on does. On the dark scheme white clears none of the four —
+     measured, 2.87:1 on the green, 3.48:1 on the red and 1.59:1 on the yellow, all
+     under the 4.5:1 small text needs — so the ink is near-black and clears all four
+     (green 6.61, red 5.46, blue 5.70, yellow 11.97). On the light scheme every accent
+     is darkened to reach the page (see `--team-accent`), which inverts the pairing:
+     white then clears all four again (5.42 to 6.64) and near-black would not.
+     `Display.css` reached the dark value first and held it literally; a second literal
+     is how the phone and the board came to disagree about the same fact. */
+  --on-accent: light-dark(#ffffff, #0b1116);
+
+  /* The three UI accents, which were 28 loose literals across four stylesheets. They
+     are ink *and* fill — `--warn` outlines the buttons that destroy something and fills
+     the dialog that confirms — so each value has to clear 4.5:1 as text on both `--bg`
+     and `--panel`, and carry `--on-accent` at 4.5:1 when it is the fill. The light
+     values are darker for the same reason the team colours are: measured on a light
+     page, the dark scheme's own green is 2.61:1 and its yellow 1.44:1.
+     These share hexes with `PALETTE`'s red and green on the dark scheme **by
+     coincidence** and must not be made to move with them — see `scoring.js`. */
+  --go: light-dark(#157f43, #27ae60);
+  --warn: light-dark(#b02a26, #eb5757);
+  --caution: light-dark(#7d6200, #f2c94c);
+
+  /* The base for a surface tint — the faint wash that lifts a lane, a chip or the
+     winning team's card off the panel under it. White on the dark scheme, black on the
+     light one, mixed to whatever strength the site wants, so each keeps its own alpha
+     and only the direction is themed. */
+  --lift: light-dark(#000000, #ffffff);
 
   font: 16px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+}
+
+/* A team colour is chosen from `PALETTE` to be read on a dark panel, and on a light one
+   all four are too pale to be text: measured, green 2.61:1 and yellow 1.44:1 against the
+   4.5 small text needs. Scaling OKLCH lightness keeps the hue and clears it, so this
+   stays **one derivation rather than a second palette**: the colour still arrives from
+   `PALETTE`, as `--team` set inline wherever a team is drawn, and `css.test.js` checks
+   the arithmetic against the same figures Chrome paints (identical to within one channel
+   step).
+
+   **Scaled and not clamped, and that is the whole of it.** `min(l, 0.5)` was the obvious
+   form and it flattens all four to the same lightness — which is exactly the channel a
+   red-green dichromat has left. Measured as CIEDE2000 under deuteranopia, red against
+   yellow fell from **17.1 to 2.6**: the palette's own red/green pair sits at 7.5 and the
+   note beside `PALETTE` already calls *that* "the same colour", so the clamp made a second
+   pair worse than the one the two-channel rule exists for — invisibly, because in normal
+   vision the two are still 32 apart. Scaling preserves the ordering (yellow stays the
+   lightest, L 0.53 against red's 0.41) and puts red/yellow back to 10.2.
+
+   **Some loss is structural and is accepted.** A light page forces every colour down, so
+   the range the four can spread over is smaller than the dark scheme's: the worst pair
+   here is 5.5 against 7.5, and matching 7.5 would need a factor near 0.72, which drops the
+   contrast floor to 3.4:1. 0.62 is the largest factor that keeps all four at 4.5:1 on
+   `--bg` — measured, 4.81 here against 4.49 at 0.64 — so the four are as light, and so as
+   far apart, as legibility allows. Both bounds are asserted in `css.test.js`: take one and
+   the other moves the wrong way.
+
+   Declared on `*` rather than on a list of the classes that set `--team`, because such a
+   list is a thing to keep in step and this is not — an element handed `--team` simply
+   has `--team-accent`, and its descendants inherit it. Where `--team` is unset the
+   declaration is invalid at computed-value time, so `var(--team-accent, …)` takes its
+   fallback; `FormPips` relies on that for the career table, which has no teams. */
+* {
+  --team-accent: light-dark(oklch(from var(--team) calc(l * 0.62) c h), var(--team));
+}
+
+/* The two ways a team colour is worn. Anything handed `--team` takes one of them rather
+   than an inline `color`/`background`, which is what makes the light scheme reachable at
+   all: an inline style beats every stylesheet, so the derivation above could never have
+   been applied over the top. */
+.team-ink {
+  color: var(--team-accent);
+}
+
+.team-fill {
+  background: var(--team-accent);
+  color: var(--on-accent);
 }
 
 * {

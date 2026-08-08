@@ -412,8 +412,8 @@
 /* Outlined rather than filled, the rule `.tournament-drop` already follows: the solid
    red belongs to the dialog that asks. */
 .match-drop {
-  border-color: #eb5757;
-  color: #eb5757;
+  border-color: var(--warn);
+  color: var(--warn);
 }
 
 /* Editing one match's lineup. A dialog like the rename one rather than a panel
@@ -451,7 +451,7 @@
 
 .match-names-note {
   margin: 10px 0 0;
-  color: #f2c94c;
+  color: var(--caution);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -525,7 +525,7 @@
 
 .rename-note {
   margin: 12px 0 0;
-  color: #f2c94c;
+  color: var(--caution);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -552,7 +552,7 @@
 }
 
 .durability-warn {
-  color: #f2c94c;
+  color: var(--caution);
 }
 
 .durability-pending,
@@ -725,10 +725,10 @@
 
 .dev-reset button {
   padding: 6px 10px;
-  border: 1px dashed #eb5757;
+  border: 1px dashed var(--warn);
   border-radius: 8px;
   background: transparent;
-  color: #eb5757;
+  color: var(--warn);
   font-size: 12px;
   font-weight: 600;
 }
@@ -750,7 +750,7 @@
   bottom: 8px;
   width: 3px;
   border-radius: 2px;
-  background: #27ae60;
+  background: var(--go);
 }
 
 /* The key, so the mark says what it is rather than only that the row is special. */
@@ -772,5 +772,5 @@
   width: 3px;
   height: 12px;
   border-radius: 2px;
-  background: #27ae60;
+  background: var(--go);
 }

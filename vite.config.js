@@ -43,6 +43,23 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // **Lightning CSS rewrites `light-dark()` unless it is told not to, and the rewrite is
+    // silently one-way.** Left at the default target it compiles every `light-dark(a, b)`
+    // into a `--lightningcss-light`/`--lightningcss-dark` pair switched by a
+    // `prefers-color-scheme` media query — which still follows the phone, so the app looks
+    // exactly right, and which no longer answers to `color-scheme` at all. That is the one
+    // thing `main.jsx` needs it to answer to: pinning the board views to the dark scheme
+    // stopped working with nothing failing, because a media query does not care what
+    // `color-scheme` an element is set to. `tools/verify-schemes.mjs` is what caught it.
+    //
+    // These are the browsers that support `light-dark()`, and they are not a new floor —
+    // `index.css` already derives a team's ink with relative colour syntax
+    // (`oklch(from …)`), which Lightning CSS cannot downlevel and simply passes through, so
+    // an older browser was already going to lose the team colours entirely. Naming the
+    // target makes the floor explicit rather than accidental.
+    cssTarget: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
+  },
   server: {
     host: true,
   },

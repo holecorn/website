@@ -23,7 +23,7 @@ many hard-won constraints, and loading all of them on every task crowds out the 
 | `.claude/rules/archive.md` | `archive.js`, `stats.js`, `Stats.*`, `inactive.js`, `store.js`, `nameField.js`, `App.jsx` | records, career stats, name editing, inactive players, the storage refusals |
 | `.claude/rules/tournament.md` | `tournament.js`, `Tournament.*`, `App.jsx` | the bracket, the draw ceremony, past tournaments |
 | `.claude/rules/scoreboard.md` | `scoreboard*`, `panel*`, `Display.*`, `Panel.*`, `segments.js`, `main.jsx` | the MQTT contract, the five board screens, the emulator |
-| `.claude/rules/layout.md` | any `src/*.css`, `Logo.jsx`, `App.jsx` | lane caps, responsive tiers, the wordmark, the side rail |
+| `.claude/rules/layout.md` | any `src/*.css`, `Logo.jsx`, `App.jsx`, `main.jsx`, `css.test.js` | lane caps, responsive tiers, the wordmark, the side rail, the two colour schemes |
 | `.claude/rules/testing.md` | any `src/*.test.js`, anything in `tools/`, `App.jsx` | what each suite and browser check is for |
 | `firmware/hub75/CLAUDE.md` | anything in `firmware/hub75/` | the panel, the power budget, the pixel check |
 
@@ -296,10 +296,37 @@ project dependency. It starts and stops its own preview server.
     on the green, 3.48:1 on the red and 1.59:1 on the yellow, against the 4.5:1 small text
     needs. `--on-accent` in `index.css` clears all four and is the only ink an accent fill
     may take, which is what lets the winner banner wear whatever colour won. **A new filled
-    control, or a new element handed `colors[team]` as an inline background, has to use
-    it** — `src/css.test.js` refuses both. `PALETTE`'s blue is set by the same constraint
+    control has to use it**, and one filled with a *team* colour wears `.team-fill`, which
+    pairs the two — `src/css.test.js` refuses an inline paint outright now. Note the ink
+    itself flips: near-black on the dark scheme, white on the light one, because every
+    accent darkens to reach the page there. `PALETTE`'s blue is set by the same constraint
     from the other side: a team colour is *text* on `--panel` at 10–13px, which is why it
     is `#448def` rather than the `#2f80ed` it was. See `.claude/rules/layout.md`.
+- **The app follows the phone's light/dark setting, and there is no toggle in it.** The
+  constraint is sunlight — dark-only measured **33.6/255** mean luminance on the play
+  screen, against 230.7 on the light scheme — and the control already exists one swipe
+  away, under the brightness slider in Control Centre. Every colour is a single
+  `light-dark(light, dark)` in `index.css` and **nothing re-declares a palette anywhere**.
+  `.claude/rules/layout.md` holds the measured detail and loads with any stylesheet.
+  Three things constrain code it doesn't cover:
+  - **A team colour is handed over as `--team` and never as an inline `color` or
+    `background`.** An inline style beats every stylesheet, so a painted colour cannot be
+    re-derived for a light page — which is how ~25 sites across six components stood
+    before. Wear `.team-ink` or `.team-fill`, or read `var(--team-accent)` in the
+    element's own rule. `src/css.test.js` refuses a `style={{ … }}` naming a paint at all,
+    which is the whole guarantee: `PALETTE` is calibrated for a dark panel and on a light
+    one its green is **2.61:1** and its yellow **1.44:1**. The derivation **scales** OKLCH
+    lightness and must not clamp it — clamping flattens the four to one lightness, which is
+    the channel a red-green dichromat has left, and took red against yellow to **2.6**
+    CIEDE2000 under deuteranopia with nothing looking wrong in normal vision.
+  - **The UI accents are `--go`, `--warn` and `--caution`**, not the literals they were in
+    28 places. They still share hexes with `PALETTE`'s red and green **by coincidence** and
+    must not be made to move with them.
+  - **`?display=1` and `?panel=1` stay dark**, pinned in `main.jsx`, because a board is
+    emissive and sits in the shade. That pin only works while `build.cssTarget` in
+    `vite.config.js` names browsers with `light-dark()` — **don't loosen it**: Lightning CSS
+    silently rewrites the function into a `prefers-color-scheme` switch that answers to
+    nothing, and the app goes on looking right while the board reads blank.
 - **Custom domain served from root**, so Vite `base` stays `/` and the PWA
   `scope`/`start_url` are `/`. Don't add a base path.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone

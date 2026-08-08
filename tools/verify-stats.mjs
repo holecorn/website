@@ -178,11 +178,29 @@ await page.getByRole('button', { name: 'New game' }).click();
   // The form panel and the career table draw their pips with the same component,
   // and only this one hands it a team colour — the career table has no teams, so
   // dropping the prop would go unnoticed there.
+  // Asserted as the colour drawn, not as an inline `background`, which is what it used to
+  // read: the pip carries `--team` now and the stylesheet derives the rest, so a check on
+  // the style attribute was measuring the mechanism rather than the property — and it went
+  // red on a change that kept the tint working perfectly.
   const litPips = page.locator('.lineup-table .form-line-pip.is-win');
-  check('the form panel tints its win pips with the team colour',
-    (await litPips.count()) > 0
-      && (await litPips.first().evaluate((e) => e.style.background)) !== '',
-    `${await litPips.count()} lit`);
+  const pipTint = await page.evaluate(() => {
+    const pip = document.querySelector('.lineup-table .form-line-pip.is-win');
+    // The untinted colour is read off a *probe element*, not off `--text` itself. A custom
+    // property's value is the raw token — `light-dark(…)` — where the pip's is a resolved
+    // `rgb(…)`, so comparing the two directly can never match however the tint is drawn,
+    // and the check passed with the team colour dropped entirely. Verified by mutation.
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--text)';
+    document.body.append(probe);
+    const plain = getComputedStyle(probe).color;
+    probe.remove();
+    return { lit: pip && getComputedStyle(pip).backgroundColor, plain };
+  });
+  check(
+    'the form panel tints its win pips with the team colour',
+    (await litPips.count()) > 0 && pipTint.lit && pipTint.lit !== pipTint.plain,
+    `${await litPips.count()} lit, ${pipTint.lit} against the untinted ${pipTint.plain}`,
+  );
 
   // A name nobody has played under must say so rather than report 0% of
   // everything — the `played` flag in lineupStats is what carries that.

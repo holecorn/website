@@ -88,7 +88,7 @@
   margin-left: 6px;
   padding: 1px 4px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--lift) 8%, transparent);
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;

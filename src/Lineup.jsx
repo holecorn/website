@@ -41,11 +41,11 @@ export default function Lineup({ game, colors, matches, series }) {
       <h2 className="lineup-title">{title}</h2>
       {record && (
         <p className="lineup-record">
-          <span style={{ color: colors.a }}>{teamLabel(game, 'a')}</span>
+          <span className="team-ink" style={{ '--team': colors.a }}>{teamLabel(game, 'a')}</span>
           <b>
             {record.a}–{record.b}
           </b>
-          <span style={{ color: colors.b }}>{teamLabel(game, 'b')}</span>
+          <span className="team-ink" style={{ '--team': colors.b }}>{teamLabel(game, 'b')}</span>
         </p>
       )}
       <table className="lineup-table">
@@ -61,7 +61,7 @@ export default function Lineup({ game, colors, matches, series }) {
         <tbody>
           {rows.map((p) => (
             <tr key={`${p.team}${p.slot}`}>
-              <th scope="row" style={{ color: colors[p.team] }}>
+              <th scope="row" className="team-ink" style={{ '--team': colors[p.team] }}>
                 <span className="lineup-player">
                   <span className="lineup-name">{p.name}</span>
                   {p.currentStreak > 1 && (

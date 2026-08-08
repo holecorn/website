@@ -21,36 +21,46 @@ function buzz(count) {
   }
 }
 
-function sparkStyle(color, i, spread, whiteEvery) {
+function sparkStyle(i, spread) {
   const angle = (i / spread.count) * Math.PI * 2 + Math.random() * 0.6;
   const dist = spread.min + Math.random() * spread.range;
   return {
-    background: i % whiteEvery === 0 ? '#fff' : color,
     '--tx': `${Math.cos(angle) * dist}px`,
     '--ty': `${Math.sin(angle) * dist}px`,
     animationDelay: `${Math.round(Math.random() * spread.delay)}ms`,
   };
 }
 
-function Sparkles({ color }) {
+// The colours come from the stylesheet, off the `--team` the lane already carries —
+// every second spark takes `--text` rather than white, which on the light scheme is the
+// difference between a flash and nothing at all.
+function Sparkles() {
   const spread = { count: SPARK_COUNT, min: 24, range: 20, delay: 40 };
   return (
     <div className="sparkles" aria-hidden="true">
       {Array.from({ length: SPARK_COUNT }, (_, i) => (
-        <span key={i} className="spark" style={sparkStyle(color, i, spread, 2)} />
+        <span
+          key={i}
+          className={`spark${i % 2 === 0 ? ' is-pale' : ''}`}
+          style={sparkStyle(i, spread)}
+        />
       ))}
     </div>
   );
 }
 
-function FourBagger({ color }) {
+function FourBagger() {
   const spread = { count: BIG_SPARK_COUNT, min: 60, range: 90, delay: 90 };
   return (
     <div className="four-bagger" aria-hidden="true">
       <div className="four-text">FOUR BAGGER!</div>
       <div className="big-sparkles">
         {Array.from({ length: BIG_SPARK_COUNT }, (_, i) => (
-          <span key={i} className="big-spark" style={sparkStyle(color, i, spread, 3)} />
+          <span
+            key={i}
+            className={`big-spark${i % 3 === 0 ? ' is-pale' : ''}`}
+            style={sparkStyle(i, spread)}
+          />
         ))}
       </div>
     </div>
@@ -70,7 +80,7 @@ function vibration(holeCount, allInHole) {
 // owns the roving tabindex and the arrow keys — the group is one tab stop instead
 // of three, and where the bag is is the `checked` state rather than something the
 // lane would have to mirror into `aria-checked` and keep in step.
-function Lane({ tier, label, group, color, holeCount, vibe, disabled, onSet }) {
+function Lane({ tier, label, group, holeCount, vibe, disabled, onSet }) {
   const [burst, setBurst] = useState(0);
 
   const place = (t) => {
@@ -102,13 +112,12 @@ function Lane({ tier, label, group, color, holeCount, vibe, disabled, onSet }) {
           vibrating ? ' vibrating' : ''
         }${tier === 'unthrown' ? ' unthrown' : ''}`}
         style={{
-          background: color,
           top: `calc(${ROW[tier]} * (100% / 3) + 5px)`,
           '--amp': `${vibe.amp}px`,
           '--vdur': `${vibe.dur}ms`,
         }}
       />
-      {burst > 0 && <Sparkles key={burst} color={color} />}
+      {burst > 0 && <Sparkles key={burst} />}
     </div>
   );
 }
@@ -122,7 +131,7 @@ function TeamLanes({ team, name, positions, color, disabled, onSet, celebrateKey
   return (
     <section className="team-lanes" style={{ '--team': color }}>
       <div className="lanes-header">
-        <span className="lanes-team" style={{ color }}>
+        <span className="lanes-team team-ink">
           {name}
         </span>
         <span className="lanes-raw">
@@ -149,7 +158,7 @@ function TeamLanes({ team, name, positions, color, disabled, onSet, celebrateKey
           />
         ))}
       </div>
-      {celebrateKey > 0 && <FourBagger key={celebrateKey} color={color} />}
+      {celebrateKey > 0 && <FourBagger key={celebrateKey} />}
     </section>
   );
 }

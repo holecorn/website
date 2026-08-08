@@ -580,9 +580,9 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
                     >
                       <span className="recent-date">{shortDate(m.endedAt)}</span>
                       <span className="recent-teams">
-                        <span style={{ color: m.colors?.a }}>{teamLabel(m, 'a')}</span>
+                        <span className="team-ink" style={{ '--team': m.colors?.a }}>{teamLabel(m, 'a')}</span>
                         <span className="recent-v"> v </span>
-                        <span style={{ color: m.colors?.b }}>{teamLabel(m, 'b')}</span>
+                        <span className="team-ink" style={{ '--team': m.colors?.b }}>{teamLabel(m, 'b')}</span>
                       </span>
                       <span className="recent-score">
                         {final ? `${final.a}–${final.b}` : '—'}
@@ -850,11 +850,11 @@ function MatchNames({ match, onCancel, onSave }) {
             {slots.map((i) => (
               <input
                 key={i}
-                className="match-name-input"
+                className="match-name-input team-ink"
                 {...NAME_FIELD}
                 value={draft[team][i] ?? ''}
                 maxLength={16}
-                style={{ color: match.colors?.[team] }}
+                style={{ '--team': match.colors?.[team] }}
                 onChange={(e) => set(team, i, e.target.value)}
                 aria-label={
                   doubles
@@ -909,8 +909,8 @@ function MatchRounds({ id, match, tie, onEdit, onDelete }) {
       {detailed && (
         <div className="match-rounds-head">
           <span>Rd</span>
-          <span style={{ color: match.colors?.a }}>{teamLabel(match, 'a')}</span>
-          <span style={{ color: match.colors?.b }}>{teamLabel(match, 'b')}</span>
+          <span className="team-ink" style={{ '--team': match.colors?.a }}>{teamLabel(match, 'a')}</span>
+          <span className="team-ink" style={{ '--team': match.colors?.b }}>{teamLabel(match, 'b')}</span>
           <span>Score</span>
         </div>
       )}
@@ -925,14 +925,16 @@ function MatchRounds({ id, match, tie, onEdit, onDelete }) {
               {doubles && <em className="mr-thrower">{r[team].thrower}</em>}
               <span className={r[team].fourBagger ? 'mr-counts is-four' : 'mr-counts'}>
                 {r[team].hole}◎ {r[team].board}▬
-                <b style={{ color: match.colors?.[team] }}>+{r[team].net}</b>
+                <b className="team-ink" style={{ '--team': match.colors?.[team] }}>
+                  +{r[team].net}
+                </b>
               </span>
             </span>
           ))}
           <span className="mr-running">
-            <span style={{ color: match.colors?.a }}>{r.running.a}</span>
+            <span className="team-ink" style={{ '--team': match.colors?.a }}>{r.running.a}</span>
             <span className="recent-v">–</span>
-            <span style={{ color: match.colors?.b }}>{r.running.b}</span>
+            <span className="team-ink" style={{ '--team': match.colors?.b }}>{r.running.b}</span>
           </span>
         </div>
       ))}

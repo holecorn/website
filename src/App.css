@@ -28,7 +28,7 @@
 }
 
 .footer-heart {
-  color: #eb5757;
+  color: var(--warn);
 }
 
 /* Styled on :not(:empty) rather than hidden with display:none, which would take
@@ -37,7 +37,7 @@
    is an inline span on the line the footer text already occupies, so it costs
    nothing. */
 .save-warning {
-  color: #f2c94c;
+  color: var(--caution);
   font-weight: 700;
 }
 
@@ -50,6 +50,24 @@
 .setup {
   gap: 20px;
   padding-top: 32px;
+}
+
+/* Chalk is a tint toward white, which is what makes the mark read as powder on the dark
+   scheme and what erased it on the light one — measured, the wordmark came out at 1.19:1
+   against `--bg`. On a light page the derived team colour is already a mid-dark pigment
+   and wants no softening at all, so the tint is dropped rather than reversed: chalk on
+   tarmac has no light-page equivalent, and mixing toward black instead just reads as a
+   different, muddier ink. */
+.logo-word {
+  --chalk: light-dark(var(--team-accent), color-mix(in srgb, var(--team-accent) 72%, white));
+}
+
+.logo-word rect {
+  stroke: var(--chalk);
+}
+
+.logo-word text {
+  fill: var(--chalk);
 }
 
 /* No vertical margin: the mark's viewBox is trimmed to what it paints, so the space
@@ -93,7 +111,7 @@
   padding: 8px 16px;
   border: none;
   border-radius: 10px;
-  background: #27ae60;
+  background: var(--go);
   color: var(--on-accent);
   font-weight: 700;
   font-size: 15px;
@@ -165,7 +183,7 @@
    screen any height. */
 .lineup-hint {
   margin: 0;
-  color: #eb5757;
+  color: var(--warn);
   font-size: 12px;
   text-align: center;
 }
@@ -278,7 +296,7 @@
    the bags — so the underline is what marks the fields the hint is about. An
    empty field has nothing but its underline to carry it. */
 .team-name-input[aria-invalid='true'] {
-  border-bottom-color: #eb5757;
+  border-bottom-color: var(--warn);
 }
 
 /* Its own row under the team cards, so it sits with the bags it moves. Not in
@@ -377,12 +395,12 @@
 }
 
 .link-status.is-connected {
-  color: #27ae60;
+  color: var(--go);
 }
 
 .link-status.is-error,
 .link-status.is-offline {
-  color: #eb5757;
+  color: var(--warn);
 }
 
 .sb-toggle {
@@ -495,7 +513,7 @@
 
 .sb-error {
   margin: 10px 0 0;
-  color: #eb5757;
+  color: var(--warn);
   font-size: 13px;
 }
 
@@ -578,7 +596,7 @@
 }
 
 .team-score.is-winner {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--lift) 6%, transparent);
 }
 
 .names {
@@ -612,6 +630,8 @@
 
 .first-bag.is-first {
   border-style: solid;
+  background: var(--team-accent);
+  border-color: var(--team-accent);
   opacity: 1;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
@@ -645,11 +665,15 @@
   gap: 6px;
 }
 
+/* The derived colour, not the raw `PALETTE` hex: the swatch has to show the ink the
+   rest of the screen will actually be drawn in, or picking a colour on the light
+   scheme means picking one and getting another. */
 .swatch {
   width: 20px;
   height: 20px;
   border-radius: 50%;
   border: 2px solid transparent;
+  background: var(--team-accent);
   padding: 0;
 }
 
@@ -801,11 +825,18 @@
   height: 168px;
   border-radius: 10px;
   overflow: visible;
+  /* The three bands are a wash over the card, so on the light scheme they can only go
+     one way — down — and the dark scheme's own alphas are a far bigger step on white
+     than on `--panel`. Measured, they took the worst bag-against-its-band contrast to
+     **2.73:1**, under the 3:1 a graphic that size wants, and the hole band was the one
+     spending it. These are the alphas that put it back to 3.91 against the dark
+     scheme's own 4.11, with the track still clearly a track (1.38:1 against the card).
+     `tools/verify-schemes.mjs` measures it; there is no unit test that can. */
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.28) 0 33.33%,
-    rgba(255, 255, 255, 0.04) 33.33% 66.66%,
-    rgba(0, 0, 0, 0.18) 66.66% 100%
+    light-dark(rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.28)) 0 33.33%,
+    light-dark(rgba(0, 0, 0, 0.02), rgba(255, 255, 255, 0.04)) 33.33% 66.66%,
+    light-dark(rgba(0, 0, 0, 0.09), rgba(0, 0, 0, 0.18)) 66.66% 100%
   );
 }
 
@@ -821,7 +852,7 @@
   height: calc(100% / 3);
   border: none;
   background: transparent;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  border-bottom: 1px dashed color-mix(in srgb, var(--lift) 8%, transparent);
 }
 
 .tier-zone:last-of-type {
@@ -829,13 +860,13 @@
 }
 
 .tier-zone:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--lift) 8%, transparent);
 }
 
 /* Inset, because the zones touch: an outset ring on the middle one is drawn over
    its neighbours and reads as the wrong band being focused. */
 .tier-zone:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--text);
   outline-offset: -3px;
   border-radius: 8px;
 }
@@ -854,6 +885,7 @@
   /* Proportional, so the corners stay corners: a fixed radius reads as a circle
      once the compact tier shrinks the token to 18px. */
   border-radius: 18%;
+  background: var(--team-accent);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   transition: top 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
   pointer-events: none;
@@ -864,7 +896,7 @@
   filter: grayscale(1);
   opacity: 0.35;
   box-shadow: none;
-  outline: 1px dashed rgba(255, 255, 255, 0.4);
+  outline: 1px dashed color-mix(in srgb, var(--lift) 40%, transparent);
   outline-offset: -3px;
 }
 
@@ -877,6 +909,9 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  /* White rather than `--text`, on both schemes: this flashes over the token, which is
+     a saturated team colour either way — the light scheme darkens it rather than
+     lightening it, so the ink that reads on the page would sink into the bag. */
   border: 2px solid #fff;
   animation: hole-ripple 0.6s ease-out;
 }
@@ -928,8 +963,18 @@
   height: 7px;
   margin: -3.5px;
   border-radius: 50%;
+  background: var(--team-accent);
   opacity: 0;
   animation: spark 620ms ease-out forwards;
+}
+
+/* Every other spark, so the burst reads as a flash rather than as more bags. `--text`
+   rather than white, because on the light scheme white sparks over a white lane are
+   the burst not happening. */
+.spark.is-pale,
+.big-spark.is-pale,
+.confetti-piece.is-pale {
+  background: var(--text);
 }
 
 @keyframes spark {
@@ -961,7 +1006,7 @@
   font-family: 'Bebas Neue', sans-serif;
   font-size: 44px;
   letter-spacing: 3px;
-  color: #fff;
+  color: var(--text);
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
   animation: four-text 1300ms ease-out forwards;
 }
@@ -980,6 +1025,7 @@
   height: 9px;
   margin: -4.5px;
   border-radius: 50%;
+  background: var(--team-accent);
   opacity: 0;
   animation: spark 900ms ease-out forwards;
 }
@@ -1063,6 +1109,7 @@
   position: absolute;
   top: -8%;
   border-radius: 1px;
+  background: var(--team-accent);
   opacity: 0;
   animation-name: confetti-fall;
   animation-timing-function: ease-in;
@@ -1144,7 +1191,7 @@
   padding: 16px 20px;
   border: none;
   border-radius: 12px;
-  background: #27ae60;
+  background: var(--go);
   color: var(--on-accent);
   font-weight: 700;
   font-size: 17px;
@@ -1172,8 +1219,8 @@
    `.tournament-drop` is: the filled red is the confirm dialog's own button, so the one
    that asks and the one that does don't look alike. */
 .secondary-controls .abandon-game {
-  border-color: #eb5757;
-  color: #eb5757;
+  border-color: var(--warn);
+  color: var(--warn);
 }
 
 /* Leaving-the-game confirmation */
@@ -1224,14 +1271,14 @@
 }
 
 .confirm-actions .confirm-danger {
-  background: #eb5757;
-  border-color: #eb5757;
+  background: var(--warn);
+  border-color: var(--warn);
   color: var(--on-accent);
 }
 
 .confirm-actions .confirm-primary {
-  background: #27ae60;
-  border-color: #27ae60;
+  background: var(--go);
+  border-color: var(--go);
   color: var(--on-accent);
 }
 

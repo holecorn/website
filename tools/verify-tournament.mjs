@@ -1595,14 +1595,24 @@ console.log('\ndeleting a tournament asks first, and says what it does not take'
   const stored = () =>
     page.evaluate(() => JSON.parse(localStorage.getItem('holecorn.tournaments.v1') || '[]').length);
   const drop = page.locator('.tournament-drop').first();
+  // Read against `--warn` rather than against a literal hex. The accent is two values now,
+  // one per colour scheme, and this file does not pin a scheme — so a literal pins the
+  // check to whichever way round Playwright happens to default, which is how this went red
+  // on a rule that was working. The property is that the button wears the app's warning
+  // accent on both edges, not that it is a particular red.
   const red = await drop.evaluate((e) => {
     const s = getComputedStyle(e);
-    return { colour: s.color, border: s.borderTopColor };
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--warn)';
+    e.append(probe);
+    const warn = getComputedStyle(probe).color;
+    probe.remove();
+    return { colour: s.color, border: s.borderTopColor, warn };
   });
   check(
     'the button is red',
-    red.colour === 'rgb(235, 87, 87)' && red.border === 'rgb(235, 87, 87)',
-    `${red.colour} on ${red.border}`,
+    red.colour === red.warn && red.border === red.warn,
+    `${red.colour} on ${red.border}, --warn is ${red.warn}`,
   );
 
   await drop.click();

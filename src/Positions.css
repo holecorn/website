@@ -39,7 +39,7 @@
   height: 52px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--lift) 5%, transparent);
 }
 
 .board-hole {
@@ -114,8 +114,8 @@
 }
 
 .pitch-box.is-throwing {
-  color: var(--team);
-  border: 1px solid var(--team);
+  color: var(--team-accent);
+  border: 1px solid var(--team-accent);
 }
 
 .pitch-box.is-throwing::after {
@@ -123,12 +123,12 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--team);
+  background: var(--team-accent);
   opacity: 0.12;
 }
 
 .pitch-box.is-waiting {
-  color: var(--team);
+  color: var(--team-accent);
   border: 1px dashed var(--border);
   opacity: 0.55;
 }
