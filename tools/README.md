@@ -79,6 +79,18 @@ No browser download is required locally — the scripts drive your installed Chr
 via `channel: 'chrome'`, and fall back to Playwright's bundled Chromium when `CI`
 is set. Output goes to `tools/out/`, which is gitignored.
 
+**`npm run test:browser` runs three at a time, longest first, against the one preview
+server.** They share nothing that would stop it: each launches its own browser, so
+`localStorage` is per check, the server only serves static files, and `verify-stats.mjs`
+is the only one that writes anything. Three because the wall clock is floored by the
+longest single check — the other nine are 71s between them, so two workers clear them
+while `verify-tournament.mjs` is still going, and a fourth browser would only add CPU
+contention to checks that measure rate limits, brightness and text metrics. Measured on a
+Mac: serial 123s, at 3 52s, at 6 **54s** — past the floor it gets slower rather than
+faster, so raising it is not the lever. `CHECK_CONCURRENCY=1` puts it back to serial when
+a failure is easier to read that way, though each check's output is buffered and printed
+whole either way, so a failure is never interleaved with another check's `ok`s.
+
 ## Running the workflow locally
 
 [`act`](https://github.com/nektos/act) runs `.github/workflows/deploy.yml` in
@@ -93,6 +105,21 @@ act push -j firmware --container-architecture linux/arm64
 
 `actions/cache` has no backend under act, so the Playwright browser cache always
 misses locally and its effect is only visible on the runners.
+
+**That miss is most of the run, and `--reuse` is what avoids paying it twice.** A fresh
+container re-downloads Chromium and re-runs the `--with-deps` apt every time — measured,
+69s and 101s on two runs, against 60s for the checks themselves. `--reuse` keeps the
+container between invocations and takes that step to **2.6s**, so a repeat run is 1m31
+rather than 2m44:
+
+```bash
+act push -j build --container-architecture linux/arm64 --reuse
+```
+
+Use it while iterating on a workflow or a layout, and do the run you actually trust
+without it — a reused container is exactly the stale-state trap the mutation harness
+records under `verify-recovery.mjs`, and the point of act is to be the fresh environment
+your Mac isn't.
 
 **Use `linux/arm64` on Apple Silicon.** The default `linux/amd64` runs under QEMU
 and vitest segfaults there, which looks like a test failure and isn't one. The

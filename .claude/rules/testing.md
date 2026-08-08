@@ -315,9 +315,19 @@ other because every one-tournament fixture then grows a second `.tournament-list
 first was a real defect and is fixed by `.series-holder`/`.series-count`; the second is why
 that mutation is done by raising the threshold instead.
 
-**That file taught the same two lessons repeatedly, and they are worth knowing before
+**That file taught the same lessons repeatedly, and they are worth knowing before
 adding to it:**
 
+- **Reading text off an element that is *absent* costs 30s, and `check` pays it twice.**
+  A fault hint renders only when something is at fault, so the ordinary case is no element
+  at all — and `innerText()` waits out Playwright's default before the `.catch()` fallback
+  runs. `check(label, cond, detail)` evaluates the condition and the detail separately, so
+  one assertion on an absent hint was **60s of that file's 110s**, and it looked like an
+  expensive check rather than a stalled one. `textOf` bounds it at 2s, which is 20x what a
+  hint takes to render; the presence assertions immediately above use the same helper, so a
+  bound too short to see a hint that *is* there fails those loudly rather than passing this
+  one quietly. **A new read whose element may legitimately be missing goes through it** —
+  the same rule `settles` already applies to waits.
 - **A bare `waitForSelector` swallows a mutation.** Three times, a mutation removed
   the thing under test, the wait timed out, and the run *ended* — naming nothing and
   skipping every block below. Waits that are really assertions go through a helper

@@ -41,6 +41,16 @@ const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' 
 // blocks. Same lesson as verify-positions.mjs and verify-stats.mjs.
 const settles = (fn) => fn().then(() => true, () => false);
 
+// The same rule for *reading* text: a fault hint is absent whenever nothing is at fault,
+// which is the ordinary case, and an unbounded read waits out Playwright's 30s default for
+// it. `check` evaluates its condition and its detail separately, so a single assertion on
+// an absent hint paid it twice — measured, one pair was 60s of this file's 110s. Absence
+// here is an answer rather than something to wait for; 2s is 20x the ~50ms a hint takes to
+// render, and a bound too short to see a hint that *is* there fails the presence
+// assertions above loudly rather than passing this one quietly.
+const textOf = (locator, absent = '(no hint)') =>
+  locator.innerText({ timeout: 2000 }).catch(() => absent);
+
 // Every draw lands on the ceremony now — `Make the draw` always plays it out, and Skip is
 // one press. A check that wants a bracket goes through it, and reports rather than
 // throwing for the reason above: a ceremony that stopped appearing would otherwise end the
@@ -164,7 +174,7 @@ console.log('an empty draw form does not tell you off before you have typed');
     // Asking for a row is something you did, so the count is said at once — the half of
     // the gate that is about the field's size rather than about its names.
     await page.getByRole('button', { name: 'Add new entrant' }).click();
-    const alone = await page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+    const alone = await textOf(page.locator('.draw-hint'));
     check('one row in, the count is reported', /at least 2 entrants/i.test(alone), alone);
     check(
       'but neither empty box is, since nobody has typed',
@@ -184,7 +194,7 @@ console.log('an empty draw form does not tell you off before you have typed');
     // Read so it *reports* when there is no hint at all — `innerText` on a locator that
     // matches nothing throws, which ends the run and names nothing. A gate stuck shut is
     // exactly the mutation that would take it, so this is the file's own lesson again.
-    const hint = await page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+    const hint = await textOf(page.locator('.draw-hint'));
     check('one name in, the empty row is reported', /Everyone entering needs a name/i.test(hint), hint);
     check('and so is the unnamed cup', /tournament needs a name/i.test(hint), hint);
     check(
@@ -199,7 +209,7 @@ console.log('an empty draw form does not tell you off before you have typed');
     // Naming it clears its own line and leaves the other, so the two are separate rules
     // rather than one message covering whatever is wrong.
     await page.locator('.draw-name input').fill('Hole Corn VI');
-    const named = await page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+    const named = await textOf(page.locator('.draw-hint'));
     check('naming it drops that line', !/tournament needs a name/i.test(named), named);
     check('and leaves the empty row reported', /Everyone entering needs a name/i.test(named), named);
     check(
@@ -463,12 +473,13 @@ console.log('\nthe roster enters people by tapping rather than typing');
   check('every chip is lit', (await page.locator('.roster-chip.is-on').count()) === 11);
   // The field costs no typing; the cup's own name still does, and it is the only thing
   // between eleven taps and a bracket.
+  const unnamed = await textOf(page.locator('.draw-hint'));
   check(
     'the whole field is in without a keystroke, and only the cup is unnamed',
     (await page.locator('.draw-go').isDisabled()) &&
-      /needs a name/i.test(await page.locator('.draw-hint').innerText().catch(() => '')) &&
+      /needs a name/i.test(unnamed) &&
       (await page.locator('.entrants .is-faulted').count()) === 0,
-    await page.locator('.draw-hint').innerText().catch(() => '(no hint)'),
+    unnamed,
   );
   await page.locator('.draw-name input').fill('Hole Corn VI');
   check('naming it is all that was left', await page.locator('.draw-go').isEnabled());
@@ -1679,7 +1690,7 @@ console.log('\nseveral tournaments can run at once');
   // block because it needs a tournament to already exist — `open()` drew Hole Corn VI —
   // and because the block goes on to draw a real second one, which is the half that would
   // break if the rule matched too much.
-  const nameHint = () => page.locator('.draw-hint').innerText().catch(() => '(no hint)');
+  const nameHint = () => textOf(page.locator('.draw-hint'));
   // The field goes in *first*, so the name is the only thing left wrong. Asserting the
   // button on an empty form would pass on the entrant count whatever the name rule did —
   // this file's own recorded failure, and verified by mutation: dropping `duplicate` from
@@ -1689,25 +1700,24 @@ console.log('\nseveral tournaments can run at once');
     await page.locator('.entrant-name').nth(i).fill(n);
   }
   await page.locator('.draw-name input').fill('Hole Corn VI');
-  check('a name already in use is refused', /already a tournament/i.test(await nameHint()), await nameHint());
+  const taken = await nameHint();
+  check('a name already in use is refused', /already a tournament/i.test(taken), taken);
   check('and the field says which box', (await page.locator('.draw-name input[aria-invalid]').count()) === 1);
   check(
     'with the draw held off, and nothing else wrong with the form',
     (await page.locator('.draw-go').isDisabled()) &&
       (await page.locator('.entrants .is-faulted').count()) === 0,
-    await nameHint(),
+    taken,
   );
   // Compared the way a person's name is, so the case it was typed in cannot smuggle a
   // second one past.
   await page.locator('.draw-name input').fill('  hole corn vi ');
-  check(
-    'however it was cased or spaced',
-    /already a tournament/i.test(await nameHint()),
-    await nameHint(),
-  );
+  const recased = await nameHint();
+  check('however it was cased or spaced', /already a tournament/i.test(recased), recased);
 
   await page.locator('.draw-name input').fill('Doubles Cup');
-  check('a name of its own is not', !/already a tournament/i.test(await nameHint()), await nameHint());
+  const own = await nameHint();
+  check('a name of its own is not', !/already a tournament/i.test(own), own);
   check('and unmarks the field', (await page.locator('.draw-name input[aria-invalid]').count()) === 0);
   check('so the second draw is ready', await page.locator('.draw-go').isEnabled());
   await page.locator('.draw-go').click();
@@ -2963,7 +2973,7 @@ console.log('\nthe draw form offers the next edition, and offers one it will acc
   }
   await backToBracket(page);
 
-  const wonBy = await page.locator('.champion-who').first().innerText().catch(() => '');
+  const wonBy = await textOf(page.locator('.champion-who').first(), '');
   check('the cup finishes with a champion', /Rho|Tau|Sigma|Phi/.test(wonBy), wonBy || '(none)');
   const champion = (wonBy.match(/Rho|Tau|Sigma|Phi/) ?? [''])[0];
   const before = await playable(page);
@@ -2981,7 +2991,7 @@ console.log('\nthe draw form offers the next edition, and offers one it will acc
   await page.getByRole('button', { name: '‹ Back' }).click();
   await backToBracket(page);
 
-  const after = await page.locator('.champion-who').first().innerText().catch(() => '');
+  const after = await textOf(page.locator('.champion-who').first(), '');
   check('the cup is still finished afterwards', after.includes(`${champion} P`), after || '(none)');
   check('and no tie has come back to life', (await playable(page)) === 0, `${await playable(page)} playable`);
   check(
