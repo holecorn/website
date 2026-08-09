@@ -171,6 +171,13 @@ project dependency. It starts and stops its own preview server.
   plays, and a guest game has no faults at all. `newGame`'s defaults are numbered across
   the lineup (`a: [1, 3]`, `b: [2, 4]`) so the app cannot open on a lineup it would refuse
   to start — **any new default name has to keep all four distinct.**
+  - **All four write paths refuse it, so no route reaches a record where one person is
+    in two slots.** The setup screen, the archive's match-names editor (which used to
+    warn and save anyway), the career rename via `renameClashes`, and `validRecord` on
+    import. **Anything new that writes a lineup asks `lineupFaults`** rather than reading
+    the rule a second time. The read-side guards in `stats.js` stay for records filed
+    before this, and the import refusal costs a record played before it — see
+    `.claude/rules/archive.md`.
 - **Bag positions:** `'unthrown' | 'floor' | 'board' | 'hole'`. Bags start
   `unthrown`; once thrown they can move between floor/board/hole but can never
   return to `unthrown` (`setBag` enforces this).

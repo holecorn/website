@@ -9,7 +9,7 @@
 // Storage follows the scoreboard.js split: the record and list helpers are pure
 // and tested, the localStorage read/write is a thin untested wrapper.
 
-import { nameKey, nameSlots } from './scoring.js';
+import { lineupFaults, nameKey, nameSlots } from './scoring.js';
 import { jsonStore } from './store.js';
 
 // Its own key, separate from game state, so `New game` can't clear the history.
@@ -162,9 +162,29 @@ export function savePlayerRename(from, to, at) {
   return saveArchive(renamePlayer(loadArchive(), from, to, at));
 }
 
+// Whether a lineup puts one person in two slots — the `twice` half of the setup
+// screen's rule, asked of a record. **`lineupFaults` rather than a second reading
+// of it**, so the four places that refuse this cannot come to disagree about who
+// counts as the same person; the `blank` half is deliberately not asked, because a
+// singles record legitimately carries an empty second slot.
+function playedTwice(record) {
+  // A lineup that isn't one has no repeat to find, and `validRecord` has already
+  // rejected it on the clause above — this only keeps `renameClashes` safe to run
+  // over whatever the archive is holding.
+  if (!nameSlots(record?.players?.a) || !nameSlots(record?.players?.b)) return false;
+  return lineupFaults(record).some((f) => f.fault === 'twice');
+}
+
 // A record can arrive from a file the user picked, so nothing about it can be
 // assumed. Require the fields stats.js reads without checking, rather than
 // letting one stray file break the whole screen.
+//
+// **A repeated name is refused here as well as on the way in**, which is the one
+// place this costs something: `mergeMatches` drops a bad record silently, so a
+// match played before the rule existed disappears from an import with nothing said.
+// That is the accepted price of there being no route left to a record where one
+// person is on both sides — the setup screen, the match-names editor and the career
+// rename close the other three.
 export function validRecord(m) {
   return Boolean(
     m &&
@@ -181,8 +201,22 @@ export function validRecord(m) {
           Array.isArray(r?.b) &&
           Number.isFinite(r?.nets?.a) &&
           Number.isFinite(r?.nets?.b),
-      ),
+      ) &&
+      !playedTwice(m),
   );
+}
+
+// Which matches this rename would put one person into two slots of — the reason a
+// career rename can be refused, where merging two spellings of somebody who never
+// faced themselves is still the point of the screen.
+//
+// **Run through `renamePlayer` rather than reasoned about**, so what is checked is
+// the rewrite that would actually happen. Records that already clash are excluded:
+// the rename is not what put them that way, and refusing over one would block the
+// edit that fixes it.
+export function renameClashes(records, from, to) {
+  const after = renamePlayer(records, from, to, 0);
+  return records.filter((m, i) => playedTwice(after[i]) && !playedTwice(m));
 }
 
 // Merge an import into what is already here. The id is the match, so

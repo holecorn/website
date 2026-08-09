@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { BOARD_NAME, nameKey, teamLabel } from './scoring.js';
+import { BOARD_NAME, lineupFaults, nameKey, teamLabel } from './scoring.js';
 import {
   dropMatch,
   loadArchive,
   loadLastExport,
   mergeMatches,
   newestEnd,
+  renameClashes,
   saveArchive,
   saveLastExport,
   saveMatchPlayers,
@@ -46,7 +47,7 @@ import {
 } from './inactive.js';
 import { UNREADABLE } from './store.js';
 import { NAME_FIELD } from './nameField.js';
-import { shortDate } from './dates.js';
+import { dateSpan, shortDate } from './dates.js';
 import { minutes, one, pct, plural } from './format.js';
 import Chip, { Chips } from './Chip.jsx';
 import FormPips from './FormPips.jsx';
@@ -710,6 +711,7 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
         <RenamePlayer
           player={renaming}
           players={players}
+          matches={matches}
           onCancel={() => setRenaming(null)}
           onSave={(to, merges) => renamePlayer(renaming.name, to, merges)}
         />
@@ -747,13 +749,26 @@ export default function Stats({ onBack, persisted, onRenamePlayer }) {
 // also how two spellings become one person and how a phantom player created by a
 // typo is folded back in — renaming onto an existing name is a merge, because
 // name-folding is the only identity there is.
-function RenamePlayer({ player, players, onCancel, onSave }) {
+function RenamePlayer({ player, players, matches, onCancel, onSave }) {
   const [value, setValue] = useState(player.name);
 
   const to = value.trim();
   const key = nameKey(to);
   const changed = Boolean(to) && to !== player.name;
   const merges = players.find((p) => p.name !== player.name && nameKey(p.name) === key);
+  // A merge is still the point of this screen — two spellings of one person fold
+  // together — but not when the two have *met*, because the fold would then put one
+  // person on both sides of a match they played. Memoised because it runs the whole
+  // archive through `renamePlayer` and this recomputes on every keystroke.
+  const clashes = useMemo(
+    () => (changed ? renameClashes(matches, player.name, to) : []),
+    [matches, player.name, to, changed],
+  );
+  const met = clashes.length > 0;
+  // Insertion order, not chronological, so the span is read off the values rather
+  // than off the ends of the list. A record can carry no date at all.
+  const ends = clashes.map((m) => m.endedAt).filter(Number.isFinite);
+  const span = ends.length > 0 ? dateSpan(Math.min(...ends), Math.max(...ends)) : null;
 
   return (
     <Modal onClose={onCancel}>
@@ -764,7 +779,7 @@ function RenamePlayer({ player, players, onCancel, onSave }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (changed) onSave(to, Boolean(merges));
+          if (changed && !met) onSave(to, Boolean(merges));
         }}
       >
         {/* Same 16 as the setup field: it is the cap the scoreboard payload's
@@ -776,9 +791,23 @@ function RenamePlayer({ player, players, onCancel, onSave }) {
           maxLength={16}
           autoFocus
           onChange={(e) => setValue(e.target.value)}
+          aria-invalid={met || undefined}
           aria-label={`New name for ${player.name}`}
         />
-        {merges && (
+        {/* Named and dated, for the reason the delete dialog names the match: this is
+            the last point at which the matches in the way are still identifiable. */}
+        {/* "Both played in" rather than "played each other": the two may have been
+            partners, which folds to somebody being their own partner and is the same
+            fault. Named and dated for the reason the delete dialog names the match —
+            this is the last point at which the matches in the way are identifiable. */}
+        {met && (
+          <p className="rename-note rename-refused" id="rename-fault">
+            {player.name} and {to} have both played in {matchCount(clashes.length)}
+            {span ? ` (${span})` : ''}. Folding them together would put one person in two
+            slots of the same lineup.
+          </p>
+        )}
+        {merges && !met && (
           <p className="rename-note">
             {merges.name} already has {matchCount(merges.matches)}. They&apos;ll be counted
             as one player from now on, and this screen can&apos;t split them again.
@@ -788,7 +817,12 @@ function RenamePlayer({ player, players, onCancel, onSave }) {
           <button type="button" onClick={onCancel}>
             Cancel
           </button>
-          <button type="submit" className="confirm-primary" disabled={!changed}>
+          <button
+            type="submit"
+            className="confirm-primary"
+            disabled={!changed || met}
+            aria-describedby={met ? 'rename-fault' : undefined}
+          >
             {merges ? 'Merge' : 'Rename'}
           </button>
         </div>
@@ -810,12 +844,15 @@ function MatchNames({ match, onCancel, onSave }) {
 
   const set = (team, i, value) =>
     setDraft((d) => ({ ...d, [team]: d[team].map((n, at) => (at === i ? value : n)) }));
-  const keysFor = (team) => slots.map((i) => nameKey(draft[team][i])).filter(Boolean);
-  const blank = ['a', 'b'].some((team) => keysFor(team).length < slots.length);
-  // One name on both sides of the court is worth saying and not worth refusing:
-  // the default doubles lineup is already like that, so blocking it would leave
-  // exactly the records most in need of editing uneditable.
-  const shared = keysFor('a').filter((k) => keysFor('b').includes(k));
+  // The setup screen's rule, unchanged and not re-read: a name in two slots is one
+  // person on both sides of the court, and a blank slot is nobody. This used to
+  // *warn* about the repeat on the grounds that the records most in need of an edit
+  // are the clashing ones — but the fix is the edit, so refusing until it is made is
+  // what closes the last route to such a record rather than what blocks it.
+  const faults = lineupFaults({ mode: match.mode, players: draft });
+  const doubled = [...new Set(faults.filter((f) => f.fault === 'twice').map((f) => f.name))];
+  const blank = faults.some((f) => f.fault === 'blank');
+  const at = (team, slot) => faults.some((f) => f.team === team && f.slot === slot);
 
   return (
     <Modal onClose={onCancel}>
@@ -827,7 +864,7 @@ function MatchNames({ match, onCancel, onSave }) {
         className="match-names"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!blank) {
+          if (faults.length === 0) {
             onSave({
               a: draft.a.map((n) => String(n ?? '').trim()),
               b: draft.b.map((n) => String(n ?? '').trim()),
@@ -855,6 +892,7 @@ function MatchNames({ match, onCancel, onSave }) {
                 value={draft[team][i] ?? ''}
                 maxLength={16}
                 style={{ '--team': match.colors?.[team] }}
+                aria-invalid={at(team, i) || undefined}
                 onChange={(e) => set(team, i, e.target.value)}
                 aria-label={
                   doubles
@@ -865,16 +903,26 @@ function MatchNames({ match, onCancel, onSave }) {
             ))}
           </div>
         ))}
-        {shared.length > 0 && (
-          <p className="match-names-note">
-            One name is on both teams, so those throws count for each side.
+        {/* One sentence each, both shown together, because a record with an empty box
+            *and* a repeat is one fix rather than two rounds of being told off — the
+            setup screen's hint has the same shape. */}
+        {faults.length > 0 && (
+          <p className="match-names-note" id="match-names-fault">
+            {doubled.length > 0 &&
+              `${doubled.join(' and ')} ${doubled.length > 1 ? 'are' : 'is'} in two slots — a name is the only way this app tells people apart. `}
+            {blank && 'Every slot this match was played with needs a name.'}
           </p>
         )}
         <div className="confirm-actions">
           <button type="button" onClick={onCancel}>
             Cancel
           </button>
-          <button type="submit" className="confirm-primary" disabled={blank}>
+          <button
+            type="submit"
+            className="confirm-primary"
+            disabled={faults.length > 0}
+            aria-describedby={faults.length > 0 ? 'match-names-fault' : undefined}
+          >
             Save
           </button>
         </div>

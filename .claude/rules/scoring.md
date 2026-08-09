@@ -384,11 +384,15 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     `nameKey` to decide what to mark.
   - **Both faults are reported together**, one sentence each. A lineup with an empty
     box *and* a repeat is one fix, not two rounds of being told off.
-  - **It refuses a repeat where the archive's editor warns about one**, which is not
-    an inconsistency: a lineup is about to be played and costs a keystroke to fix,
-    whereas a record is history and the ones needing the edit most are exactly the
-    clashing ones. Blanks are refused in both places. The two notes point at each
-    other; don't unify them.
+  - **All four write paths call it now, and that unification was deliberate.** The
+    archive's match-names editor used to *warn* about a repeat and save anyway, on the
+    grounds that a record is history and the ones needing the edit most are the
+    clashing ones — but the edit is the fix, so refusing until it is made locks
+    nothing. The career rename refuses a fold that would create one (`renameClashes`),
+    and `validRecord` refuses one arriving in a file. **A new surface that writes a
+    lineup asks `lineupFaults`**; a second reading of "the same person" is the drift
+    with no symptom. See `.claude/rules/archive.md` for the two archive halves and what
+    the import refusal costs.
   - **`newGame`'s defaults are numbered across the lineup, not within each team.**
     `a: [1, 3]`, `b: [2, 4]`, so the app cannot open on a lineup it would refuse to
     start — and singles, the common case, still reads Player 1 against Player 2. Any

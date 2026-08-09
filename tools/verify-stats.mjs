@@ -735,6 +735,15 @@ check(
         round(bags('floor'), bags('floor'), 0, 0),
         round(bags('hole'), bags('floor'), 12, 0),
       ],
+    }, {
+      // An older, separate match, so the block has a pair who have **never** shared a
+      // lineup. Without it every name here has met every other and there is no clean
+      // merge left to check — the four in r1 are two partnerships and one fixture.
+      // Dated behind r1 so the recent list still opens r1 first.
+      format: 1, id: 'r2', startedAt: 1.7e12 - 12e5, endedAt: 1.7e12 - 6e5, mode: 'singles',
+      players: { a: ['Sigma', ''], b: ['Omega', ''] },
+      colors: { a: '#2f80ed', b: '#eb5757' }, target: 21, winner: 'a',
+      rounds: [round(bags('hole'), bags('floor'), 12, 0), round(bags('hole'), bags('floor'), 12, 0)],
     }]));
   });
   await renPage.reload();
@@ -778,8 +787,24 @@ check(
     (await slots.nth(1).getAttribute('aria-label'))?.includes('far board'),
     await slots.nth(1).getAttribute('aria-label'),
   );
+  // The editor refuses the same lineup the setup screen does, and this is the only
+  // thing that can see it: `lineupFaults` is unit tested, and whether the dialog
+  // asks it is `.jsx`. It used to *warn* and save anyway, which was the last route
+  // to a record with one person on both sides.
+  const editSave = renPage.locator('.match-names').getByRole('button', { name: 'Save' });
+  await slots.nth(1).fill('Rho');
+  check('the match editor refuses one person in two slots', await editSave.isDisabled());
+  check(
+    'and says which name is doubled',
+    (await renPage.locator('.match-names-note').innerText()).includes('Rho'),
+    await renPage.locator('.match-names-note').innerText().catch(() => '(no hint)'),
+  );
+  await slots.nth(1).fill('');
+  check('it refuses a blank slot too', await editSave.isDisabled());
+
   await slots.nth(1).fill('Tau');
-  await renPage.locator('.match-names').getByRole('button', { name: 'Save' }).click();
+  check('and lets a corrected lineup through', await editSave.isEnabled());
+  await editSave.click();
 
   const throwers = await renPage
     .locator('.match-round .mr-side:nth-child(2) .mr-thrower')
@@ -796,14 +821,30 @@ check(
   check('the career table follows', tau.RDS === '1', JSON.stringify(tau));
   check('and the typo is gone from it', !(await renPage.getByText('Tua').count()));
 
-  // Renaming onto somebody who already has a history is a merge. Said out loud,
-  // because it cannot be undone from this screen.
+  // Chi and Phi were **partners** in r1, so folding them makes somebody their own
+  // partner — the same `twice` fault, and the other route to a record the rest of
+  // this now refuses. `renameClashes` is unit tested; only a browser can see the
+  // dialog ask it.
   await openRename(renPage, 'Chi');
   await renPage.locator('.rename-input').fill('Phi');
+  const mergeBtn = renPage.locator('.modal').getByRole('button', { name: 'Merge' });
+  check('a rename onto somebody they have played is refused', await mergeBtn.isDisabled());
+  check(
+    'and names the matches in the way',
+    (await renPage.locator('.rename-refused').innerText()).includes('1 match'),
+    await renPage.locator('.rename-refused').innerText().catch(() => '(no refusal)'),
+  );
+  await renPage.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
+
+  // The other direction, and it is what stops the rule from simply banning merges:
+  // Sigma played only r2, so folding them into Rho puts nobody on both sides.
+  await openRename(renPage, 'Sigma');
+  await renPage.locator('.rename-input').fill('Rho');
+  check('two spellings who never met still merge', await mergeBtn.isEnabled());
   check('a merge is named as a merge', await renPage.getByText('already has 1 match').isVisible());
   check(
-    'and the button says so too',
-    await renPage.locator('.modal').getByRole('button', { name: 'Merge' }).isVisible(),
+    'and no refusal is shown for it',
+    (await renPage.locator('.rename-refused').count()) === 0,
   );
   await renPage.locator('.modal').getByRole('button', { name: 'Cancel' }).click();
 

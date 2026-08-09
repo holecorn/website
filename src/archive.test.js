@@ -8,6 +8,7 @@ import {
   matchRecord,
   upsertMatch,
   removeMatch,
+  renameClashes,
   renamePlayer,
   setMatchPlayers,
   validRecord,
@@ -141,6 +142,63 @@ describe('validRecord', () => {
 
   it('still accepts the empty slot a singles record carries', () => {
     expect(validRecord({ ...good, players: { a: ['Neil', ''], b: ['Sigma', ''] } })).toBe(true);
+  });
+
+  // No route to a record where one person is in two slots: the setup screen, the
+  // match-names editor and the career rename close the other three, and this closes
+  // the import. It costs a real match played before the rule existed, which
+  // `mergeMatches` drops with nothing said — the accepted price of the rule.
+  it('refuses one person in two slots, however it is spelled', () => {
+    const both = { ...good, players: { a: ['Neil', ''], b: ['  neil ', ''] } };
+    expect(validRecord(both)).toBe(false);
+    const partner = {
+      ...good,
+      mode: 'doubles',
+      players: { a: ['Neil', 'Neil'], b: ['Sigma', 'Tau'] },
+    };
+    expect(validRecord(partner)).toBe(false);
+  });
+
+  // Only the slots the mode plays: a singles record's unused second slot holds a
+  // name on both teams in every record the app has ever written.
+  it('ignores a repeat in a slot the mode never played', () => {
+    expect(
+      validRecord({ ...good, players: { a: ['Neil', 'Rho'], b: ['Sigma', 'Rho'] } }),
+    ).toBe(true);
+  });
+});
+
+describe('renameClashes', () => {
+  const met = (id, endedAt) => ({
+    ...matchRecord(wonGame(id), endedAt),
+    players: { a: ['Neil', 'Player 2'], b: ['Nell', 'Player 2'] },
+  });
+  const apart = { ...matchRecord(wonGame('m9'), 900), players: { a: ['Nell', ''], b: ['Tau', ''] } };
+
+  it('names the matches a fold would put one person on both sides of', () => {
+    const records = [met('m1', 100), apart, met('m2', 200)];
+    expect(renameClashes(records, 'Nell', 'Neil').map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  // The whole point of the screen, and it has to survive this: two spellings of
+  // somebody who never faced themselves still fold together.
+  it('is empty when the two have never met', () => {
+    expect(renameClashes([apart], 'Nell', 'Neil')).toEqual([]);
+    expect(renameClashes([apart], 'Nell', 'Nell R')).toEqual([]);
+  });
+
+  // Otherwise a record that already clashes blocks the rename that would fix it.
+  it('ignores a record that was already like that', () => {
+    const already = {
+      ...matchRecord(wonGame('m3'), 300),
+      players: { a: ['Rho', ''], b: ['rho', ''] },
+    };
+    expect(renameClashes([already], 'Nell', 'Neil')).toEqual([]);
+  });
+
+  it('has nothing to report for a name that is not moving', () => {
+    expect(renameClashes([met('m1', 100)], 'Nell', ' nell ')).toEqual([]);
+    expect(renameClashes([met('m1', 100)], '', 'Neil')).toEqual([]);
   });
 });
 

@@ -274,7 +274,33 @@ chip in that dialog — because nothing in `TeamsFields` itself would notice.
 `src/stats.test.js` builds its fixtures by playing rounds through the real
 scoring functions and archiving the result, rather than hand-writing record
 blobs, so a rules change that breaks attribution surfaces there instead of
-quietly agreeing with a stale fixture. `tools/verify-stats.mjs` covers what the
+quietly agreeing with a stale fixture.
+
+**That decision had a blind spot, and it was one coherent one.** Several guards in
+`stats.js` and `archive.js` exist for records the *UI cannot produce* — one person on
+both sides of the court, two teams resolving to one side key, a match with no winner —
+and a fixture played through the app structurally cannot reach any of them, so every one
+was carefully commented and none was asserted. Measured: the two per-match double-credit
+guards, `sideRecord`'s same-side check and `summary`'s winner check all survived being
+deleted outright, with 773 tests green. **The fixtures did not have to be hand-written to
+fix it**: `newGame` accepts any lineup and the refusal lives above it in `lineupFaults`,
+so `singles('Neil', 'neil ', …)` still plays its rounds through the real scoring functions
+and only the *lineup* is built by hand. Only `summary`'s winnerless case needs the
+hand-built `result()` helper, and that is the shape `tools/import-legacy.mjs` writes
+anyway. **So a guard here is not untestable for being unreachable by play** — reach for an
+unplayable lineup with real rounds before concluding it is.
+
+**And "the UI cannot produce it" was wrong when it was written, which is the sharper
+lesson.** Two of those four were reachable through the app at the time: the match-names
+editor *warned* about one name on both teams and saved it anyway, and `renamePlayer`
+swept every record with no such check, so merging two spellings of somebody who had faced
+themselves filed exactly that record. All four write paths refuse it now — see
+**Nobody plays themselves** in `.claude/rules/scoring.md` — so the guards protect records
+filed *before* the rule rather than shapes nobody can make. **Before writing "unreachable"
+over a guard, find the write paths and check each one**; a comment asserting it is not
+evidence, and here two of them were the ones that had never been looked at.
+
+`tools/verify-stats.mjs` covers what the
 unit tests can't: that the effect in `App.jsx` fires on the right transitions.
 That is the part which would otherwise either lose every match or file each one
 twice, with the pure helpers passing throughout. It covers the same gap for

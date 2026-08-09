@@ -693,13 +693,26 @@ themselves, correcting the names on them, and marking a player inactive.
   name-folding already is the identity. What it needs is *saying*: the dialog names
   whose history is about to absorb which, and how many matches, since this screen
   can't split them again. Splitting is the per-match edit, one match at a time.
-- **A name on both teams is warned about here, not refused — the opposite of the
-  setup screen, and deliberately.** These are records already filed that way, and
-  the ones most in need of editing are exactly the ones that would be locked: every
-  match played before the setup screen refused the lineup. (The career fold does
-  credit those throws to both sides, and the warning says so rather than pretending
-  otherwise.) See **Nobody can play themselves** under Domain rules for the other
-  half.
+- **A name in two slots is refused here too, and it used to be merely warned about.**
+  The old reasoning was that these are records already filed that way and the ones
+  most in need of editing would be the ones locked — but the edit *is* the fix, so
+  refusing until it is made unlocks nothing and closes the last route to a new such
+  record. `lineupFaults` is called with the draft lineup, so the editor and the setup
+  screen cannot come to disagree about who counts as the same person; only the
+  `twice` half applies to a record, since a singles one legitimately carries an empty
+  second slot. See **Nobody can play themselves** under Domain rules.
+  - **The career rename is the other route and `renameClashes` closes it.** Folding two
+    spellings together is still the point of that dialog — but not when the two have
+    shared a lineup, opponents or partners, because the fold then puts one person in
+    two slots of a match they played. It runs the archive through `renamePlayer` rather
+    than reasoning about it, so what is checked is the rewrite that would happen, and
+    records that *already* clash are excluded — otherwise one of them blocks the rename
+    that would fix it.
+  - **And `validRecord` closes the fourth, the import.** The known cost is that
+    `mergeMatches` drops a bad record silently, so a real match played before the rule
+    disappears from a transfer with nothing said. Accepted deliberately, in exchange for
+    there being no route left; the read-side guards in `stats.js` stay for the records
+    already filed.
 - **`nameKey` lives in `scoring.js` now, not `stats.js`.** Three places need the
   identity rule — the career fold, the archive rewrite and the reducer — and two
   definitions of "same person" is the failure that has no symptom. `BOARD_NAME`

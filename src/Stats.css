@@ -464,9 +464,12 @@
   min-width: 0;
 }
 
+/* `--warn` and not `--caution`, for `.lineup-hint`'s reason: this stopped being a
+   note the moment Save went off until it goes, and the two screens refuse the same
+   lineup for the same reason. */
 .match-names-note {
   margin: 10px 0 0;
-  color: var(--caution);
+  color: var(--warn);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -543,6 +546,20 @@
   color: var(--caution);
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* A merge that will happen is a caution; one that won't is a fault, so it takes
+   the same colour the setup screen's refused lineup does. */
+.rename-refused {
+  color: var(--warn);
+}
+
+/* The field carries the fault as well as the sentence, the way the setup screen's
+   name fields do — one sentence and two boxes otherwise leaves you counting. These
+   have a full border where `.team-name-input` has only an underline. */
+.match-name-input[aria-invalid='true'],
+.rename-input[aria-invalid='true'] {
+  border-color: var(--warn);
 }
 
 .durability {

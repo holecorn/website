@@ -216,6 +216,24 @@ describe('playerStats — doubles attribution', () => {
     // Still threw both rounds, since each round has exactly one thrower.
     expect(rho.rounds).toBe(2);
   });
+
+  // A record filed before the app refused this lineup. There is no route left to a
+  // new one — the setup screen, the match-names editor, the career rename and
+  // `validRecord` all turn it away — so this guard is what the *already filed* ones
+  // are read through, and it stays for exactly that.
+  //
+  // The rounds are still played through the real scoring functions; only the lineup
+  // is built by hand, which is what makes such a record reachable from a fixture at
+  // all. `newGame` accepts any lineup — the refusal lives above it.
+  it('counts somebody on both sides as one match, not a win and a loss', () => {
+    const both = singles('Neil', 'neil ', SWEEP, { id: 'both' });
+    const rows = playerStats([both]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ matches: 1, wins: 1, losses: 0 });
+    expect(rows[0].form).toEqual([true]);
+    // Both teams' rounds still fold in, because they were all thrown by them.
+    expect(rows[0].rounds).toBe(4);
+  });
 });
 
 describe('sideStats', () => {
@@ -288,6 +306,16 @@ describe('sideStats', () => {
   it('drops a side with nobody named rather than collecting them under one', () => {
     const m = result({ players: { a: ['', ''], b: ['Phi', ''] }, final: { a: 12, b: 21 } });
     expect(sideStats([m]).length).toBe(1);
+  });
+
+  // The same record `playerStats` is guarded against, one keying up: both teams
+  // resolve to one side key, and one match must not be that entrant's win and
+  // their loss. One row, not two, and the rounds of both teams under it.
+  it('counts one side on both teams as one match, not a win and a loss', () => {
+    const both = singles('Neil', 'neil ', SWEEP, { id: 'both' });
+    const sides = sideStats([both]);
+    expect(sides.length).toBe(1);
+    expect(sides[0]).toMatchObject({ matches: 1, wins: 1, losses: 0, rounds: 4 });
   });
 });
 
@@ -535,6 +563,15 @@ describe('sideRecord', () => {
     expect(sideRecord(matches, game())).toEqual({ a: 3, b: 0 });
   });
 
+  // Reachable only from a record filed before the app refused this, and here there
+  // is a matching one to count — so without the guard the panel reports somebody
+  // leading themselves 1–0.
+  it('has nothing to report when the same person is on both sides', () => {
+    const played = [singles('Neil', 'neil ', SWEEP, { id: 'both', endedAt: 1 })];
+    const itself = game({ players: { a: ['Neil', 'P2'], b: ['neil ', 'P2'] } });
+    expect(sideRecord(played, itself)).toBeNull();
+  });
+
   // The whole reason this exists rather than filtering headToHead: in doubles the
   // question is whether *this pair* beats *that pair*, and headToHead credits
   // partners individually across four cross-pairs.
@@ -716,6 +753,18 @@ describe('summary', () => {
     const s = summary([timed, untimed]);
     expect(s.matches).toBe(2);
     expect(s.avgDurationMs).toBe(600000);
+  });
+
+  // A winnerless record is refused by tools/import-legacy.mjs and never written by
+  // the app, and `validRecord` still doesn't ask for a winner — the shape it turns
+  // away is a repeated *name*. Nobody was skunked in a match nobody won — and every
+  // such record reads as one, since the absent winner makes `final.a` the loser's
+  // score.
+  it('does not count a match nobody won as a skunk', () => {
+    const drawn = oldSingles('Neil', 'Sigma', { a: 0, b: 21 }, { winner: null });
+    expect(summary([drawn]).skunks).toBe(0);
+    // The same score with a winner is one, so it is the winner doing the work.
+    expect(summary([oldSingles('Neil', 'Sigma', { a: 0, b: 21 })]).skunks).toBe(1);
   });
 
   it('is safe on an empty archive', () => {

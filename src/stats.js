@@ -218,6 +218,9 @@ export function playerStats(matches) {
       return made;
     };
 
+    // One person cannot be credited twice for one match. No route left files a record
+    // like that — see `sideStats` for the four that refuse it — and the ones already
+    // filed are read through this.
     const played = new Set();
     for (const team of TEAMS) {
       for (const { key, name } of participants(match, team)) {
@@ -256,9 +259,11 @@ export function playerStats(matches) {
 export function sideStats(matches) {
   const acc = new Map();
   for (const match of chronological(matches)) {
-    // Which sides this match has already credited. Two teams cannot normally hold the
-    // same side, but an imported record can, and one match must not be a win and a
-    // loss for one entrant — the guard `playerStats` applies per person.
+    // Which sides this match has already credited. Nothing can file a record where
+    // both teams hold one side any more — the setup screen, the match-names editor,
+    // the career rename and `validRecord` all refuse it — but a record filed before
+    // that rule is still in the archive, and one match must not be a win *and* a loss
+    // for one entrant. The guard `playerStats` applies per person, one keying up.
     const credited = new Set();
     for (const team of TEAMS) {
       const names = rosterFor(match, team)
@@ -293,8 +298,8 @@ export function sideStats(matches) {
 //
 // Keyed by team and slot, not by name the way `playerStats` is: within one game
 // the slot *is* the identity, and two teams on one name are two rows, not one.
-// The setup screen refuses to start such a lineup, but an older save or an
-// imported record can still hold one. Nothing here needs the game to be over, so
+// Every route to such a lineup is refused now, but a record filed before that rule
+// is still in the archive. Nothing here needs the game to be over, so
 // there is no win/loss or streak to report as a spurious zero.
 //
 // Except in a casual game, where the slot is *not* an identity — both partners
