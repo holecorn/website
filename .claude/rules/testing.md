@@ -23,6 +23,38 @@ lost acknowledgement, a refused subscription, a half-open socket — are ones a
 real broker will not reproduce on demand. `openScoreboardLink` takes an
 injectable `connect` for exactly this; production never passes it.
 
+`src/useScoreboard.test.js` covers the layer above it, and it is the **only file in
+this project that needs a DOM** — hence the `// @vitest-environment happy-dom`
+docblock and the two devDependencies (`happy-dom`, `@testing-library/react`) that
+exist for it alone. `vitest.config.js` stays `environment: 'node'` for everything
+else. It was written because that hook had no test and **CI executes none of it**:
+every check in `npm run test:browser` runs with the scoreboard off, and the two that
+drive a real publisher are deliberately outside that set because they need a broker.
+So the five debounce timers, the four JSON dedupes, the five `pending*Ref` replays and
+the `{ value }` wrapper were all unexecuted on the path that decides what a board shows
+for a whole game.
+- **The transport is mocked, not faked at the socket**, because the file above already
+  drives the real one. What is left for this one is *when* the hook calls it and with
+  what — so `openScoreboardLink` returns a promise the test resolves by hand, which is
+  the only way to reach the replay paths at all: everything computed before it resolves
+  has nowhere to go but a pending ref.
+- **The `{ value }` assertions are the ones that earn the file.** A computed null is an
+  instruction — clear the retained topic — and a ref holding the payload cannot tell it
+  from "nothing pending yet", so a board reconnecting mid-game sits on the form screen
+  while the score moves underneath it. Unwrapping either ref fails only its own test.
+- **A layout assertion taken at mount cannot see the press.** The first version asserted
+  `sendLayout` after opening the link, which the *replay* answers — so deleting the
+  undebounced press survived it. It rerenders with a changed `config.layout` after the
+  link is open instead, which is why `config` is a prop with a default rather than a
+  constant closed over. Same shape as this file's standing lesson one layer down.
+- Seventeen mutations were run and each of the sixteen that changes behaviour is killed
+  by the assertion aimed at it — the debounce removed, each of the four dedupes dropped,
+  each of the five replays dropped, both `{ value }` wrappers unwrapped, the draw
+  debounced, the unknown layout falling back to `full`, the version guard dropped, and a
+  null lineup skipped as "nothing to send". The seventeenth is equivalent: dropping the
+  `return` after `setSenderOnline` falls through to `msg.payload`, which is `undefined`,
+  which `acceptsUpdate` already refuses.
+
 `src/rules.test.js` is the odd one out: it tests the notes rather than the app. A rule
 file reaches a reader only through its `paths:` frontmatter, and prose and globs drift
 apart in both directions with no symptom either way — the rules simply don't arrive, and

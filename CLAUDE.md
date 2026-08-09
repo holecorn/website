@@ -122,7 +122,9 @@ project dependency. It starts and stops its own preview server.
 - `src/scoreboardLink.js` — the MQTT transport. No React; dynamically imports
   `mqtt` so the client is a separate chunk.
 - `src/useScoreboard.js` — the React glue (`useScoreboardPublisher` for the
-  scoring phone, `useScoreboardDisplay` for the board).
+  scoring phone, `useScoreboardDisplay` for the board). Tested in
+  `src/useScoreboard.test.js`, **the one suite that needs a DOM** — it carries its own
+  `// @vitest-environment happy-dom` and `vitest.config.js` stays on `node`.
 - `src/useWakeLock.js` — keeps a screen awake. Two callers: `?display=1` for the
   whole game, and `App.jsx` for the play screen only. `tools/verify-wakelock.mjs`
   covers both.
