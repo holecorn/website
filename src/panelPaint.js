@@ -36,6 +36,8 @@ export function paintPanel(canvas, fb, cell) {
       ctx.beginPath();
       ctx.arc(x * cell + cell / 2, y * cell + cell / 2, radius, 0, Math.PI * 2);
       if (r || g || b) {
+        // Untransformed on purpose: it reads as a duty figure drawn as an sRGB level, but the
+        // library's CIE1931 curve is within 1.16x of sRGB's, so a gamma step here is a second one.
         ctx.fillStyle = `rgb(${r},${g},${b})`;
         ctx.shadowColor = `rgb(${r},${g},${b})`;
         ctx.shadowBlur = cell;

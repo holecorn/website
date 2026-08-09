@@ -196,6 +196,38 @@ the broker on the LAN.
   deliberate; `boardLiveness()` is the pure version, tested in
   `panelRender.test.js` because the grace has to run from the *drop* — stamping it
   at connect made a long session dim the instant the socket went.
+- **`panelPaint.js` writes the framebuffer byte straight into an sRGB canvas, and that is
+  right rather than a missed gamma step.** It reads like a bug: `LEVEL_STALE` is 60, and
+  60/255 of *duty* is 23.5% of the light where 60/255 of *sRGB* is 4.5% of it, so the
+  emulator looks like it overstates the board's dim about 5x. But nothing drives the panel
+  at a linear duty. `drawPixelRGB888` runs every channel through `lumConvTab`, the
+  library's 16-bit CIE1931 curve, unless `NO_CIE1931` is defined — and it is not, in the
+  header or the sketch. Measured against the table shipped with 3.0.12: `lumConvTab[60]`
+  is 2593 of 65535, and the panel lights eight bit planes off the top eight bits of that
+  (`MASK_OFFSET` is `16 - depth`), so **10 of 255 duty, 3.92%**, against sRGB 60's **4.52%**
+  luminance. **1.15x, not 5x**, and in the direction that makes the emulator slightly
+  *brighter*.
+  - **Per colour it is 0.95x to 1.16x**, which is the figure that matters, because
+    `scaled()` dims in the framebuffer and so each channel is mapped from its own already
+    scaled byte. Luminance-weighted stale-against-live: the marker grey 0.95, green 0.96,
+    red 0.99, blue 1.15, white 1.15, yellow 1.16. `setBrightness8` cannot enter into it —
+    brightness is an OE window applied per row, independent of the pixel data, so it moves
+    both states together.
+  - **What the emulator genuinely cannot show is the banding.** At `LEVEL_STALE` a
+    palette colour's channels land on duties of 1, 3 and 8 of 255, so the board has a
+    handful of levels there where the canvas has smooth ones. That is a real difference
+    and it is the *only* one — so if a stale scene ever needs judging on the hardware, it
+    is quantisation to look for, not brightness.
+  - **The two curves agree because they are two fits of the same thing** — sRGB's ~2.2
+    power and CIE1931's inverse cube root both approximate the eye's response — so this is
+    not a coincidence to be re-derived per level. It also means the reverse worry, that a
+    real brightness problem would be hidden here, is bounded by the same 1.16x.
+  - **Nothing checks it and a check would be worth little.** The fact lives in a
+    third-party table and in the browser's own transfer function, so there is nothing on
+    this side to assert beyond the line being the line — and the change it guards against
+    is a deliberate one someone would make while reading the file, not an accident. The
+    firmware README records the same trap from the other side, where the panel's red was
+    thought to need a gamma table and did not.
 - **How far the display dims is one number on `.display`'s children, and it is pinned as
   the deepest that keeps the digits readable.** A segment is the same hex lit and unlit —
   8% of it when off — so a stale digit's legibility is the gap between two shades of one
