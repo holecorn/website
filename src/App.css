@@ -1098,9 +1098,21 @@
   }
 }
 
+/* The two surfaces that say who won, lifted above the confetti rather than under it: half
+   of 70 pieces are the winning team's colour, over a 56px figure in that same colour.
+   Measured at 24.9% of the digits' ink covered — `.claude/rules/layout.md` has the rest. */
+.scoreboard,
+.winner-banner {
+  position: relative;
+  z-index: 2;
+}
+
+/* `fixed` because this is no longer inside `.callout`: with no positioned ancestor left,
+   `absolute` would measure the document where the pieces' `vh` fall assumes the viewport. */
 .confetti {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  z-index: 1;
   overflow: hidden;
   pointer-events: none;
 }

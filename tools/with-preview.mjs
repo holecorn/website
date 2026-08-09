@@ -29,8 +29,11 @@ const CHECKS = [
   'verify-copy-link.mjs',
   'verify-a11y.mjs',
   'verify-schemes.mjs',
+  // Last because it is the cheapest at ~1s: it freezes the celebration's animations and
+  // steps their clock rather than waiting on them.
+  'verify-celebration.mjs',
 ];
-// Three, not more. The other nine checks are 71s of work between them, so two workers
+// Three, not more. The other ten checks are 72s of work between them, so two workers
 // clear them in ~36s while the tournament is still running — the wall clock is floored at
 // that 52s whatever this is set to, and every extra browser only adds CPU contention to
 // checks that measure rate limits, brightness and text metrics. Measured on a Mac:

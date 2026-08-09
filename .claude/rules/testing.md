@@ -515,6 +515,42 @@ invisible to the unit suite. Before it, the lanes were 24 buttons named `bag hol
   timed out of the whole file instead — the same crash-rather-than-fail the live
   region's `allInnerTexts` avoids.
 
+`tools/verify-celebration.mjs` covers **paint order**, which is a fourth kind of gap: not
+a role, not a number and not a value handed to the wrong component, but which of two
+elements ends up on top. Nothing in the unit suite can see it and nothing in the
+stylesheets can either — the confetti used to be a child of `.callout`, so it inherited
+that overlay's `z-index` and no z-index anywhere was wrong. See **The celebration paints
+behind the result** in `.claude/rules/layout.md` for the constraint and the numbers.
+- **It reads the stacking through `elementsFromPoint`, which returns topmost first**, over
+  a 4px grid across the winning digits' *ink* box — derived from canvas font metrics rather
+  than the element box, because `.score` is 56px of line box and the glyphs fill about two
+  thirds of it. Hit-testing skips `pointer-events: none` and every piece has it, so the
+  check lifts the property for the duration; paint order does not answer to it.
+- **It scans every frame of the crossing rather than picking one, and that is not
+  thoroughness — it is the only way the file is not flaky.** Each piece's delay, duration,
+  drift and rotation are `Math.random()`, so which frame has a piece on the digits differs
+  every run: measured, the crossing is roughly 400–800ms of a 1.7s fall and peaks at 6
+  pieces. It pauses every animation and steps `currentTime` from 250 to 1000ms, which is
+  also why the whole file costs **1.1s** — it never waits on the clock.
+- **The guard is the assertion that earns the file.** A frame with no piece near the digits
+  reports nothing painted over them however the stacking is set up, *including with the
+  confetti deleted outright* — so the first check is that the pieces still fall across
+  them. Four mutations: the header's `z-index` dropped and the component moved back inside
+  `.callout` each fail only the paint-order assertion (all 226–255 samples), deleting the
+  confetti fails only the guard, and the duplicate React key passes clean.
+- **The celebration's own timers are patched out, not waited through.** It clears itself
+  after 2600ms and a frame that has unmounted cannot be measured, so every `setTimeout` of
+  1000ms or more is dropped before the winning round is committed.
+- **It waits on `.confetti-piece`, not on `.winner-banner`, and catches the timeout.** The
+  banner comes straight off the reducer and the callout off an effect, so the banner is a
+  render early and finds nothing; and with the confetti gone, an uncaught wait ends the run
+  in a 30s stack trace instead of letting the guard name the fault — the failure mode
+  `verify-tournament.mjs`'s `open()` and `verify-stats.mjs`'s paging block both record.
+- **Its `console.error` listener cannot see a React warning.** The checks run against the
+  production build, which strips them, so the duplicate-key complaint that the markup split
+  produced is loud in `npm run dev` and silent here. Don't read the listener as covering
+  it — verified by mutation.
+
 **The browser checks take a different branch on the runners than they do locally**
 — `channel: 'chrome'` here, Playwright's bundled Chromium when `CI` is set — so
 passing locally is not evidence they pass in CI. `act` covers that gap for the

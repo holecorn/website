@@ -1027,9 +1027,14 @@ export default function App() {
         </div>
       </dialog>
 
+      {/* Beside the callout rather than inside it, and that is what lets the confetti go
+          behind the score: a child paints at `.callout`'s z-index, which is above
+          everything. Its own key, or React reads two children keyed alike. */}
+      {callout?.win && (
+        <Confetti key={`confetti-${callout.key}`} count={callout.confetti} color={callout.color} />
+      )}
       {callout && (
         <div className="callout" key={callout.key} aria-hidden="true">
-          {callout.win && <Confetti count={callout.confetti} color={callout.color} />}
           <span className="callout-text team-ink" style={{ '--team': callout.color }}>
             {callout.text}
           </span>

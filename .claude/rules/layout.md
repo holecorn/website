@@ -292,6 +292,38 @@ emitted light against reflected glare. It is 230.7 on the light scheme now.
     `Team A` rather than `Blue`. `New game` resets it. Worth knowing before assuming a
     fixture with the old blue is stale.
 
+## The celebration paints behind the result
+
+- **`.scoreboard` and `.winner-banner` carry a `z-index` and the confetti carries a lower
+  one, because the celebration was covering the thing it celebrates.** 70 pieces fall on a
+  skunk and half of them are the winning team's own colour, over a 56px figure in that same
+  colour. Measured at 390x844 on the worst case the app can make — four in the hole twice,
+  24–0, so a skunk *and* a four bagger: a peak of **34 pieces over the header band and 6 on
+  the winning digits' own ink, covering 24.9% of it**, for about 350ms of the 1.7s fall.
+  - **The 2026-08-06 review counted 27 of 70 over "the score band" and that overstates it.**
+    The band is mostly empty: at the worst frame only 6 of those 27 are anywhere near a
+    glyph, which is why the fix is paint order rather than fewer or slower pieces. The band
+    figure is still the right one for the *header*, and the two numbers are not in conflict.
+  - **Neither element gains a background, so nothing is hidden.** They are transparent but
+    for the winner card's `--lift 6%` wash, so the pieces still fall visibly across the
+    band and simply lose where they meet the text. Thinning the confetti or steering it
+    round the header buys the same legibility and costs the celebration; a band the pieces
+    visibly avoid is also a rectangle nobody drew.
+  - **The markup is half of it, and neither half is visible in the other.** `Confetti` used
+    to be a *child* of `.callout`, which is `z-index: 10` — from in there no z-index can put
+    it behind anything, so the lift only works with the component moved out to a sibling.
+    That is also why `.confetti` is `position: fixed` rather than `absolute`: outside
+    `.callout` there is no positioned ancestor, so `absolute` would measure the document
+    where the pieces' `vh` fall assumes the viewport.
+  - **The two siblings must not share a key.** Both are keyed off `callout.key` and React
+    reads them as one children set, so the obvious split gives a duplicate-key warning —
+    which is a `console.error` in `npm run dev` and **nothing at all** in the production
+    build the browser checks run against. Verified by mutation: the duplicate passes
+    `verify-celebration.mjs` clean.
+  - **`.four-bagger` at `z-index: 4` deliberately still wins.** It is `inset: 0` inside
+    `.team-lanes`, so it cannot reach the header, and `.callout`'s own text has to stay
+    above everything — the ordering is confetti 1, result 2, four bagger 4, callout 10.
+
 ## The stats screen's caps
 
 - **The stats screen caps at 1040px, the same number the play screen's wide tier uses**, so

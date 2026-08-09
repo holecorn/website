@@ -83,7 +83,7 @@ is set. Output goes to `tools/out/`, which is gitignored.
 server.** They share nothing that would stop it: each launches its own browser, so
 `localStorage` is per check, the server only serves static files, and `verify-stats.mjs`
 is the only one that writes anything. Three because the wall clock is floored by the
-longest single check — the other nine are 71s between them, so two workers clear them
+longest single check — the other ten are 72s between them, so two workers clear them
 while `verify-tournament.mjs` is still going, and a fourth browser would only add CPU
 contention to checks that measure rate limits, brightness and text metrics. Measured on a
 Mac: serial 123s, at 3 52s, at 6 **54s** — past the floor it gets slower rather than
