@@ -124,6 +124,33 @@ const display = await open('?display=1&', { width: 1280, height: 800 });
     `widths ${rails.map((r) => r.rule).join(',')}`);
   check('and the last is not, which would read as a footer', rails.at(-1).rule === 0,
     `${rails.at(-1).rule}px`);
+  // Who throws first, on the screen a board actually holds while everyone walks to
+  // the boards — the lineup topic is cleared at the first bag, so this is the whole
+  // window in which the marks matter. Which row each lands on is the crossing no unit
+  // test can see: `first` and `round` come off the score payload and the rows off the
+  // lineup one, and only Display.jsx pairs them.
+  const bagRows = await display.evaluate(() =>
+    [...document.querySelectorAll('.form-row')].map((r) => ({
+      name: r.querySelector('.form-name').innerText.trim(),
+      mark: r.querySelector('.thrower.is-first')
+        ? 'first'
+        : r.querySelector('.thrower')
+          ? 'next'
+          : r.querySelector('.thrower-gap')
+            ? 'gap'
+            : 'none',
+    })),
+  );
+  check('the first thrower gets a filled bag',
+    bagRows.filter((r) => r.mark === 'first').map((r) => r.name).join() === 'NEIL',
+    JSON.stringify(bagRows));
+  check('the other player at that end gets a hollow one',
+    bagRows.filter((r) => r.mark === 'next').map((r) => r.name).join() === 'SIGMA',
+    JSON.stringify(bagRows));
+  // Without this the marked rows are the only ones indented, which reads as two of the
+  // four names being wrong rather than as two of them being marked.
+  check('and the far partners reserve the column',
+    bagRows.filter((r) => r.mark === 'gap').length === 2, JSON.stringify(bagRows));
   // The whole point of the override: the scorer chose the score layout and the
   // seven-segment digits must not be on screen at all.
   check('no score digits while the lineup is up', (await display.locator('.seg-digit').count()) === 0);
@@ -151,6 +178,23 @@ await new Promise((r) => setTimeout(r, 2000));
 {
   check('the display form table is gone', (await display.locator('.form-table').count()) === 0);
   check('and the score digits are back', (await display.locator('.seg-digit').count()) === 4);
+  // The same two marks on the score screen, and here the bag has to sit beside the
+  // partner who is up rather than the label — round 2, so slot 0 again. Read as the
+  // text following each mark, which is what makes this an assertion about *which*
+  // player rather than about a mark existing.
+  const scoreMarks = await display.evaluate(() =>
+    [...document.querySelectorAll('.display-team')].map((p) => {
+      const mark = p.querySelector('.thrower');
+      return {
+        filled: mark?.classList.contains('is-first') ?? null,
+        beside: mark?.nextSibling?.textContent?.trim() ?? null,
+      };
+    }),
+  );
+  check('the score screen marks the partner who is up on both sides',
+    scoreMarks.map((m) => m.beside).join() === 'Neil,Sigma', JSON.stringify(scoreMarks));
+  check('filled for the thrower and hollow for the other end',
+    scoreMarks.map((m) => m.filled).join() === 'true,false', JSON.stringify(scoreMarks));
   const caption = await panel.locator('.panel-caption').innerText();
   check('the panel caption is back to the layout', caption.includes('Score only'), caption);
   const panelScoreLit = await litRows(panel);
@@ -220,8 +264,9 @@ await new Promise((r) => setTimeout(r, 1000));
 // looks like a harmless nudge to either buys itself out of the other.
 //
 // The character bound is the one with a rule behind it: **the panel draws 8**, so a
-// tablet that truncated at 8 or fewer would be worse than the LED strip. Nine keeps
-// a character of headroom.
+// tablet that truncated below 8 would be worse than the LED strip. The headroom that
+// used to sit above it is spent — the first-thrower bag is a column on both, and both
+// dropped a character for it. See `.claude/rules/scoreboard.md`.
 //
 // Measured against a two-digit record either side, which is the worst case and the
 // one that bit: at single digits the columns are narrower and more name fits, so a

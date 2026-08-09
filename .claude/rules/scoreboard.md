@@ -183,6 +183,70 @@ the broker on the LAN.
     glyph sizes come from **one** `generate_glyphs.mjs` run — 11x20 is 100mm at
     P5 and 17x30 is 150mm — and the tables are `uint32_t` because 17 columns
     won't fit the `uint16_t` the single-size version used.
+- **Who throws next is marked on every board screen, and `first` was always on the
+  wire** — `scoreboardPayload` has published it since the first version and only the
+  panel read it. The mark is a **bag**: filled for the player throwing first, a hollow
+  outline for the other player at that end. It is `.first-bag` on the phone,
+  `.thrower` in `Display.css` and `drawBag` in `render.h`, one shape across all four
+  surfaces. Nothing new is published for any of it.
+  - **The two panel score layouts rule instead, and that divergence is forced rather
+    than chosen.** In `score` a bag is physically impossible: `SCORE_DIGIT_Y` is 0 and
+    `DIGITS_BIG` is 30 rows of a 32-row panel, so rows 30–31 are all there is and an
+    outline needs three. In `full` it would have to sit beside the partner who is up,
+    which in doubles is *inside* the label after the slash — rendered, `NEIL/■RHO` —
+    and costs a name character on top: `SIGMA/TAU` came back as `SIGMA/TA`. The
+    underline already points at that partner for nothing, so it grew a second form
+    instead: solid for the first thrower, **dashed** for the other end's player, which
+    is the only "hollow" one pixel row can carry. Duty 13.8 → 14.2% (`full`) and
+    13.5 → 13.9% (`score`), and no characters either way.
+  - **A dim mark is out, and that rule already existed**: an unlit-but-not-off LED is
+    indistinguishable from off, which is why a loss pip is a single pixel. So the pair
+    differs in *fill*, never in brightness — the one property that survives from a
+    13px control down to 5x5 pixels.
+  - **Singles gets no second mark**, because there is nobody at that end to tell from
+    the thrower and marking both would only say the two of them are playing. Derived
+    from the label having no ` & ` — the test `winVerb` already makes, so **the payload
+    still carries no `mode`**. `doublesLabels` in `render.h` and `panelRender.js`, and
+    `splitLabel` in `scoring.js` on the app side. A *casual* game reads as singles here
+    whatever the mode, correctly: both partners are published as one colour word.
+  - **The panel's form screen is the one board screen that takes a bag**, and it is the
+    screen that most needed one: the lineup topic is cleared at the first bag, so this
+    is what a board holds for the whole walk to the boards. It costs **one name
+    character on every row** — the column is reserved or the marked rows would be the
+    only ones indented — taking 11 to 10 on an ordinary roster, 9 to 8 at `12-10` and 7
+    to 6 at `120-87`.
+    - **Duty is not the constraint it looks like.** On a sparse roster the screen goes
+      14.6 → 15.6% lit, which reads as spending a third of the margin under
+      `DUTY_CEILING`; on a *dense* one it goes **27.4 → 26.9%**, because the character
+      the column gives up lights more pixels than two bags add. The worst case is the
+      dense one, so the ceiling is further away than before, not nearer.
+    - **It can be drawn with no score message behind it** — unlike the fixture card,
+      which needs `haveState` — and then there is no first thrower to read, so no bags
+      and no reserved column. That is the right answer and it is why the indent is
+      conditional rather than constant.
+  - **On the display the bag is a new column too, and the table had to be re-sized for
+    it.** `--form-size` went `min(8vw, 10.5vh)` → `min(7.8vw, 10.2vh)` and the mark is
+    `0.4em`, both derived from a sweep rather than nudged: at 8vw even a 0.4em mark cuts
+    2 of 4 eight-character names on both portrait iPads, and at 7.5vw the 11in portrait
+    falls to 62.6px against the 65px floor. **7.8vw with a 0.4em mark is the only cell in
+    that grid that clears both** — 65.1px at the binding case with nothing cut.
+    - **The headroom over the panel is gone, and it could not be kept.** The note below
+      picks 9 characters because the panel draws 8; with the bag column the panel draws 8
+      at `12-10` and the display draws 8, so they are level rather than the display being
+      one ahead. Buying the character back needs 7.5vw, which is under the legibility
+      floor on an 11in portrait iPad — so this is a bound that ran out, not a preference.
+    - **The balancing gap follows a *leading* bag only.** The score screen needs the
+      *text* centred over its own digits, so a leading bag is paid for with a trailing
+      gap — measured, 22.5px off without it. The fixture card has nothing underneath, so
+      what should look centred is the mark and the name together, and a gap there pushes
+      the ink **63px** off the card's centre. Hence `balance`, set at the score screen's
+      two call sites and nowhere else. On an odd round the bag is *interior* and needs no
+      gap at all, on either surface.
+    - **The mark is named through `role="img"`, not a `visually-hidden` sibling.** A
+      clipped span is still rendered, so its words come back from `innerText` — inside
+      `.form-name` that put "throws first," in front of every name read off the table,
+      which is how the roster assertion in `verify-form-screen.mjs` found it. `SegNumber`
+      already names itself this way.
 - **The panel emulator deliberately has neither the wake lock nor the
   fullscreen tap**, both of which `?display=1` has. It is a judging tool you look
   at for a few rounds, and a 128x32 strip is not a scoreboard — so a tablet

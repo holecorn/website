@@ -32,6 +32,7 @@ const OWNED = {
   nameKey: 'scoring.js',
   sideKeyOf: 'scoring.js',
   sideLabel: 'scoring.js',
+  splitLabel: 'scoring.js',
   playerLabel: 'scoring.js',
   teamLabel: 'scoring.js',
   winVerb: 'scoring.js',

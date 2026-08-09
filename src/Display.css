@@ -30,6 +30,32 @@
   white-space: nowrap;
 }
 
+/* The first-thrower bag, and the gap that balances it. `.first-bag` in `App.css` is the
+   same mark on the phone and deliberately keeps its own name: every stylesheet is
+   bundled into one file (`main.jsx` imports all three views statically), so one class
+   cannot hold both a 13px control and a board mark sized off the text it sits in.
+   Sized in `em` so it scales with whichever surface draws it — the score screen's name
+   row, a form row, or a fixture card — the way every other dimension in this file does. */
+.thrower {
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-right: 0.14em;
+  border-radius: 0.1em;
+  border: 0.08em solid currentColor;
+  vertical-align: baseline;
+}
+
+.thrower.is-first {
+  background: currentColor;
+}
+
+.thrower-gap {
+  display: inline-block;
+  width: 0.4em;
+  margin-right: 0.14em;
+}
+
 .seg-number {
   display: flex;
   gap: 1.2vmin;
@@ -178,7 +204,7 @@
      because `em` on *this* element resolves against the `font-size` it declares two
      lines down; a custom property has nothing to resolve against. Descendants use `em`
      freely — they refer to a parent's font-size, which is already resolved. */
-  --form-size: min(8vw, 10.5vh);
+  --form-size: min(7.8vw, 10.2vh);
   display: grid;
   /* The name track is `1fr` and the numeric ones `max-content`. That split is the fix
      for a rotation bug, not a preference: the name is the only cell that is clipped
@@ -224,10 +250,16 @@
      Measured worst case (a two-digit record either side, `12-10`), the longest name
      that renders whole: 8 chars at `8.25vw/11vh`, 9 at `8vw/10.5vh`, 10 at
      `7.5vw/10vh`. 11vh is the ceiling — 12vh overflows the viewport in landscape.
-     `8vw/10.5vh` is the pick because **the panel draws 8 characters**, so a tablet
-     that truncated at 8 or fewer would be worse than the LED strip; 9 keeps one
-     character of headroom over it. That lands at 83-108px with 85% of the height
-     filled in landscape.
+     **The first-thrower bag is a fifth column, so each of those figures loses one**,
+     and the size was re-derived by sweeping it against the mark's width rather than
+     nudged: at `8vw` even a 0.4em mark cuts 2 of 4 eight-character names on both
+     portrait iPads, and at `7.5vw` the 11in portrait falls to 62.6px against the 65px
+     legibility floor. `7.8vw/10.2vh` with a 0.4em mark is the only pair clearing both —
+     65.1px at the binding case with nothing cut, 80-105px elsewhere, 87% of the height
+     in landscape. **The panel draws 8 characters**, and with its own bag column it now
+     draws 8 at a two-digit record, so the two are level: a tablet truncating below 8
+     would be worse than the LED strip, and the character of headroom this used to keep
+     over it is spent.
      **Measure, don't nudge.** `.display` is a flex container and bounds the table at
      `vw - 4vmin` whatever `max-width` says, so reading a rendered width gives the
      clamped figure and not the intrinsic one. An earlier version of this comment was

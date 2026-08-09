@@ -722,6 +722,17 @@ the board while the stats screen is still open, which is the window the app's ow
 copy of the archive used to be stale in — see **Editing names** in
 `.claude/rules/archive.md`.
 
+**It is also the only thing that can see the first-thrower bags reach the display**, on
+both the form table and the score screen — `first` and `round` come off the score payload
+and the rows off the lineup one, so which row and which partner each mark lands on is a
+crossing only `Display.jsx` makes. Both assertions read the *name beside the mark* rather
+than a count, which is what makes them about which player: verified by mutation, pointing
+the bag at the partner who is **not** up fails only the score-screen one (`Rho`, `Tau`
+instead of `Neil`, `Sigma`), and marking the second thrower filled fails only the three
+that tell the two shapes apart. The panel's half is pinned by the pixel check instead, in
+`test_render.cpp` — where `drawBag` counting `BAG*BAG` against its own hollow edge is what
+stops "is something drawn" passing with two of either.
+
 **It is also where the display's form-table *layout* is asserted, and nothing in CI
 covers that** — the reach that caught the 12em cap, the record never wrapping, the
 rotation block, and now the rail under each lane. Not a choice: the table only exists

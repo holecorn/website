@@ -613,20 +613,41 @@
   min-width: 0;
 }
 
+/* Hollow rather than dashed, because this mark is now shared with the board and the LED
+   panel and one of the three cannot draw a dash: `?display=1` scales it off the text it
+   sits in (`.thrower` in `Display.css`), and the panel's is 5x5 pixels, where a dashed
+   outline is two lit corners. A dim one is out for the same reason a loss pip is a single
+   pixel — an unlit-but-not-off LED reads as off — so the pair differs in *fill*, which
+   survives every size.
+   Grey by default, because on the name fields a bag is drawn for every slot and the far
+   partner's is a *control* — press it and they open, which swaps their pair's ends —
+   rather than a report of who is up. The board and the panel leave that player unmarked
+   altogether, so grey is the nearest a pressable control gets to absent. */
 .first-bag {
   flex: none;
   width: 13px;
   height: 13px;
   padding: 0;
   border-radius: 3px;
-  border: 1.5px dashed var(--muted);
+  border: 1.5px solid var(--muted);
   background: transparent;
   opacity: 0.5;
   transition: opacity 0.15s;
 }
 
+/* The two players at the throwing end, which is who the board and the panel mark — so
+   these take the team's colour, as they do there. One class drives both the colour and
+   the weight rather than a class and an inline `--team` that have to agree.
+   0.8 is a measured floor, not a taste: at the 0.5 the grey uses, the outline composites
+   to **2.15:1** on `--panel` against the 3:1 a graphic this size wants — dimmer than the
+   grey it replaced (2.41), which is the opposite of the point. 0.8 gives 4.09 (red) and
+   4.27 (blue), and the filled bag above is still plainly the stronger of the two. */
+.first-bag.at-throwing {
+  border-color: var(--team-accent);
+  opacity: 0.8;
+}
+
 .first-bag.is-first {
-  border-style: solid;
   background: var(--team-accent);
   border-color: var(--team-accent);
   opacity: 1;

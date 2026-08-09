@@ -11,6 +11,7 @@ import {
   newGame,
   playerLabel,
   sideLabel,
+  splitLabel,
   teamLabel,
   winVerb,
   setFirst,
@@ -491,6 +492,29 @@ describe('sideLabel', () => {
 
   it('does not fall over on a missing list', () => {
     expect(sideLabel(undefined)).toBe('');
+  });
+});
+
+// The board marks the partner who is up, so it has to divide a label the same way
+// `splitPair` in render.h does — and null is what makes singles the case with no
+// second mark, which is the only thing telling the two apart without a mode field.
+describe('splitLabel', () => {
+  it('divides a pair and refuses a single name', () => {
+    expect(splitLabel('Rho & Tau')).toEqual(['Rho', 'Tau']);
+    expect(splitLabel('Rho')).toBeNull();
+  });
+
+  it('is exact for a name with an ampersand in it, because sideLabel collapsed it', () => {
+    expect(splitLabel(sideLabel(['Ben & Jerry']))).toBeNull();
+    expect(splitLabel(sideLabel(['Ben & Jerry', 'Tau']))).toEqual(['Ben&Jerry', 'Tau']);
+  });
+
+  it('splits on the first join, as the firmware does', () => {
+    expect(splitLabel('A & B & C')).toEqual(['A', 'B & C']);
+  });
+
+  it('does not fall over on a missing label', () => {
+    expect(splitLabel(undefined)).toBeNull();
   });
 });
 

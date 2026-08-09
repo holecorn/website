@@ -77,6 +77,25 @@ static const int ROUND_Y = DIGIT_Y + 2;
 static const int TARGET_Y = DIGIT_Y + 11;
 static const int UNDERLINE_Y = FONT_H + 1;
 
+// Which mark a side gets. RULE_NEXT is the player throwing after the first one from
+// the same end, which only doubles has — in singles there is nobody at that end to
+// tell from the thrower, so the second mark would only say the two of them are
+// playing. Read off the label having a join, the same test winVerb makes on the app
+// side, because the payload deliberately carries no mode.
+static const int RULE_NONE = 0;
+static const int RULE_FIRST = 1;
+static const int RULE_NEXT = 2;
+
+// A cornhole bag, filled for the player throwing first and an outline for the other.
+// Only the form screen has a row to spare for one: the full layout would have to put
+// it beside the partner who is up, which in doubles is *inside* the label after the
+// slash and costs a name character on top ("SIGMA/TAU" came back as "SIGMA/TA"), and
+// the score layout has rows 30-31 free where an outline needs three. Both of those
+// rule instead. A dim bag is out for the reason a loss pip is a single pixel — an
+// unlit-but-not-off LED reads as off — so the two differ in fill, not brightness.
+static const int BAG = 5;
+static const int BAG_ADVANCE = BAG + 1;
+
 // ---------------------------------------------------- score layout geometry --
 //
 // No names, so the digits take all 32 rows bar the rule: 30px is 150mm at P5
@@ -376,6 +395,23 @@ void drawRule(Canvas& c, int x0, int x1, int y, Rgb color) {
   for (int x = x0; x < x1; x++) c.px(x, y, color.r, color.g, color.b);
 }
 
+// Every other pixel — the only "hollow" one row can carry, which is what the score
+// layout has to work with.
+template <typename Canvas>
+void drawDashedRule(Canvas& c, int x0, int x1, int y, Rgb color) {
+  for (int x = x0; x < x1; x += 2) c.px(x, y, color.r, color.g, color.b);
+}
+
+template <typename Canvas>
+void drawBag(Canvas& c, int x, int y, Rgb color, bool filled) {
+  for (int dy = 0; dy < BAG; dy++) {
+    for (int dx = 0; dx < BAG; dx++) {
+      const bool edge = dx == 0 || dy == 0 || dx == BAG - 1 || dy == BAG - 1;
+      if (filled || edge) c.px(x + dx, y + dy, color.r, color.g, color.b);
+    }
+  }
+}
+
 template <typename Canvas>
 void drawBlock(Canvas& c, int x, int y, int w, int h, Rgb color) {
   for (int dy = 0; dy < h; dy++)
@@ -514,7 +550,7 @@ inline bool labelPart(const char* fitted, int joinAt, int which, int& start, int
 
 template <typename Canvas>
 void drawSide(Canvas& c, const char* name, int joinAt, const char* pair, int pairX,
-              int regionX, Rgb color, bool showScore, bool throwsFirst, int upPartner) {
+              int regionX, Rgb color, bool showScore, int rule, int upPartner) {
   const int w = textWidth(name, NAME_CHARS);
   int nx = regionX + (NAME_REGION_W - w) / 2;
   if (nx < 0) nx = 0;
@@ -523,7 +559,7 @@ void drawSide(Canvas& c, const char* name, int joinAt, const char* pair, int pai
   // Ruled rather than flagged with a glyph, which would cost a character. In
   // doubles only the partner who is up: ruling the whole label would say two
   // people are throwing.
-  if (throwsFirst) {
+  if (rule != RULE_NONE) {
     int start = 0;
     int len = cStrLen(name);
     if (len > NAME_CHARS) len = NAME_CHARS;
@@ -536,7 +572,8 @@ void drawSide(Canvas& c, const char* name, int joinAt, const char* pair, int pai
     }
     const int x0 = nx + start * FONT_ADVANCE;
     const int x1 = x0 + len * FONT_ADVANCE - 1;  // matches textWidth
-    drawRule(c, x0, x1, UNDERLINE_Y, color);
+    if (rule == RULE_FIRST) drawRule(c, x0, x1, UNDERLINE_Y, color);
+    else drawDashedRule(c, x0, x1, UNDERLINE_Y, color);
   }
   if (!showScore) return;
   drawPair(c, pair, pairX, DIGIT_Y, color, DIGITS_SMALL);
@@ -578,6 +615,24 @@ void drawMarkers(Canvas& c, const BoardState& s, Rgb grey, int roundY, int targe
 // rather than published, because the app derives it the same way.
 inline int upPartnerFor(const BoardState& s) { return s.round % 2; }
 
+// A pair of names is a doubles game — the same test winVerb makes on the app side,
+// which is why the payload needs no mode. A casual game reads as singles here
+// whatever the mode, and correctly: both partners are published as one colour word,
+// so there is no second player on the board to mark.
+inline bool doublesLabels(const BoardState& s) {
+  int firstLen;
+  const char* second;
+  return splitPair(s.teamA, firstLen, second) || splitPair(s.teamB, firstLen, second);
+}
+
+// Both score layouts mark the side throwing first, and in doubles the one throwing
+// after them from the same end.
+inline int ruleFor(const BoardState& s, char side) {
+  if (s.winner != 0 || s.first == 0) return RULE_NONE;
+  if (s.first == side) return RULE_FIRST;
+  return doublesLabels(s) ? RULE_NEXT : RULE_NONE;
+}
+
 template <typename Canvas>
 void drawFull(Canvas& c, const BoardState& s, uint8_t level, bool blinkOn) {
   char digits[5];
@@ -588,12 +643,12 @@ void drawFull(Canvas& c, const BoardState& s, uint8_t level, bool blinkOn) {
   const int joinB = fitLabel(s.teamB, nameB, NAME_CHARS + 1);
   const int upPartner = upPartnerFor(s);
 
-  // Once the game is won nobody is throwing, so the rule comes off.
+  // Once the game is won nobody is throwing, so the rules come off.
   drawSide(c, nameA, joinA, digits, LEFT_X, 0, scaled(s.colorA, level),
-           !(s.winner == 'a' && !blinkOn), s.winner == 0 && s.first == 'a', upPartner);
+           !(s.winner == 'a' && !blinkOn), ruleFor(s, 'a'), upPartner);
   drawSide(c, nameB, joinB, digits + 2, RIGHT_X, PANEL_W - NAME_REGION_W,
            scaled(s.colorB, level), !(s.winner == 'b' && !blinkOn),
-           s.winner == 0 && s.first == 'b', upPartner);
+           ruleFor(s, 'b'), upPartner);
 
   const Rgb grey = scaled(MARKER_COLOR, level);
 
@@ -617,11 +672,19 @@ void drawScore(Canvas& c, const BoardState& s, uint8_t level, bool blinkOn) {
     drawPair(c, digits + 2, SCORE_RIGHT_X, SCORE_DIGIT_Y, colorB, DIGITS_BIG);
   }
 
-  if (s.winner == 0 && s.first == 'a') {
+  // No names here to underline, so the rules go under the digit pairs — and no room
+  // for a bag either: DIGITS_BIG is 30 rows of a 32-row panel.
+  const int ruleA = ruleFor(s, 'a');
+  const int ruleB = ruleFor(s, 'b');
+  if (ruleA == RULE_FIRST) {
     drawRule(c, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorA);
+  } else if (ruleA == RULE_NEXT) {
+    drawDashedRule(c, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorA);
   }
-  if (s.winner == 0 && s.first == 'b') {
+  if (ruleB == RULE_FIRST) {
     drawRule(c, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorB);
+  } else if (ruleB == RULE_NEXT) {
+    drawDashedRule(c, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorB);
   }
 
   drawMarkers(c, s, scaled(MARKER_COLOR, level), SCORE_ROUND_Y, SCORE_TARGET_Y);
@@ -684,12 +747,33 @@ void drawForm(Canvas& c, const BoardState& s, const LineupState& l, uint8_t leve
   const int y0 = (PANEL_H - l.count * FORM_ROW_H) / 2;
   const FormLayout f = formLayout(l);
 
+  // Rows are in slot order, so a slot index is a row index. This is the one screen
+  // that can be drawn with no score message behind it, and then there is nobody to
+  // mark — the lineup topic carries no first thrower and deliberately never will.
+  const int half = l.count / 2;
+  const int up = upPartnerFor(s);
+  const bool marked = s.first != 0 && s.winner == 0;
+  const int firstRow = marked ? (s.first == 'a' ? 0 : half) + up : -1;
+  // Four rows is doubles; two is the singles case that gets no second mark, the same
+  // rule the score layouts read off the label.
+  const int nextRow = marked && l.count == 4 ? (s.first == 'a' ? half : 0) + up : -1;
+  // Reserved on every row, or the marked one would be the only name indented. The
+  // cost is a name character: 11 to 10 on an ordinary roster, 9 to 8 at a two-digit
+  // record and 7 to 6 at a three-digit one. Duty is not the constraint it looks like
+  // — measured on a dense roster the screen comes out *less* lit with the bags than
+  // without (27.4% to 26.9%), because the character given up costs more pixels than
+  // two bags add.
+  const int indent = marked ? BAG_ADVANCE : 0;
+  const int nameChars = f.nameChars - (marked ? 1 : 0);
+
   for (int i = 0; i < l.count && i < LINEUP_MAX; i++) {
     const LineupRow& r = l.rows[i];
     const Rgb color = i < l.count / 2 ? colorA : colorB;
     const int y = y0 + i * FORM_ROW_H;
 
-    drawText(c, r.name, 0, y, color, f.nameChars);
+    if (i == firstRow) drawBag(c, 0, y + 1, color, true);
+    else if (i == nextRow) drawBag(c, 0, y + 1, color, false);
+    drawText(c, r.name, indent, y, color, nameChars);
 
     char record[FORM_WL_MAX + 1];
     formatRecord(r.wins, r.losses, record);

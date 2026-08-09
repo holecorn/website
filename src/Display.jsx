@@ -11,7 +11,7 @@ import {
   saveScoreboardConfig,
   segmentDigits,
 } from './scoreboard.js';
-import { DEFAULT_COLORS, winVerb } from './scoring.js';
+import { DEFAULT_COLORS, TEAM_JOIN, splitLabel, winVerb } from './scoring.js';
 import { DIGIT_VIEWBOX, SEGMENTS, litSegments } from './segments.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import { useWakeLock } from './useWakeLock.js';
@@ -73,6 +73,73 @@ function SegNumber({ value, color, places = 2, label, hollow }) {
         <Digit key={i} char={char} hollow={hollow} />
       ))}
     </div>
+  );
+}
+
+// Who throws the next bag, and who throws after them from the same end. A filled bag
+// for the first and a hollow one for the other: the phone's `.first-bag` at board
+// scale, so the setup screen, the board and the LED panel all mark it the same way.
+// The panel's two score layouts rule the name or the digits instead — a bag costs a
+// name character there, and the `score` layout has two spare rows where an outline
+// needs three — but every screen that can carry a bag carries this one.
+//
+// **Singles has no second mark.** With one player a side there is nobody at that end
+// to tell from the thrower, so a mark on both would only say the two of them are
+// playing. Read off the label rather than a `mode` field, the test `winVerb` already
+// makes, because the payload deliberately carries no mode.
+//
+// Named through `role="img"` rather than a `visually-hidden` sibling, which is what
+// `SegNumber` already does: a clipped span is still *rendered*, so its words come back
+// from `innerText` — inside `.form-name` that put "throws first," in front of every
+// name any check or copy-paste reads off the table.
+function Bag({ first }) {
+  return (
+    <span
+      className={`thrower${first ? ' is-first' : ''}`}
+      role="img"
+      aria-label={first ? 'throws first' : 'throws next'}
+    />
+  );
+}
+
+// The gap keeps the name centred over its own digits: the bag is drawn before the
+// text, so without it the label sits half a token off. Measured on an 11in iPad,
+// 22.5px, which is why it is not left to look after itself.
+const BagGap = () => <span className="thrower-gap" aria-hidden="true" />;
+
+// `mark` is 'first', 'next' or null. In doubles the bag goes beside the partner who
+// is up rather than the whole label, which is the same half `render.h` underlines.
+//
+// `balance` is what the score screen needs and the fixture card does not: there the
+// label sits over its own digits, so the *text* has to stay centred and a leading bag
+// is paid for with a trailing gap. On a card there is nothing underneath, so what
+// should look centred is the mark and the name together — a gap there pushes the ink
+// half its own width off the card's centre.
+function SideName({ label, up, mark, balance = false }) {
+  const parts = splitLabel(label);
+  if (!parts) {
+    if (!mark) return label;
+    return (
+      <>
+        <Bag first={mark === 'first'} />
+        {label}
+        {balance && <BagGap />}
+      </>
+    );
+  }
+  return (
+    <>
+      {parts.map((text, i) => (
+        <span key={i}>
+          {i > 0 && TEAM_JOIN}
+          {mark && i === up && <Bag first={mark === 'first'} />}
+          {text}
+        </span>
+      ))}
+      {/* Only a *leading* bag needs balancing. On an odd round it sits between the two
+          names, where it displaces nothing. */}
+      {balance && mark && up === 0 && <BagGap />}
+    </>
   );
 }
 
@@ -138,6 +205,17 @@ export default function Display() {
   const colorA = payload?.colorA ?? DEFAULT_COLORS.a;
   const colorB = payload?.colorB ?? DEFAULT_COLORS.b;
   const stale = status !== 'connected' || !senderOnline;
+  // Which partner is up, the way `upPartnerFor` in render.h and `activeIdx` in App.jsx
+  // both derive it — slot 0 throws even rounds, so nothing is published for this.
+  const upPartner = (payload?.round ?? 0) % 2;
+  const doubles = Boolean(splitLabel(payload?.teamA) || splitLabel(payload?.teamB));
+  // Once the game is won nobody is throwing, so the marks come off — the rule the
+  // panel's underline already follows.
+  const throwerMark = (side) => {
+    if (!payload?.first || payload.winner) return null;
+    if (payload.first === side) return 'first';
+    return doubles ? 'next' : null;
+  };
   const winnerLabel = payload?.winner
     ? (payload.winner === 'a' ? payload.teamA : payload.teamB)
     : '';
@@ -192,6 +270,8 @@ export default function Display() {
           sides={[payload?.teamA ?? 'Team A', payload?.teamB ?? 'Team B']}
           colorA={colorA}
           colorB={colorB}
+          up={upPartner}
+          marks={[throwerMark('a'), throwerMark('b')]}
         />
         <p className="display-status">{statusText}</p>
       </div>
@@ -206,7 +286,12 @@ export default function Display() {
     >
       <div className="display-side">
         <p className="display-team" style={{ color: colorA }}>
-          {payload?.teamA ?? 'Team A'}
+          <SideName
+            label={payload?.teamA ?? 'Team A'}
+            up={upPartner}
+            mark={throwerMark('a')}
+            balance
+          />
         </p>
         <SegNumber
           value={payload?.a ?? 0}
@@ -230,7 +315,12 @@ export default function Display() {
 
       <div className="display-side">
         <p className="display-team" style={{ color: colorB }}>
-          {payload?.teamB ?? 'Team B'}
+          <SideName
+            label={payload?.teamB ?? 'Team B'}
+            up={upPartner}
+            mark={throwerMark('b')}
+            balance
+          />
         </p>
         <SegNumber
           value={payload?.b ?? 0}
@@ -296,9 +386,22 @@ function DrawCard({ card }) {
   );
 }
 
-function FormTable({ lineup, tie, sides, colorA, colorB }) {
+function FormTable({ lineup, tie, sides, colorA, colorB, up, marks }) {
   const rows = lineup?.rows ?? [];
   const half = rows.length / 2;
+  // Rows arrive in lane order — team A's slots then team B's — so a slot index is a
+  // row index, and the partner who is up is the end play starts from. Pre-game, so
+  // `up` is 0 in practice; derived anyway rather than assumed, since the same rule
+  // decides it everywhere else.
+  const rowFor = (side) => (side === 0 ? 0 : half) + up;
+  const marked = (i) => {
+    if (marks[0] && i === rowFor(0)) return marks[0];
+    if (marks[1] && i === rowFor(1)) return marks[1];
+    return null;
+  };
+  // A board that has been sent a roster but no score has nobody to mark, and there
+  // the column would only be an indent on every row.
+  const anyMark = marks.some(Boolean);
   return (
     <div className={`form-table${rows.length === 0 ? ' is-card' : ''}`}>
       {/* The tie replaces the title rather than sitting beside it: "Form" is the
@@ -324,7 +427,7 @@ function FormTable({ lineup, tie, sides, colorA, colorB }) {
         sides.map((side, i) => (
           <div className="form-row" key={i}>
             <span className="form-name form-side" style={{ color: i === 0 ? colorA : colorB }}>
-              {side}
+              <SideName label={side} up={up} mark={marks[i]} />
             </span>
           </div>
         ))
@@ -346,6 +449,9 @@ function FormTable({ lineup, tie, sides, colorA, colorB }) {
         return (
           <div className="form-row" key={i}>
             <span className="form-name" style={{ color }}>
+              {/* The gap on an unmarked row is what keeps the names in one column;
+                  without it a marked row is the only one indented. */}
+              {marked(i) ? <Bag first={marked(i) === 'first'} /> : anyMark && <BagGap />}
               {row.n}
             </span>
             <span className="form-record">

@@ -292,6 +292,16 @@ export function sideLabel(names) {
   return (names ?? []).map(withoutJoin).join(TEAM_JOIN);
 }
 
+// The two halves of a joined label, or null when it names one person. `splitPair` in
+// render.h does the same over bytes, for a board that shortens each half; this is the
+// rule for a screen that draws the label whole. Exact rather than a guess for the same
+// reason `winVerb` is: `sideLabel` keeps the join out of the names it joins.
+export function splitLabel(label) {
+  const text = String(label ?? '');
+  const at = text.indexOf(TEAM_JOIN);
+  return at < 0 ? null : [text.slice(0, at), text.slice(at + TEAM_JOIN.length)];
+}
+
 // Display name for a team: the single player, or both partners in doubles.
 export function teamLabel(game, team) {
   // One label per team in casual even in doubles: the colour is the whole

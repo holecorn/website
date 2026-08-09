@@ -65,6 +65,17 @@ const SCORE_ROUND_Y = 6;
 const SCORE_TARGET_Y = 17;
 const SCORE_RULE_Y = PANEL_H - 1;
 
+// Which mark a side gets: none, the player throwing first, or the other player at
+// that end. Singles has no `RULE_NEXT` — there is nobody at that end to tell from the
+// thrower — and that is read off the label rather than a mode, which the payload
+// deliberately does not carry.
+const RULE_NONE = 0;
+const RULE_FIRST = 1;
+const RULE_NEXT = 2;
+
+const BAG = 5;
+const BAG_ADVANCE = BAG + 1;
+
 const FORM_ROW_H = FONT_H + 1;
 const FORM_COL_GAP = 3;
 const FORM_PIPS = 5;
@@ -245,6 +256,25 @@ function drawPair(fb, pair, x, y, color, font) {
 
 function drawRule(fb, x0, x1, y, color) {
   for (let x = x0; x < x1; x += 1) px(fb, x, y, color);
+}
+
+// Every other pixel. Both score layouts mark the player throwing next as well as the
+// one throwing first, and this is the only "hollow" a single row can carry — the
+// `score` layout has two spare rows under 30px digits, where an outline needs three.
+function drawDashedRule(fb, x0, x1, y, color) {
+  for (let x = x0; x < x1; x += 2) px(fb, x, y, color);
+}
+
+// A bag, 5x5: filled for the player throwing first and an outline for the other
+// player at that end. The form screen has the row to carry one where the score
+// layouts do not, and it costs a name character there — see render.h.
+function drawBag(fb, x, y, color, filled) {
+  for (let dy = 0; dy < BAG; dy += 1) {
+    for (let dx = 0; dx < BAG; dx += 1) {
+      const edge = dx === 0 || dy === 0 || dx === BAG - 1 || dy === BAG - 1;
+      if (filled || edge) px(fb, x + dx, y + dy, color);
+    }
+  }
 }
 
 function drawBlock(fb, x, y, w, h, color) {
@@ -521,13 +551,13 @@ function labelPart(fitted, joinAt, which) {
   return len > 0 ? { start, len } : null;
 }
 
-function drawSide(fb, name, joinAt, pair, pairX, regionX, color, showScore, throwsFirst, upPartner) {
+function drawSide(fb, name, joinAt, pair, pairX, regionX, color, showScore, rule, upPartner) {
   const w = textWidth(name, NAME_CHARS);
   let nx = regionX + idiv(NAME_REGION_W - w, 2);
   if (nx < 0) nx = 0;
   if (nx + w > PANEL_W) nx = PANEL_W - w;
   drawText(fb, name, nx, NAME_Y, color, NAME_CHARS);
-  if (throwsFirst) {
+  if (rule !== RULE_NONE) {
     let start = 0;
     let len = Math.min(name.length, NAME_CHARS);
     const part = labelPart(name, joinAt, upPartner);
@@ -536,10 +566,28 @@ function drawSide(fb, name, joinAt, pair, pairX, regionX, color, showScore, thro
       len = part.len;
     }
     const x0 = nx + start * FONT_ADVANCE;
-    drawRule(fb, x0, x0 + len * FONT_ADVANCE - 1, UNDERLINE_Y, color);
+    const x1 = x0 + len * FONT_ADVANCE - 1;
+    if (rule === RULE_FIRST) drawRule(fb, x0, x1, UNDERLINE_Y, color);
+    else drawDashedRule(fb, x0, x1, UNDERLINE_Y, color);
   }
   if (!showScore) return;
   drawPair(fb, pair, pairX, DIGIT_Y, color, GLYPH_SMALL);
+}
+
+// A pair of names is a doubles game, which is the same test `winVerb` makes and is
+// why the payload needs no mode. A casual game reads as singles here whatever the
+// mode, correctly: both partners are published as one colour word, so there is no
+// second player on the board to mark.
+function doublesLabels(s) {
+  return splitPair(s.teamA) !== null || splitPair(s.teamB) !== null;
+}
+
+// Both score layouts mark the side throwing first, and in doubles the one throwing
+// after them from the same end.
+function ruleFor(s, side) {
+  if (s.winner !== null || s.first === null) return RULE_NONE;
+  if (s.first === side) return RULE_FIRST;
+  return doublesLabels(s) ? RULE_NEXT : RULE_NONE;
 }
 
 // The round marker and target line, which both layouts carry — only their rows
@@ -572,12 +620,12 @@ function drawFull(fb, s, level, blinkOn) {
   const b = fitLabel(s.teamB, NAME_CHARS + 1);
   const upPartner = s.round % 2;
 
-  // Once the game is won nobody is throwing, so the rule comes off.
+  // Once the game is won nobody is throwing, so the rules come off.
   drawSide(fb, a.bytes, a.joinAt, digits, LEFT_X, 0, scaled(s.colorA, level),
-    !(s.winner === 'a' && !blinkOn), s.winner === null && s.first === 'a', upPartner);
+    !(s.winner === 'a' && !blinkOn), ruleFor(s, 'a'), upPartner);
   drawSide(fb, b.bytes, b.joinAt, digits.subarray(2), RIGHT_X, PANEL_W - NAME_REGION_W,
     scaled(s.colorB, level), !(s.winner === 'b' && !blinkOn),
-    s.winner === null && s.first === 'b', upPartner);
+    ruleFor(s, 'b'), upPartner);
 
   const grey = scaled(MARKER_COLOR, level);
   drawText(fb, VERSUS, idiv(PANEL_W - FONT_W, 2), NAME_Y, grey, 1);
@@ -596,11 +644,17 @@ function drawScore(fb, s, level, blinkOn) {
     drawPair(fb, digits.subarray(2), SCORE_RIGHT_X, SCORE_DIGIT_Y, colorB, GLYPH_BIG);
   }
 
-  if (s.winner === null && s.first === 'a') {
-    drawRule(fb, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorA);
+  // No names here to underline, so the rules go under the digit pairs — and no room
+  // for a bag either: DIGITS_BIG is 30 rows of a 32-row panel.
+  const ruleA = ruleFor(s, 'a');
+  const ruleB = ruleFor(s, 'b');
+  if (ruleA !== RULE_NONE) {
+    const draw = ruleA === RULE_FIRST ? drawRule : drawDashedRule;
+    draw(fb, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorA);
   }
-  if (s.winner === null && s.first === 'b') {
-    drawRule(fb, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorB);
+  if (ruleB !== RULE_NONE) {
+    const draw = ruleB === RULE_FIRST ? drawRule : drawDashedRule;
+    draw(fb, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W, SCORE_RULE_Y, colorB);
   }
 
   drawMarkers(fb, s, scaled(MARKER_COLOR, level), SCORE_ROUND_Y, SCORE_TARGET_Y);
@@ -642,13 +696,29 @@ function drawForm(fb, s, l, level) {
   const grey = scaled(MARKER_COLOR, level);
   const y0 = idiv(PANEL_H - l.count * FORM_ROW_H, 2);
   const f = formLayout(l);
+  const half = idiv(l.count, 2);
+  // Rows are in slot order, so a slot index is a row index. Nothing to mark on a board
+  // that has a roster but no score behind it, which is the one screen that can be drawn
+  // without a score message.
+  const up = s.round % 2;
+  const marked = s.first !== null && s.winner === null;
+  const firstRow = marked ? (s.first === 'a' ? 0 : half) + up : -1;
+  // A four-row lineup is doubles; a two-row one is the singles case that gets no
+  // second mark, the same rule the score layouts read off the label.
+  const nextRow = marked && l.count === 4 ? (s.first === 'a' ? half : 0) + up : -1;
+  // Reserved on every row or the marked one would be the only name indented. Costs a
+  // name character: 11 to 10 on an ordinary roster, 7 to 6 at a three-digit record.
+  const indent = marked ? BAG_ADVANCE : 0;
+  const nameChars = f.nameChars - (marked ? 1 : 0);
 
   for (let i = 0; i < l.count && i < LINEUP_MAX; i += 1) {
     const r = l.rows[i];
     const color = i < idiv(l.count, 2) ? colorA : colorB;
     const y = y0 + i * FORM_ROW_H;
 
-    drawText(fb, r.name, 0, y, color, f.nameChars);
+    if (i === firstRow) drawBag(fb, 0, y + 1, color, true);
+    else if (i === nextRow) drawBag(fb, 0, y + 1, color, false);
+    drawText(fb, r.name, indent, y, color, nameChars);
     drawTextRight(fb, formatRecord(r.wins, r.losses), f.wlRight, y, grey, f.wlChars);
     if (hasRate(r)) {
       drawTextRight(fb, formatTenths(r.ppr), f.pprRight, y, grey, f.pprChars);

@@ -1122,8 +1122,10 @@ function TeamsFields({
                     {onSetFirst ? (
                       <button
                         type="button"
-                        className={`first-bag${first ? ' is-first' : ''}`}
-                        style={first ? { '--team': game.colors[team] } : undefined}
+                        className={`first-bag${i === 0 ? ' at-throwing' : ''}${
+                          first ? ' is-first' : ''
+                        }`}
+                        style={{ '--team': game.colors[team] }}
                         onClick={() => onSetFirst(team, i)}
                         aria-label={`${name} throws first`}
                         aria-pressed={first}
@@ -1309,8 +1311,8 @@ function TeamScore({ players, activeIdx, score, color, winner, first }) {
             <div className={`name-row${benched ? ' benched' : ''}`} key={i}>
               {active ? (
                 <span
-                  className={`first-bag${first ? ' is-first' : ''}`}
-                  style={first ? { '--team': color } : undefined}
+                  className={`first-bag at-throwing${first ? ' is-first' : ''}`}
+                  style={{ '--team': color }}
                   aria-hidden="true"
                   title="Throws first"
                 />

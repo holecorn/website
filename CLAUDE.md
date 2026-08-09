@@ -183,6 +183,16 @@ project dependency. It starts and stops its own preview server.
   return to `unthrown` (`setBag` enforces this).
 - **First thrower:** the team that scored last round throws first next; unchanged
   on a wash (tie). Derived through `endRound`/`undoRound`, not free-floating.
+  - **A bag marks it on every surface that has room for one**, filled for the player
+    throwing first and hollow for the other player at that end — the setup screen, the
+    play header, `?display=1` and the panel's form screen. The panel's two score
+    layouts rule the name or the digits instead, because a bag does not fit there; the
+    reasons are measured in `.claude/rules/scoreboard.md`. **A dim mark is never the
+    other half of the pair** — an unlit LED reads as off — so the two differ in fill.
+  - **Singles gets no second mark, and that is read off the label rather than the
+    mode.** `splitLabel` finding no join is what says singles, the same test `winVerb`
+    makes, so **the scoreboard payload still carries no `mode`**. A casual game reads as
+    singles here whatever the mode, correctly: both partners publish as one colour word.
 - **Where people stand is derived, not stored.** `startSide` anchors it and the rest falls
   out of `rounds.length`, so it reverts with `undoRound` for free, the same as the first
   thrower. `courtPositions()` in `scoring.js` owns it.
@@ -368,6 +378,10 @@ What constrains code outside those files:
 - **`stats` is only reachable from `setup`, and the archive depends on it.** If Stats
   ever becomes reachable from the play screen, deleting the live match would undo
   itself on the next reload.
+- **`splitLabel` lives in `scoring.js` beside `sideLabel`**, because dividing a joined
+  label is the same fact as building one and the board reads it back: `render.h` and
+  `panelRender.js` each have a `splitPair` over bytes for their own shortening, and a
+  third spelling on the app side is the drift with no symptom. `shared.test.js` holds it.
 - **`nameKey` and `sideKeyOf` live in `scoring.js`**, not `stats.js` — the career fold,
   the archive rewrite, the head-to-head pairs and the bracket all have to agree, and two
   definitions of "the same person" is the failure with no symptom. **That family is

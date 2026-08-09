@@ -482,6 +482,11 @@ int main() {
   const Framebuffer scoreWinOff = shot("score-winner-off", won, true, true, false, PANEL_SCORE);
   const Framebuffer scoreWorst = shot("score-worst", big, true, true, true, PANEL_SCORE);
   shot("score-overflow", overflow, true, true, true, PANEL_SCORE);
+  // Doubles through the score layout, where the second mark appears. `ruledSingle`
+  // above is the singles counterpart and must stay unmarked on the other side, so
+  // the two scenes together are what pin the rule being doubles-only.
+  const Framebuffer scorePair =
+      shot("score-ruled-pair", ruledPairEven, true, true, true, PANEL_SCORE);
   // Blank names put nothing but digits in the pair columns, which is what lets
   // the two layouts' digit heights be measured off the panel below. A blank
   // player name is a real case anyway — drawSide has a branch for it.
@@ -546,6 +551,15 @@ int main() {
 
   const Framebuffer formS = shot("form-singles", play, true, true, true, PANEL_FULL, &singles);
   const Framebuffer formD = shot("form-doubles", play, true, true, true, PANEL_FULL, &doubles);
+  // `play` sets no first thrower, so the two above are the unmarked shape. These carry
+  // one — the screen a board actually shows while everyone walks to the boards, which
+  // is the whole reason the bags are here rather than only on the score.
+  const BoardState formFirst = makeState(0, 0, 0, "Neil & Rho", "Sigma & Tau", 0, 'a');
+  const BoardState formFirstSingle = makeState(0, 0, 0, "Neil", "Sigma", 0, 'a');
+  const Framebuffer formBagD =
+      shot("form-doubles-bags", formFirst, true, true, true, PANEL_FULL, &doubles);
+  const Framebuffer formBagS =
+      shot("form-singles-bags", formFirstSingle, true, true, true, PANEL_FULL, &singles);
   shot("form-stale", play, true, false, true, PANEL_FULL, &doubles);
   // Under PANEL_SCORE, to show the lineup overrides the layout rather than
   // combining with it.
@@ -1013,7 +1027,19 @@ int main() {
   check(scorePlay.litRow(SCORE_RULE_Y, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W),
         "score layout rules the side due to throw");
   check(!scorePlay.litRow(SCORE_RULE_Y, SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W),
-        "score layout rules only the side due to throw");
+        "singles leaves the other side of the score layout unruled");
+  // Doubles marks the player throwing after them from the same end, and it has to be
+  // told from the solid one by *shape* — a dimmer rule would be invisible on a real
+  // module, the reason a loss pip is a single pixel. Counted rather than merely lit,
+  // or a solid rule on both sides would pass.
+  {
+    const int solid = scorePair.litCount(SCORE_RULE_Y, SCORE_RIGHT_X,
+                                         SCORE_RIGHT_X + SCORE_PAIR_W);
+    const int dashed = scorePair.litCount(SCORE_RULE_Y, SCORE_LEFT_X,
+                                          SCORE_LEFT_X + SCORE_PAIR_W);
+    check(solid == SCORE_PAIR_W, "the throwing side's score rule is solid");
+    check(dashed > 0 && dashed * 2 <= solid + 1, "the other end's is dashed, not solid");
+  }
   check(scoreWorst.lit() > worst.lit(), "score layout should light more than full — it is bigger");
   check(scoreNoState.lit() > 0, "score no-state must draw dashes, not nothing");
   check(scoreWinOff.lit() < scoreWinOn.lit(), "score winner blink should blank the winning pair");
@@ -1068,6 +1094,41 @@ int main() {
   check(!formS.litRow(0, 0, PANEL_W), "a singles form screen is centred, not top-aligned");
   check(formD.litRow(0, 0, PANEL_W), "a doubles form screen fills the panel");
   check(formD.lit() > formS.lit(), "four rows light more than two");
+
+  // The bags. This is the screen a board holds while everyone walks to the boards, so
+  // it is the one that has to say who is throwing — and the only board screen with a
+  // row to spare for a bag rather than a rule.
+  {
+    const int y0 = (PANEL_H - 4 * FORM_ROW_H) / 2;
+    const int y2 = (PANEL_H - 2 * FORM_ROW_H) / 2;
+    const auto bag = [&](const Framebuffer& fb, int rowY) {
+      return band(fb, rowY, 0, BAG);
+    };
+    // Filled is BAG*BAG and hollow is its edge, so counting tells them apart where
+    // "is something drawn" would pass with two of either.
+    check(bag(formBagD, y0) == BAG * BAG, "the first thrower's bag is filled");
+    check(bag(formBagD, y0 + 2 * FORM_ROW_H) == BAG * BAG - (BAG - 2) * (BAG - 2),
+          "the other end's player gets a hollow one");
+    check(bag(formBagD, y0 + FORM_ROW_H) == 0, "the partner waiting at the far end gets none");
+    check(bag(formBagD, y0 + 3 * FORM_ROW_H) == 0, "nor theirs");
+    // Singles has nobody at that end to tell from the thrower, so only one bag — the
+    // same rule the score layouts read off the label, here read off the row count.
+    check(bag(formBagS, y2) == BAG * BAG, "singles marks the thrower");
+    check(bag(formBagS, y2 + FORM_ROW_H) == 0, "and marks nobody else");
+    // The column is reserved on every row, so an unmarked name starts where a marked
+    // one does. Without this the marked row is the only one indented.
+    check(formBagD.litCount(y0 + 1, 0, BAG_ADVANCE) > 0 &&
+              !formBagD.litRow(y0 + FORM_ROW_H + 1, 0, BAG_ADVANCE),
+          "an unmarked row leaves the bag column empty");
+    const FormLayout lyBag = formLayout(doubles);
+    check(band(formBagD, y0 + FORM_ROW_H, 0, BAG_ADVANCE) == 0,
+          "and its name starts past the column rather than in it");
+    // A board sent a roster but no score has nobody to mark, and then the column
+    // costs a character for nothing.
+    check(band(formD, y0, 0, BAG_ADVANCE) > 0,
+          "with no first thrower the names keep the whole column");
+    check(lyBag.nameChars - 1 >= 6, "a bag must still leave a readable name");
+  }
 
   // A newcomer's row is their name and 0-0 and nothing else: no pips, and no rate
   // column claiming 0.0. Two rows, so both are centred and the newcomer is second.
@@ -1218,13 +1279,25 @@ int main() {
           "odd round rules the second partner only");
     check(firstPartner < whole && secondPartner < whole,
           "a doubles rule is never the width of the whole label");
-    check(!evenRound.litRow(UNDERLINE_Y, 0, RIGHT), "the other team stays unruled");
+    // The other team's player at that end throws next, so they are ruled too — dashed,
+    // and under their own up partner rather than the whole label. "Nu/Tau" on an even
+    // round means Nu, so the dashes must sit within Nu's characters and nowhere else.
+    const int nuWidth = textWidth("Nu", NAME_CHARS);
+    const int dashes = evenRound.litCount(UNDERLINE_Y, 0, RIGHT);
+    check(dashes > 0, "the other end's player is ruled as well");
+    check(dashes * 2 <= nuWidth + 1, "and dashed rather than solid");
+    check(evenRound.litCount(UNDERLINE_Y, 0, RIGHT) ==
+              evenRound.litCount(UNDERLINE_Y, 0, RIGHT / 2 + nuWidth),
+          "the dashed rule stays under the partner who is up");
 
-    // Singles has no partner to pick, so the whole name is ruled.
+    // Singles has no partner to pick, so the whole name is ruled — and nobody at that
+    // end to tell from the thrower, so the other side gets nothing at all. Both halves
+    // here: the first is what makes the second a real assertion.
     Framebuffer single;
     renderBoard(single, makeState(9, 6, 5, "Nu", "Alpha", 0, 'b'), true, true, true);
     check(single.litCount(UNDERLINE_Y, RIGHT, PANEL_W) == textWidth("Alpha", NAME_CHARS),
           "singles rules the whole name");
+    check(!single.litRow(UNDERLINE_Y, 0, RIGHT), "singles has no second mark");
   }
 
   // The "V" has its own column, so it must clear two full-length names.

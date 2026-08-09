@@ -153,6 +153,29 @@ source-order traps themselves — read those first, they bite hardest.
   was grepped; **a new row-shaped surface needs a new class or the two-class form.**
   The `.first-bag` glyph *is* shared on purpose — nothing redeclares it, only
   `.field-row .first-bag::before` adds a target.
+- **`.first-bag` is a solid outline rather than the dashed one it was**, and that is not
+  taste: the same mark is now drawn by `?display=1` (`.thrower`) and by the LED panel
+  (`drawBag` in `render.h`), and at 5x5 pixels a dashed outline is two lit corners. A
+  dimmer one is out for the reason a loss pip is a single pixel — an unlit-but-not-off
+  LED reads as off — so the pair differs in *fill*, which is the only property that
+  survives from a 13px control down to five pixels. `.first-bag.is-first` no longer sets
+  `border-style` because the base rule now carries it.
+- **The board's copy keeps its own class name**, and it has to: `main.jsx` imports all
+  three views statically, so every stylesheet lands in one file and `.first-bag` cannot
+  hold both a 13px control and a mark sized in `em` off the text it sits in.
+- **`.at-throwing` is what takes the team's colour, and the far partner stays grey.** The
+  name fields draw a bag for all four slots because each is a *control* — press it and
+  that player opens, which swaps their pair's ends — where the board and the panel mark
+  only the two at the throwing end and leave the far pair out entirely. Grey is the
+  nearest a pressable control gets to absent. One class drives both the colour and the
+  weight rather than a class and an inline `--team` that would have to agree; `--team` is
+  handed over unconditionally now. Same split in `Positions.css`, off `is-throwing`,
+  which the court already had.
+  - **0.8 opacity is a measured floor.** At the 0.5 the grey uses, a team-coloured
+    outline composites to **2.15:1** (red) and 2.23 (blue) on `--panel` against the 3:1 a
+    graphic that size wants — *dimmer* than the 2.41 the grey it replaced measures, which
+    is the opposite of the point. 0.8 gives 4.09 and 4.27, and the filled bag is still
+    plainly the stronger of the two because it is a solid block rather than an outline.
 
 ## The type scale
 

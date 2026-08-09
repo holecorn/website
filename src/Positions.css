@@ -142,11 +142,14 @@
   opacity: 0.4;
 }
 
-/* A bag, matching the marker on the play screen's header and on the name fields,
-   so the same shape means "throws first" wherever it appears. Every occupied box
-   carries one — dashed when that player isn't up first — because a marker that
-   only appears on one box shifts its name sideways by the marker's width, and the
-   two names then jump every time the arrangement changes. */
+/* A bag, matching the marker on the play screen's header, on the name fields, on
+   `?display=1` and on the LED panel, so the same shape means "throws first" wherever
+   it appears. Every occupied box carries one — hollow when that player isn't up first
+   — because a marker that only appears on one box shifts its name sideways by the
+   marker's width, and the two names then jump every time the arrangement changes.
+   Hollow rather than the dashed it was: the panel draws this pair at 5x5 pixels, where
+   a dash is two lit corners, so the four surfaces differ in *fill* — see
+   `.claude/rules/layout.md`. */
 .pitch-box:not(.is-empty)::before {
   content: '';
   flex: none;
@@ -154,12 +157,18 @@
   height: 8px;
   margin-right: 5px;
   border-radius: 2px;
-  border: 1px dashed var(--muted);
+  border: 1px solid var(--muted);
   opacity: 0.6;
 }
 
+/* The two boxes at the end that is throwing take the team's colour, which is what the
+   board and the panel draw the same pair in. The waiting end stays grey: those two are
+   not up, and the form screens leave them unmarked entirely. */
+.pitch-box.is-throwing::before {
+  border-color: currentColor;
+}
+
 .pitch-box.is-first::before {
-  border-style: solid;
   border-color: currentColor;
   background: currentColor;
   opacity: 1;
