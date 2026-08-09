@@ -410,9 +410,10 @@ describe('archiveFile and readArchiveFile', () => {
     });
   });
 
-  it('still reads an export taken before tournaments existed', () => {
-    // A bare array is every file exported so far, and those have to keep importing.
-    expect(readArchiveFile([match])).toEqual({ matches: [match], tournaments: [], inactive: {} });
+  // A bare array used to be read as a pre-envelope export. There are none of those
+  // left in the wild, so the envelope is the only shape and the branch is gone.
+  it('refuses a bare array, which is not an export', () => {
+    expect(readArchiveFile([match])).toBeNull();
   });
 
   it('tolerates an envelope missing either of the other two sections', () => {

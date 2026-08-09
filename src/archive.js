@@ -221,8 +221,9 @@ function marksOrNone(value) {
 // `loadGame` uses rather than bumping a key and abandoning what is on people's
 // phones. A missing section is the empty one, never a refusal.
 export function readArchiveFile(parsed) {
-  if (Array.isArray(parsed)) return { matches: parsed, tournaments: [], inactive: {} };
-  if (!parsed || typeof parsed !== 'object') return null;
+  // A bare array used to be read as a pre-envelope export. Nothing in the wild
+  // holds one any more, so the envelope is the only shape.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   const { matches, tournaments, inactive } = parsed;
   if (!Array.isArray(matches)) return null;
   return {

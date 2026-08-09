@@ -646,9 +646,10 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     ids. `identified` now takes a non-string id as no id — an object one reaches the
     archive, where `validRecord` rejects the record on the way out to a file and
     `upsertMatch` can't find it, so the match exists locally and cannot be exported.
-  - **A target above `MAX_TARGET` is accepted.** The two-digit cap arrived after the app
-    shipped, so a save can legitimately hold one and refusing it deletes a real game.
-    Clamping is the input's job, not the loader's.
+  - **The target is bounded above as well as below.** This used to accept anything
+    over `MAX_TARGET`, because the two-digit cap arrived after the app shipped and a
+    save could legitimately hold one — there are no such saves left, and every dispatch
+    goes through `clampTarget`, so a live game cannot reach one either.
   - **`nameSlots` moved here from `archive.js`** for the reason `nameKey` is here: a live
     game and an archived record are the same lineup shape, and two definitions of what a
     name slot is would let `validGame` accept what `validRecord` rejects.

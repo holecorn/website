@@ -123,15 +123,9 @@ describe('validGame', () => {
     ['tournament as a number', { tournament: 7 }],
     ['target as a string', { target: 'lots' }],
     ['target as zero', { target: 0 }],
+    ['target above the two-digit cap', { target: MAX_TARGET + 1 }],
   ])('rejects %s', (_label, patch) => {
     expect(validGame({ ...played, ...patch })).toBe(false);
-  });
-
-  // A target above the two-digit cap is not corruption: `MAX_TARGET` arrived after
-  // the app shipped, so a save can legitimately hold one and refusing it would
-  // throw away a game that has always loaded. Clamping is the display's job.
-  it('keeps a target from before the two-digit cap', () => {
-    expect(validGame({ ...played, target: MAX_TARGET + 1 })).toBe(true);
   });
 });
 

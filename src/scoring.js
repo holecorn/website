@@ -78,7 +78,7 @@ export function newGame(target = DEFAULT_TARGET) {
     // why it is slot 0 that throws on even rounds.
     //
     // Numbered across the lineup rather than within each team, because both
-    // teams defaulting to the same two names is a lineup `duplicateNames`
+    // teams defaulting to the same two names is a lineup `lineupFaults`
     // refuses — the app would open on a game it would not let you start. The
     // odd/even split is what keeps singles reading "Player 1" against
     // "Player 2", which is the pairing seen most.
@@ -153,6 +153,10 @@ export function validGame(g) {
       (g.tournament === null || typeof g.tournament === 'string') &&
       Number.isFinite(g.target) &&
       g.target >= 1 &&
+      // Bounded as well as positive. Every dispatch goes through `clampTarget`, so a
+      // live game cannot hold more — the tolerance this used to carry was for a save
+      // written before `MAX_TARGET` existed, and there are none of those left.
+      g.target <= MAX_TARGET &&
       bagSide(g.current?.a) &&
       bagSide(g.current?.b) &&
       Array.isArray(g.rounds) &&
