@@ -203,6 +203,79 @@ for (const scheme of ['dark', 'light']) {
   await page.close();
 }
 
+// `WASH` on a round in an expanded match, which is the only *text* saying nobody scored it —
+// `.is-wash` otherwise dims the running score, and that is opacity alone. It sat at 9px with
+// `--muted` under `opacity: 0.7` and measured **2.99:1 on the light scheme** and 3.67:1 on
+// the dark. `--muted` itself clears at 5.53/6.29, so the opacity was the whole of it, and
+// nothing in a stylesheet can see that: the two declarations are in different rules and the
+// colour is inherited from the cell above rather than set here.
+//
+// **Composited rather than sampled, which is the opposite of the bag above and deliberate.**
+// A bag is 20px of flat colour, so a pixel from its middle *is* its colour; 11px text is
+// antialiased down to 1px stems, so the darkest pixel inside a glyph is already part
+// background and the figure comes out low by however much the hinting decided — a check that
+// fails on a font rather than on a colour. `opacity` is one number to read and the blend the
+// browser does with it is exact, so both colours still come through `resolve` and only the
+// multiply is here. Effective alpha is the product up the ancestor chain, which is what the
+// browser composites; an opacity moved to the row or the cell would otherwise be invisible.
+console.log('\na wash is legible on both schemes');
+for (const scheme of ['dark', 'light']) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, colorScheme: scheme });
+  await page.goto(URL);
+  await page.evaluate(() => {
+    const round = (a, b, na, nb) => ({ a, b, nets: { a: na, b: nb }, first: 'a' });
+    const bags = (t) => Array(4).fill(t);
+    localStorage.clear();
+    localStorage.setItem(
+      'holecorn.matches.v1',
+      JSON.stringify([
+        {
+          format: 1, id: 'w1', startedAt: 1e12, endedAt: 1e12 + 6e5, mode: 'singles',
+          players: { a: ['Rho', ''], b: ['Tau', ''] },
+          colors: { a: '#27ae60', b: '#f2c94c' }, target: 21, winner: 'a',
+          rounds: [
+            round(bags('hole'), bags('floor'), 12, 0),
+            round(bags('floor'), bags('floor'), 0, 0),
+            round(bags('hole'), bags('floor'), 12, 0),
+          ],
+        },
+      ]),
+    );
+  });
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Stats' }).click();
+  await page.locator('.recent-open').first().click();
+  const tag = page.locator('.match-round.is-wash .mr-n em');
+  check(`${scheme}: the wash round says so in words`, (await tag.count()) === 1);
+  if (await tag.count()) {
+    const read = await tag.evaluate((el) => {
+      let alpha = 1;
+      for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+        alpha *= Number(getComputedStyle(n).opacity);
+      }
+      // The nearest ancestor that actually paints, which is the round table rather than the
+      // row — a row with no background of its own would resolve to `rgba(0, 0, 0, 0)`.
+      const behind = el.closest('.match-rounds');
+      return {
+        alpha,
+        size: parseFloat(getComputedStyle(el).fontSize),
+        ink: getComputedStyle(el).color,
+        bg: getComputedStyle(behind).backgroundColor,
+      };
+    });
+    const [ink, bg] = await Promise.all([read.ink, read.bg].map((c) => resolve(page, c)));
+    const painted = ink.map((c, i) => Math.round(c * read.alpha + bg[i] * (1 - read.alpha)));
+    const ratio = contrast(painted, bg);
+    check(
+      `${scheme}: and says it legibly`,
+      ratio >= 4.5,
+      `${ratio.toFixed(2)}:1 at ${read.size}px, alpha ${read.alpha}`,
+    );
+  }
+  await page.close();
+}
+
 // The board is emissive and propped against a fence, so it stays dark whatever the tablet
 // is set to. Both views, because they are pinned by one line in `main.jsx` and a check on
 // only one of them would pass with the other spelt wrong.

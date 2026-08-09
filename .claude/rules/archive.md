@@ -74,6 +74,22 @@ themselves, correcting the names on them, and marking a player inactive.
   can't show because there it is always just the current total. `matchRounds()`
   derives it; the row's own final score is the last round's running score, and
   `verify-stats.mjs` asserts exactly that so the two can't drift.
+  - **`WASH` on a round is the only text saying nobody scored it, and it was the smallest
+    and faintest thing in the app.** `.is-wash` otherwise dims the running score, which is
+    opacity alone — so the tag carries the fact, and it sat at 9px with `--muted` at
+    `opacity: 0.7`: measured **2.99:1 on the light scheme** and 3.67:1 on the dark, against
+    the 4.5:1 small text needs. Dropping the opacity is what fixes that, since `--muted`
+    itself clears at 5.53/6.29 — the figures `.casual-note` is sized against. The same shape
+    as the review's `NOT RECORDED` finding, one screen over.
+    - **11px and not 12, on two grounds.** The cell is a fixed `3.2em` = 41.6px track and
+      `WASH` measures 35.5px at 11 against **38.5px at 12** — 3.1px of slack, on a runner
+      whose `system-ui` is not a Mac's. And at 12 it reads as a peer of the `R3` above it in
+      the same cell rather than as a note under it, which is the visible difference when the
+      two are rendered side by side. It costs 3px of row height and nothing horizontally,
+      the track being fixed.
+    - **`.mr-thrower` beside it stays at 10px deliberately.** It is *equal* to the column
+      heads around it rather than below them, which is where the line actually falls; 9px
+      was below every label on the screen. See the type scale in `.claude/rules/layout.md`.
 - **Leaving the game only confirms while a game is unfinished.** It used to ask
   after a win too, which made sense when `New game` destroyed the only trace of the
   match — the archive changed that, so the prompt was guarding something no

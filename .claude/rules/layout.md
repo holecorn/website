@@ -154,6 +154,52 @@ source-order traps themselves — read those first, they bite hardest.
   The `.first-bag` glyph *is* shared on purpose — nothing redeclares it, only
   `.field-row .first-bag::before` adds a target.
 
+## The type scale
+
+**Nineteen sizes, listed with what each is for, and `css.test.js` refuses a twentieth.** The
+2026-08-06 review counted 14 and read "no 4px or 8px rhythm"; the stylesheets *declare* 19,
+because it sampled four screens rather than the source. `SCALE` in the `type` block is the
+list, and set equality is deliberate in both directions — an unclaimed size reads as a step
+somebody may reach for, which is how the drift got in.
+
+- **A 4px rhythm is the wrong target here and was measured before being rejected.** The whole
+  small-label band is 10–14px, which is *one step* of such a rhythm: 8/12/16 collapses five
+  label roles onto two sizes, and 8px is below anything this app sets. 10/11/12/13/14 carry
+  **116 of the 133 declarations** in the 9–18px band, so the band is not a 1px staircase
+  through unused values — it is five roles at the sizes small text is legible at.
+  - The spacing half of the same finding does not hold either. **61 of ~72 static `gap`
+    declarations are 8/10/12px** and **53 of ~80 radii** are the same three; there is a
+    rhythm, it is 2px-stepped in the small band. `padding-top` is the one the review had
+    right — counting shorthands, 18 distinct top values, with a tail of `7px` ×4 and
+    singletons at 3/9/11px. Not folded: unlike a font size, no two of them are the same
+    role at different values.
+- **Everything above 18px is one scene rather than drift**, which is why the list is long
+  and still not slack: 20 the winner banner, 22 a chip's figure, 28 the emulator title and
+  the ceremony name, 30 FOUR BAGGER inside a callout (a width budget — see the overlays
+  section), 32/38/44/56 the `.score` by viewport tier, 34 the board's title, 72 a callout.
+- **The check reads `font:` as well as `font-size:`, and that is load-bearing rather than
+  thorough.** `.score` is `font: 800 56px/1 system-ui` — the largest size in the app, and
+  invisible to a `font-size` scan, along with six other shorthands. A ratchet that missed
+  the biggest step would have been the "passes for the wrong reason" shape the review
+  catalogues. Verified: moving `.score` to 57px fails it.
+- **`Display.css` is exempt as a whole file, and the exemption is the second assertion.**
+  The board sizes every scene off the viewport (`clamp`) or off that scene's own root
+  (`--form-size`, `--draw-size`), so it has no steps to keep to — and *only* it may, because
+  **a factor is not a step: the same factor under two parents is two sizes.** Measured,
+  `0.9em` on inline `code` rendered the identical `&panel=1` at **10.8px** in the scoreboard
+  settings (under a 12px hint) and **14.4px** in the emulator's message (under body text).
+  One `code` rule in `index.css` at 12px now, beside `button { font: inherit }` for the same
+  reason — the element is shared and its type is not a per-surface decision — with each
+  caller keeping only its own `background`. 12px is the largest that is never *bigger* than
+  the text around it. Putting the `0.9em` back fails the exemption assertion by name.
+- **17px on a text input is the iOS zoom threshold, and it is the step most likely to look
+  like a stray.** `Stats.css` and `Tournament.css` each say beside their own that iOS zooms
+  the page on a focus under 16px. **`.target-field` at 15px and `.sb-link-dialog input` at
+  13px never got the same treatment** — an inconsistency rather than a decision, and the
+  reason folding 15/17/18 into 16/18 was *not* the tidy-up it looks like: it would put two
+  more fields on the wrong side of a documented threshold and move `.tie-side` in the
+  bracket, for no visible gain.
+
 ## The header's centre column
 
 - **`.scoreboard` is `1fr auto 1fr`, so every pixel the middle column takes comes straight

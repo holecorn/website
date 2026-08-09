@@ -591,4 +591,87 @@ describe('type', () => {
     expect(sizeOf('.casual-note'), '.casual-note sets no font-size in px').toBeGreaterThan(0);
     expect(sizeOf('.casual-note')).toBeGreaterThanOrEqual(sizeOf('.target'));
   });
+
+  // **Both spellings, because `.score` is the shorthand.** `font: 800 56px/1 system-ui` sets
+  // the largest size in the app and a `font-size` scan cannot see it — nor the six other
+  // shorthands, two of which carry the iOS note below. A check that missed the biggest step
+  // would be the "passes for the wrong reason" shape, so this reads `font:` too and skips
+  // the line-height after the slash.
+  const sizes = () => {
+    const out = [];
+    for (const { file, text } of sheets) {
+      for (const [, short, value] of text.matchAll(/(?:^|[;{])\s*font(-size)?\s*:\s*([^;}]+)/g)) {
+        const v = value.trim();
+        if (short === undefined) {
+          if (v === 'inherit') continue;
+          const px = /(?:^|\s)(\d+(?:\.\d+)?px)(?=[\s/]|$)/.exec(v);
+          out.push({ file, value: px ? px[1] : v });
+        } else out.push({ file, value: v });
+      }
+    }
+    return out;
+  };
+
+  // The scale, and what each step is for — the list *is* the document. A size that is not on
+  // it fails here, and the fix is to reuse a step or to add one with its reason beside it.
+  //
+  // Set equality rather than a subset, so dropping the last use of a step fails too: an
+  // unclaimed size in this list reads as a step somebody may reach for, which is how the
+  // drift the 2026-08-06 review found got in. Its count was 14; the stylesheets declare 19,
+  // because it sampled four screens rather than the source.
+  //
+  // **A 4px rhythm is the wrong target and was not adopted.** The whole small-label band is
+  // 10-14px, which is one step of such a rhythm — 8/12/16 collapses five label roles onto
+  // two sizes, and 8px is below anything this app sets. The steps above 18 are not drift
+  // either: each is one scene, sized against a viewport.
+  const SCALE = {
+    10: 'the floor — a column head, a tag; `.projection-cap` is measured at it',
+    11: 'a small label: the career table heads, a footnote, the wash tag',
+    12: 'a hint, a note, a date, a section heading, inline code',
+    13: 'secondary body — the tables, the footer',
+    14: 'body, and most buttons',
+    15: "a screen's primary button, the target field",
+    16: 'a screen heading, a paging arrow, the document itself',
+    17: 'End round, a modal title, and every name field — **iOS zooms the page on a focus '
+      + 'under 16px**, which `Stats.css` and `Tournament.css` each say beside their own. '
+      + '`.target-field` at 15 and `.sb-link-dialog input` at 13 never got the same '
+      + 'treatment, which is an inconsistency rather than a decision.',
+    18: 'a lineup name field, the draw ceremony',
+    20: 'the winner banner, the career screen heading',
+    22: "a stat chip's figure",
+    28: "the emulator's title, the ceremony's name",
+    30: 'FOUR BAGGER inside a callout — a width budget, see `.claude/rules/layout.md`',
+    32: 'the score, landscape',
+    34: "the board's title",
+    38: 'the score, a short viewport',
+    44: 'the score at 740px, and the FOUR BAGGER reveal',
+    56: 'the score',
+    72: 'a callout',
+  };
+
+  it('every size the app sets is a step of the scale', () => {
+    const px = sizes()
+      .map(({ value }) => /^(\d+)px$/.exec(value)?.[1])
+      .filter(Boolean)
+      .map(Number);
+    expect(
+      [...new Set(px)].sort((a, b) => a - b),
+      'reuse a step, or add one to SCALE with what it is for beside it'
+    ).toEqual(Object.keys(SCALE).map(Number));
+  });
+
+  // The board's type is the exception and it is a whole file: `Display.css` sizes every
+  // scene off the viewport (`clamp`) or off that scene's own root size (`--form-size`,
+  // `--draw-size`), which is why it has no steps to keep to.
+  //
+  // Anywhere else a factor is not a step, because the same factor under two parents is two
+  // sizes: `0.9em` on inline `code` rendered the identical `&panel=1` at 10.8px in the
+  // scoreboard settings and 14.4px in the emulator's message. That is what this refuses.
+  it('only the board sizes text with anything but a step', () => {
+    const derived = sizes()
+      .filter(({ value }) => !/^\d+px$/.test(value))
+      .filter(({ file }) => file !== 'Display.css')
+      .map(({ file, value }) => `${file} ${value}`);
+    expect(derived).toEqual([]);
+  });
 });

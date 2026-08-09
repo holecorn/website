@@ -123,6 +123,13 @@ declaration removed fails on the named guard rather than on a bare `NaN`. **`.pr
 is exempt and must stay 10px** — see **The header's centre column** in
 `.claude/rules/layout.md` for what it costs every game.
 
+That pass has since happened and the prediction held: the block now also pins the whole
+**type scale** — every literal size the stylesheets set, in both spellings, against a list
+naming what each step is for. The two assertions sit together deliberately, because one
+holds a *relation* between two sizes and the other holds the *set* they may come from, and
+neither implies the other: the scale would accept `.casual-note` at 10px, and the relation
+would accept both of them at 19px. See **The type scale** in `.claude/rules/layout.md`.
+
 `tools/verify-schemes.mjs` covers what none of that can: whether the light scheme *fires*,
 and whether the browser understands the derivation. Both fail silently and in opposite
 directions — the app renders perfectly with the light values simply never reached, and an
@@ -132,6 +139,20 @@ channel while staying perfectly legible. It measures the play screen's mean lumi
 (33.6/255 before this existed, 230.7 now), that the two team inks differ from each other
 and from the body ink, and a bag against the band it is resting on, which is a gradient
 stop against a derived colour and therefore exists only once a browser has resolved both.
+- **It also holds the `WASH` tag on an expanded match**, which is the only *text* saying
+  nobody scored a round and sat at 9px with `--muted` under `opacity: 0.7`: 2.99:1 on the
+  light scheme, 3.67:1 on the dark. It is here rather than in `verify-stats.mjs` because
+  the machinery and the two schemes are both here, and the light one is the worse of them.
+  Nothing in a stylesheet can see it — the size and the opacity are in different rules and
+  the colour is inherited from the cell above — and no other browser check reads a contrast.
+  - **Composited rather than sampled, which is the opposite of the bag beside it.** A bag is
+    20px of flat colour so a pixel from its middle *is* its colour; 11px text is antialiased
+    to 1px stems, so the darkest pixel in a glyph is already part background and the figure
+    comes out low by whatever the hinting decided — a check that fails on a font rather than
+    on a colour. Both colours still come through `resolve`; only the multiply is local, and
+    the alpha is the product up the ancestor chain, so an opacity moved to the row or the
+    cell is still caught. Verified: putting the opacity back fails both schemes at exactly
+    the figures above, and the alpha-1 case reproduces `--muted`'s own 5.53/6.29.
 - **Never parse a computed colour in a browser check.** On the light scheme a derived ink
   serialises as `oklch(0.5 0.164089 256.69)`, and pulling three numbers out of that yields
   `[0.5, 0.164, 256.69]` as if they were channels — which is not a visible failure but a

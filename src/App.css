@@ -505,10 +505,7 @@
 }
 
 .sb-layout code {
-  padding: 1px 4px;
-  border-radius: 3px;
   background: var(--bg);
-  font-size: 0.9em;
 }
 
 .sb-error {

@@ -58,8 +58,5 @@
 }
 
 .panel-message code {
-  padding: 1px 4px;
-  border-radius: 3px;
   background: var(--panel);
-  font-size: 0.9em;
 }

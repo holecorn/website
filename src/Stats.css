@@ -342,12 +342,19 @@
   font-size: 12px;
 }
 
+/* `WASH` is the only text saying nobody scored that round — `.is-wash` otherwise dims the
+   running score, which is opacity alone — and it was the smallest and faintest text in the
+   app: 9px, below every label around it, and `--muted` at 0.7 measures **2.99:1** on the
+   light scheme and 3.67:1 on the dark, against the 4.5:1 small text needs. Dropping the
+   opacity is what fixes that; `--muted` itself clears it at 5.53/6.29. 11px rather than 12
+   because the cell is a fixed `3.2em` = 41.6px track and `WASH` is 38.5px at 12 — 3.1px of
+   slack, on a runner whose `system-ui` is not a Mac's — and because at 12 it reads as a
+   peer of the `R3` above it rather than as a note under it. See `.claude/rules/archive.md`. */
 .mr-n em {
   font-style: normal;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  opacity: 0.7;
 }
 
 .mr-side {

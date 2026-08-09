@@ -142,3 +142,16 @@ button:disabled {
   cursor: default;
   opacity: 0.4;
 }
+
+/* Both places that tell you to add `&panel=1` mark it up as `code`, and each set its own
+   `0.9em` — which is a *factor*, so the identical instruction rendered at **10.8px** under
+   the scoreboard settings' 12px hint and **14.4px** under the emulator's body text. Sized
+   here for the same reason `button` takes `font: inherit` here: the element is shared and
+   its type is not a per-surface decision. 12px is the largest that is never *bigger* than
+   the text around it. The two callers keep only their own background, which is the one
+   thing that does differ. */
+code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
