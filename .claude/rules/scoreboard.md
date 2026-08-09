@@ -196,6 +196,21 @@ the broker on the LAN.
   deliberate; `boardLiveness()` is the pure version, tested in
   `panelRender.test.js` because the grace has to run from the *drop* — stamping it
   at connect made a long session dim the instant the socket went.
+- **How far the display dims is one number on `.display`'s children, and it is pinned as
+  the deepest that keeps the digits readable.** A segment is the same hex lit and unlit —
+  8% of it when off — so a stale digit's legibility is the gap between two shades of one
+  colour, and dimming only `.seg.on` closed that gap instead of shifting it: measured,
+  11.29 to **1.90** at the worst colour, where a stale `22` and `88` are the same shape.
+  **Re-proportioning the unlit stroke is not the fix** — the `+0.05` flare term in the
+  contrast formula dominates once the lit level is that dark, so scaling both by 0.45
+  moves the worst colour from 1.90 to 1.98. Depth is the only lever, and 0.7 is where it
+  sits because 0.65 measures 2.84 against the 3:1 a digit this size needs. `css.test.js`
+  holds both bounds, so neither the dim nor the floor can be loosened alone; the lost
+  glow is the second cue, and it costs no legibility.
+  - **Enumerated per element it was the win banner that got left out**, at full brightness
+    over a board reading "waiting for the scorer". One rule on the children is what makes
+    a new element on the board dim by default — the status line is the single exception,
+    since it is what says why.
 - **The grace runs from when the drop is *detected*, and the two ends detect at
   very different speeds.** Nothing can start the clock earlier, but it means the
   emulator can take twice as long as the board to admit a dead link, so don't

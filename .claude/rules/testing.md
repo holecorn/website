@@ -81,6 +81,18 @@ own file's rule check, naming the selector, the pair and the ratio.
 - **The fill/ink check is deliberately blind to a rule that sets only one of them.**
   What an ink lands on then depends on the DOM, which no parse can know, so widening it
   would mean guessing. The defect was in controls that declare both together.
+- **The board's stale dim is a fifth, and the only one where both colours are the same
+  hex.** A segment is 8% of its own colour when off, so how readable a dimmed digit is
+  depends on the gap between two shades of one team colour — nothing about `--panel` or
+  `--on-accent` can see it, and a stale `22` rendering as `88` screenshots perfectly.
+  Two-sided like the light derivation: the dim clears 3:1 and one step deeper does not,
+  so the value is pinned as the deepest that stays readable rather than as a preference.
+  A sixth assertion holds the *shape* — one `is-stale` rule setting `opacity`, because
+  enumerating it per element is what left the win banner bright. Three mutations, each
+  killed by its own: the old 0.45 fails the floor at 1.91, a shallower 0.85 fails only
+  the lower bound, and going back to `.seg.on` plus `.form-table` fails the shape check
+  and the named parse guard. **That guard is load-bearing** — absent, the dim parses as
+  `NaN` and every bound fails saying nothing about why.
 
 **That file also asks every contrast question of *both* colour schemes**, since `index.css`
 declares each value as `light-dark(light, dark)` and a single-scheme check leaves the half

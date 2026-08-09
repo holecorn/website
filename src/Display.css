@@ -114,10 +114,16 @@
   top: calc(max(env(safe-area-inset-top, 0px), 24px) + 1.5vmin);
 }
 
-/* Nothing is arriving, so dim the whole board rather than show a confident
-   score that may be minutes old. */
+/* Nothing is arriving, so dim the whole board rather than show a confident score that
+   may be minutes old — but on the children rather than on `.seg.on`, which dimmed the
+   lit segments away from the unlit ones and left a stale 22 and 88 hard to tell apart.
+   The status line is the one thing that must not dim, since it says why. */
+.display.is-stale > *:not(.display-status) {
+  opacity: 0.7;
+}
+
+/* A second staleness cue, and unlike the dim it costs no legibility. */
 .display.is-stale .seg.on {
-  opacity: 0.45;
   filter: none;
 }
 
@@ -323,11 +329,6 @@
   height: 0.4em;
   border-radius: 50%;
   background: #232a31;
-}
-
-.display.is-stale .form-table,
-.display.is-stale .draw-card {
-  opacity: 0.45;
 }
 
 @media (orientation: portrait) {

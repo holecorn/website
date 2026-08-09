@@ -482,6 +482,54 @@ describe('contrast', () => {
     expect(contrast(VARS[scheme]['--muted'], VARS[scheme]['--bg'])).toBeGreaterThanOrEqual(AA);
   });
 
+  // **The board's dim, which is a ratio between two shades of one team colour.** A segment
+  // is the same hex lit and unlit — 8% of it when off — so how readable a stale digit is
+  // depends on the gap between those two, and `--on-accent` and `--panel` have nothing to
+  // say about it. Dimming only `.seg.on` closed the gap instead of shifting it: measured,
+  // 11.29 live to 1.90 at the worst colour, and a stale 22 read as 88.
+  //
+  // Two-sided, the same shape as the light derivation above and for the same reason: a
+  // deeper dim says "not live" more plainly and a shallower one is more readable, so the
+  // value is pinned as the *deepest* that still clears the floor. 3:1 rather than `AA`
+  // because a scoreboard digit is `min(62vh, 35vw)` tall — there is no small text here.
+  const LARGE = 3;
+  const board = sheets.find((s) => s.file === 'Display.css').text;
+  const declOf = (sel, prop) => {
+    const rule = new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`);
+    const body = rule.exec(board)?.[1] ?? '';
+    return new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`).exec(body)?.[1].trim();
+  };
+  const BOARD_BG = channels(declOf('.display', 'background'));
+  const SEG_OFF = Number(declOf('.seg', 'opacity'));
+  const STALE_SEL = '.display.is-stale > *:not(.display-status)';
+  const STALE = Number(declOf(STALE_SEL, 'opacity'));
+
+  // An ancestor's opacity multiplies a descendant's, so the off-state dims with the dim.
+  const blend = (hex, alpha) =>
+    `#${channels(hex)
+      .map((c, i) => Math.round(alpha * c + (1 - alpha) * BOARD_BG[i]).toString(16).padStart(2, '0'))
+      .join('')}`;
+  const litFromUnlit = (dim) =>
+    Math.min(...PALETTE.map(({ value }) => contrast(blend(value, dim), blend(value, dim * SEG_OFF))));
+
+  it('a stale board is as dim as its digits staying readable allows', () => {
+    expect(SEG_OFF).toBeGreaterThan(0);
+    // Named, because absent parses as NaN and every bound below then fails saying nothing.
+    expect(declOf(STALE_SEL, 'opacity'), `${STALE_SEL} sets no opacity, so the ratio below is
+      measuring a dim that is not an ancestor's and does not reach the off-state`).toBeDefined();
+    expect(STALE).toBeLessThan(1);
+    expect(litFromUnlit(STALE)).toBeGreaterThanOrEqual(LARGE);
+    expect(litFromUnlit(STALE - 0.05)).toBeLessThan(LARGE);
+  });
+
+  // **One dim for the whole board, which is what makes a new element on it dim by
+  // default.** Enumerated per element it was the win banner that got left out, sitting at
+  // full brightness over a board reading "waiting for the scorer".
+  it('the board dims in one place', () => {
+    const dims = rulesIn(board).filter((r) => r.sel.includes('is-stale') && r.props.has('opacity'));
+    expect(dims.map((r) => r.sel)).toHaveLength(1);
+  });
+
   it.each(sheets.flatMap((s) => SCHEMES.map((scheme) => ({ file: s.file, scheme }))))(
     '$scheme: $file: every rule that fills and inks is legible',
     ({ file, scheme }) => {
