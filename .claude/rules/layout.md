@@ -71,6 +71,42 @@ source-order traps themselves — read those first, they bite hardest.
   decides where the rail's panels go and JS decides whether they render at all;
   they have to say the same thing or the panels appear with nothing laying them
   out and no toggle to dismiss them.
+- **The landscape tier's 84px lane gives 28px tap zones, and the "79px of unused screen"
+  that would pay for a taller one is a headless figure.** The 2026-08-06 review measured
+  the play screen ending at y=351 in a 430px viewport and concluded the band was laid out
+  short rather than squeezed. It is right about the cause — nothing spends the surplus,
+  because 84px has to suit the shortest phone the tier covers — and wrong about the size
+  of it, because a browser with no chrome and no safe area is the *installed* case.
+  Measured on an iPhone 17 Pro: landscape is **874x402 installed and 874x292 in a Safari
+  tab**, `svh` 292 against `lvh` 402, so the toolbars cost **110px**.
+  - **Installed there is 38.8px spare, not 79**, since the screen is 402 tall rather than
+    the review's 430 and the content is 363. Spending all of it reaches **40.9px** — still
+    under the 44 every touch guideline agrees on. Dropping `Made with ♥` in landscape as
+    well reaches **52.3px**, and is the only version that clears it.
+  - **In a tab there is no surplus at all**: 363px of content into 292 is a **71px
+    deficit**. The screen already scrolls and the secondary row is already below the fold,
+    so `Undo round` needs a scroll — which is arguably the worse fault and is not in the
+    review either. `End round` stays visible throughout, at y=259.
+  - **Not built, because this group scores in portrait**, and portrait is healthy: 56px
+    zones with the whole button row above the fold at 402x874. **Don't re-derive the 79px
+    from the review** — the figure only exists on a device nobody is holding.
+  - **If it is ever built:** `dvh`, not the `svh` the rest of the app uses. `svh` would
+    pin the layout to 292 for ever and forfeit the 110px even after the toolbars have
+    retracted; `dvh` follows, and a `minmax(84px, 1fr)` floor on the lane row is what
+    makes that safe — at 292 every variant falls back to today's 84px lane and today's
+    scroll rather than clipping.
+  - **`verify-lanes.mjs`'s `MIN_LANE = 44` is on the lane's *width*, and the tap target's
+    tight dimension is its height.** Nothing measures the zone's height, which is how 28px
+    shipped past a check whose whole subject is the lane's geometry. Worth fixing before
+    the layout is, if it ever is.
+- **The landscape tier has no horizontal `env()`, and `viewport-fit=cover` is set.**
+  Measured on the same phone, landscape safe-area insets are **T 0, R 62, B 20, L 62**, and
+  `.app` carries 14px of side padding — so each team card paints 48px into a region the
+  rounded corner and the Dynamic Island are in. Portrait is unaffected, and not by luck:
+  `apple-mobile-web-app-status-bar-style` is **`black`** rather than `black-translucent`, so
+  iOS starts the web view below the status bar and `safe-area-inset-top` reports 0. Only
+  `.footer` reads an inset at all, and only the bottom one. Rides with the point above —
+  landscape-only, so unfixed for the same reason.
 
 ## The wordmark
 
