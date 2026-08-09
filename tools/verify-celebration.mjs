@@ -1,17 +1,19 @@
-// The win moment, measured as paint order.
+// The win moment: what paints over what, and how many overlays fire at once.
 //
-// A game ending fires four things at once: the winner banner, the round callout, the
-// four-bagger reveal if the winning round was one, and 70 confetti pieces — half of them
-// in the winning team's own colour, falling over the winning score in that same colour.
-// Measured before this check existed, at 390x844 with the worst case the app can make
-// (four in the hole twice, 24–0, so a skunk and a four bagger): a peak of 34 pieces over
-// the header band, 6 of them on the winning digits' ink box, covering 24.9% of it.
+// A round can set off four things together — the winner banner, the round callout, the
+// four-bagger reveal, and 70 confetti pieces in the winning team's own colour falling over
+// the winning score in that same colour. Two separate faults live in that pile-up and this
+// file holds both, because neither is reachable from a unit test: paint order is invisible
+// to `css.test.js` as well, and the effect that decides which overlays fire is in
+// `App.jsx`, which the node-environment suites cannot import.
 //
-// Nothing in a unit test can see paint order, and nothing in the stylesheets can either:
-// the confetti used to be a *child* of `.callout`, so it inherited that overlay's
-// z-index and no z-index anywhere was wrong. Both halves — the markup and the number —
-// have to be right for the digits to stay on top, which is why this measures the pixels'
-// stacking rather than reading either one.
+//   1. The confetti used to be a *child* of `.callout`, so it inherited that overlay's
+//      z-index and no z-index anywhere was wrong. Measured at 390x844 on the worst case
+//      the app can make: a peak of 34 pieces over the header band, 6 of them on the
+//      winning digits' ink box, covering 24.9% of it.
+//   2. `.four-bagger` is anchored to a lane card and `.callout` to the viewport, so
+//      nothing kept the two apart. Measured at 874x402 they overlapped by 17.1% and took
+//      the `R!` off FOUR BAGGER!. The callout carries the words itself now.
 //
 //   npm run test:browser  (or a preview on 4173, then node tools/verify-celebration.mjs)
 
@@ -33,68 +35,111 @@ const check = (label, cond, detail = '') => {
 };
 
 const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' });
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-page.on('pageerror', (e) => {
-  console.log('  PAGE ERROR', e.message);
-  failures++;
-});
-// Runtime errors only. React's own warnings are *not* reachable from here — splitting one
-// keyed overlay into two siblings gave both children the same key, which it complains
-// about loudly in `npm run dev` and not at all in the production build these checks run
-// against. Verified by mutation: putting the duplicate key back passes this file clean.
-page.on('console', (m) => {
-  if (m.type() !== 'error') return;
-  console.log('  CONSOLE ERROR', m.text());
-  failures++;
-});
 
-await page.goto(URL);
-await page.evaluate(() => localStorage.clear());
-await page.reload();
-await page.waitForSelector('.setup');
-const fields = page.locator('.team-name-input');
-await fields.nth(0).fill('Rho');
-await fields.nth(1).fill('Sigma');
-await page.getByRole('button', { name: 'Start', exact: true }).click();
-await page.waitForSelector('.lane');
+// One game, played to a given target, with a four bagger for team A and optionally for
+// team B as well. A four bagger nets 12, so `target: 12` makes a single round a win, a
+// skunk and a four bagger at once — where two rounds to 21 leave the *first* round's own
+// four-bagger overlay still mounted under the timer patch, which reads as the fault.
+async function play({ width, height, target, bothTeams = false }) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  // Runtime errors only. React's own warnings are *not* reachable from here — splitting
+  // one keyed overlay into two siblings gave both children the same key, which it
+  // complains about loudly in `npm run dev` and not at all in the production build these
+  // checks run against. Verified by mutation: putting the duplicate key back passes clean.
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    console.log('  CONSOLE ERROR', m.text());
+    failures++;
+  });
 
-// The celebration clears itself after 2600ms, and a frame that has been unmounted cannot
-// be measured. Every timer the app sets from here is shorter than that except the ones
-// that end it.
-await page.evaluate(() => {
-  const real = window.setTimeout;
-  window.setTimeout = (fn, d, ...rest) => (d >= 1000 ? 0 : real(fn, d, ...rest));
-});
+  await page.goto(URL);
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForSelector('.setup');
+  const fields = page.locator('.team-name-input');
+  await fields.nth(0).fill('Rho');
+  await fields.nth(1).fill('Sigma');
+  await page.locator('.target-field input').fill(String(target));
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.waitForSelector('.lane');
 
-for (let round = 0; round < 2; round += 1) {
-  for (let i = 0; i < 4; i += 1) await page.locator('.team-lanes').nth(0).locator('.lane').nth(i).locator('.tier-hole').click();
-  // Two presses: the first puts the other side's four on the floor, the second commits.
+  // The celebration clears itself after 1600–2600ms, and a frame that has been unmounted
+  // cannot be measured. Every timer the app sets from here is shorter than that except
+  // the ones that end it.
+  await page.evaluate(() => {
+    const real = window.setTimeout;
+    window.setTimeout = (fn, d, ...rest) => (d >= 1000 ? 0 : real(fn, d, ...rest));
+  });
+
+  for (const team of bothTeams ? [0, 1] : [0])
+    for (let i = 0; i < 4; i += 1)
+      await page.locator('.team-lanes').nth(team).locator('.lane').nth(i).locator('.tier-hole').click();
+  // Two presses when one side's bags are still out: the first puts them on the floor, the
+  // second commits. With both sides thrown the first press already commits.
   await page.locator('.end-round').click();
-  await page.locator('.end-round').click();
+  if (!bothTeams) await page.locator('.end-round').click();
   await page.waitForFunction(() => document.querySelectorAll('.lane input:checked').length === 0);
+  // The lanes clearing is the reducer's render and every overlay comes from the effect
+  // after it, so reading straight off the commit lands early and finds nothing at all.
+  // Waiting for *either* overlay rather than the expected one is what keeps this a wait
+  // and not an assertion; caught, so a round that draws neither is named below instead of
+  // ending the run in a 30s timeout.
+  await page
+    .waitForSelector('.four-text, .callout-text', { timeout: 4000 })
+    .catch(() => {});
+  return page;
 }
+
+// What is on screen once a round has been committed, with the animations frozen at their
+// peak so a box is measured at the size it is actually drawn.
+const overlays = (page) =>
+  page.evaluate(() => {
+    for (const a of document.getAnimations()) {
+      a.pause();
+      a.currentTime = 300;
+    }
+    const four = document.querySelector('.callout-four');
+    const block = document.querySelector('.callout-text');
+    const b = block?.getBoundingClientRect();
+    return {
+      reveals: document.querySelectorAll('.four-text').length,
+      callouts: document.querySelectorAll('.callout-text').length,
+      four: four?.textContent ?? null,
+      fourLines: four ? four.getClientRects().length : 0,
+      outcome: block ? block.lastChild.textContent : null,
+      left: b ? Math.round(b.left) : null,
+      right: b ? Math.round(b.right) : null,
+      viewport: window.innerWidth,
+    };
+  });
+
+console.log('a four-bagger win is one overlay, and the confetti falls behind the score');
+const win = await play({ width: 390, height: 844, target: 12 });
 // The banner comes straight off the reducer and the callout off an effect, so waiting on
 // the banner lands a render too early and finds no confetti at all. Caught rather than
 // left to throw: with the confetti gone this is the first thing to notice, and a 30s
 // timeout ending in a stack trace says far less than the guard below does.
-await page.waitForSelector('.confetti-piece', { timeout: 4000 }).catch(() => {});
+await win.waitForSelector('.confetti-piece', { timeout: 4000 }).catch(() => {});
 
-console.log('the confetti falls behind the score it is celebrating');
-const seen = await page.evaluate(({ from, to, step }) => {
+const seen = await win.evaluate(({ from, to, step }) => {
   // Hit-testing skips `pointer-events: none`, and every piece has it. Paint order is
   // unaffected by the property, so lifting it is how the stacking becomes readable.
   const lift = document.createElement('style');
   lift.textContent = '.confetti-piece { pointer-events: auto }';
   document.head.append(lift);
 
-  const win = document.querySelector('.team-score.is-winner .score');
-  const box = win.getBoundingClientRect();
+  const scored = document.querySelector('.team-score.is-winner .score');
+  const box = scored.getBoundingClientRect();
   // The digits' ink, not the element box: `.score` is 56px of line box and the glyphs
   // fill about two thirds of it, so the box counts whitespace as though it were a score.
   const cv = document.createElement('canvas').getContext('2d');
-  const cs = getComputedStyle(win);
+  const cs = getComputedStyle(scored);
   cv.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-  const m = cv.measureText(win.textContent);
+  const m = cv.measureText(scored.textContent);
   const baseline =
     box.top + (box.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 +
     m.fontBoundingBoxAscent;
@@ -122,13 +167,13 @@ const seen = await page.evaluate(({ from, to, step }) => {
         if (piece < 0) continue;
         onDigits++;
         onThisFrame++;
-        if (piece < stack.indexOf(win)) above++;
+        if (piece < stack.indexOf(scored)) above++;
       }
     }
     if (onThisFrame > worst.on) worst = { at, on: onThisFrame };
   }
   lift.remove();
-  return { onDigits, above, worst, pieces: document.querySelectorAll('.confetti-piece').length, ink };
+  return { onDigits, above, worst, pieces: document.querySelectorAll('.confetti-piece').length };
 }, { from: FROM, to: TO, step: STEP });
 
 // The guard, and it is the whole reason the assertion below can fail: a frame with no
@@ -144,6 +189,51 @@ check(
   seen.above === 0,
   `${seen.above} of ${seen.onDigits} samples have a piece above the score`,
 );
+
+const won = await overlays(win);
+check(
+  'the four bagger is said on the callout',
+  won.four === 'FOUR BAGGER!' && won.outcome === 'SKUNK!',
+  `${JSON.stringify(won.four)} over ${JSON.stringify(won.outcome)}`,
+);
+check(
+  'and `.four-bagger` does not fire beside it',
+  won.reveals === 0 && won.callouts === 1,
+  `${won.reveals} reveals, ${won.callouts} callouts`,
+);
+await win.close();
+
+// The guard for the pair above: with `.four-bagger` gone altogether they both still pass,
+// and the ordinary mid-game four bagger is the only thing that says it is still there.
+console.log('\nan ordinary four bagger keeps its own reveal');
+const mid = await play({ width: 390, height: 844, target: 21 });
+const midway = await overlays(mid);
+check(
+  'the reveal fires on a round that ends nothing',
+  midway.reveals === 1,
+  `${midway.reveals} reveals`,
+);
+check('and no callout goes with it', midway.callouts === 0, `${midway.callouts} callouts`);
+await mid.close();
+
+// Two four baggers is the only round that reads FOUR BAGGERS!, and it is also the round
+// that used to draw three big texts at once — the wash plus a reveal on each card.
+console.log('\na wash carrying two four baggers is still one overlay, at 320px');
+const wash = await play({ width: 320, height: 568, target: 21, bothTeams: true });
+const washed = await overlays(wash);
+check(
+  'both are said once, in the plural',
+  washed.four === 'FOUR BAGGERS!' && washed.outcome === 'WASH!' && washed.reveals === 0,
+  `${JSON.stringify(washed.four)} over ${JSON.stringify(washed.outcome)}, ${washed.reveals} reveals`,
+);
+// Nothing clips or wraps a callout — `.callout` has no `overflow` and the text no
+// `nowrap` — so the widest wording on the narrowest screen is the case to measure.
+check(
+  'and the block fits the screen at full scale on one line each',
+  washed.left >= 0 && washed.right <= washed.viewport && washed.fourLines === 1,
+  `${washed.left}–${washed.right} of ${washed.viewport}px, ${washed.fourLines} line(s)`,
+);
+await wash.close();
 
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : '\nall good');

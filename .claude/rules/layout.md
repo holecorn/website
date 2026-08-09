@@ -322,7 +322,49 @@ emitted light against reflected glare. It is 230.7 on the light scheme now.
     `verify-celebration.mjs` clean.
   - **`.four-bagger` at `z-index: 4` deliberately still wins.** It is `inset: 0` inside
     `.team-lanes`, so it cannot reach the header, and `.callout`'s own text has to stay
-    above everything — the ordering is confetti 1, result 2, four bagger 4, callout 10.
+    above everything — the ordering is confetti 1, result 2, four bagger 4, callout 10. The
+    two no longer coincide, per the next section, so nothing is stacked at 4 and 10 at once.
+
+## The two big overlays are anchored to different boxes
+
+- **`.four-bagger` is `inset: 0` inside a lane card and `.callout` is `inset: 0` on the
+  viewport, so where they land relative to each other is whatever the layout says — and
+  nothing held them apart.** They fire on the same commit, at 44px and 72px of Bebas.
+  Measured on a four-bagger skunk: at 390x844 the two boxes sit **12px apart** (no overlap,
+  but two lines of display type stacked), at 1024x768 the callout is centred on the
+  *viewport* so half of it lands on the side rail's history table, and at 874x402 the cards
+  are side by side and they **overlap by 17.1%** — the `S` of SKUNK! sitting on the `R!` of
+  FOUR BAGGER!, which is the one case where a word is actually lost.
+  - **So the callout carries the words and the reveal stands down**, rather than the two
+    being positioned around each other. Which round that applies to, and why nothing is
+    lost by it, is in `.claude/rules/scoring.md` — this is only the geometry.
+  - **Re-anchoring the callout was the alternative and it fixes the narrower fault.**
+    Centring it on `.main` instead of the viewport would take it off the rail at 1024px and
+    stop it straddling the gap between the cards — but it puts it *on* the lane cards, which
+    is where `.four-bagger` already is, so the landscape overlap gets worse rather than
+    better. It also needs a positioned ancestor, which is the trap `.confetti` is `fixed`
+    to avoid. Two overlays arranged more carefully is still two overlays; the review's
+    complaint was that four things fire at once.
+  - **The callout straddling the card gap is left alone deliberately.** Measured at 390x844
+    its centre sits in the 14px between the two cards, which the review reads as
+    "belongs to neither" — but it is the *game's* announcement rather than a team's, the
+    banner directly above it names the winner full-width in their own colour, and the text
+    is legible throughout. A full-screen flash centred on the screen is the design.
+  - **`.callout-four` sits inside `.callout-text` so one animation scales both lines**, and
+    it is 30px against the outcome's 72px because the outcome is the headline. **That size
+    is a width budget, not taste:** nothing clips or wraps a callout — `.callout` has no
+    `overflow` and the text no `nowrap` — and the widest wording is `FOUR BAGGERS!`, which
+    only a double-four-bagger wash produces. At 30px it is **212px at the animation's 1.2
+    peak, inside a 320px screen with 52px either side**; at the outcome's own 72px it runs
+    **68px past both edges**. `verify-celebration.mjs` measures exactly that, on the wash,
+    at 320px — verified by mutation, dropping the `font-size` fails that assertion and only
+    that one, and passes all 64 of `css.test.js`.
+  - **Unlike almost every other measured width here, this one is not a Mac figure.** The
+    callouts are Bebas Neue, which `index.css` self-hosts and `vite.config.js` precaches, so
+    the deploy runner and a phone draw the same file — measured, Bebas is 139px against the
+    fallback's 250px for `FOUR BAGGERS!` at 30px, so a miss would be obvious rather than
+    marginal. The `system-ui` caveat that applies to `.setup-top` and `.end-round` does not
+    reach anything inside `.callout`.
 
 ## The stats screen's caps
 

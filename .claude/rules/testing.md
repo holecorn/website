@@ -515,12 +515,31 @@ invisible to the unit suite. Before it, the lanes were 24 buttons named `bag hol
   timed out of the whole file instead — the same crash-rather-than-fail the live
   region's `allInnerTexts` avoids.
 
-`tools/verify-celebration.mjs` covers **paint order**, which is a fourth kind of gap: not
-a role, not a number and not a value handed to the wrong component, but which of two
-elements ends up on top. Nothing in the unit suite can see it and nothing in the
-stylesheets can either — the confetti used to be a child of `.callout`, so it inherited
-that overlay's `z-index` and no z-index anywhere was wrong. See **The celebration paints
-behind the result** in `.claude/rules/layout.md` for the constraint and the numbers.
+`tools/verify-celebration.mjs` covers the win moment, and its subject is a fourth kind of
+gap: not a role, not a number and not a value handed to the wrong component, but **what
+ends up on top of what, and how many overlays fire at once**. Nothing in the unit suite can
+see either half — the effect that decides which overlays fire is in `App.jsx`, and paint
+order is invisible to the stylesheets as well as to the tests. See **The celebration paints
+behind the result** and **The two big overlays are anchored to different boxes** in
+`.claude/rules/layout.md` for the constraints and the numbers.
+- **It drives three separate games, and `play()` is what makes that cheap.** A four bagger
+  nets 12, so a **target of 12** makes one round a win, a skunk and a four bagger at once —
+  where the two rounds to 21 this file used to play leave the *first* round's own
+  four-bagger overlay still mounted under the timer patch, which reads as exactly the fault
+  being checked. The other two are an ordinary mid-game four bagger and a
+  double-four-bagger wash, the only round that says `FOUR BAGGERS!`.
+- **The guard for the one-overlay pair is the mid-game four bagger.** With `setFourBagger`
+  deleted outright both assertions still pass — the reveal is absent for the right reason
+  and the wrong one alike — so the check has to show it is still there on a round that ends
+  nothing. Five mutations: restoring the old side-by-side firing fails two, deleting the
+  reveal fails **only** the guard, dropping the callout's line fails three, taking the
+  outcome's own 72px fails only the width bound, and always using the singular fails only
+  the plural. All five pass every unit test, and the CSS one passes all 64 of
+  `css.test.js`.
+- **It waits for *either* overlay after a commit, not for the expected one.** The lanes
+  clearing is the reducer's render and every overlay comes from the effect after it, so
+  reading straight off the commit finds nothing at all — but waiting for the one the block
+  is about would make the wait the assertion.
 - **It reads the stacking through `elementsFromPoint`, which returns topmost first**, over
   a 4px grid across the winning digits' *ink* box — derived from canvas font metrics rather
   than the element box, because `.score` is 56px of line box and the glyphs fill about two
@@ -531,16 +550,17 @@ behind the result** in `.claude/rules/layout.md` for the constraint and the numb
   drift and rotation are `Math.random()`, so which frame has a piece on the digits differs
   every run: measured, the crossing is roughly 400–800ms of a 1.7s fall and peaks at 6
   pieces. It pauses every animation and steps `currentTime` from 250 to 1000ms, which is
-  also why the whole file costs **1.1s** — it never waits on the clock.
-- **The guard is the assertion that earns the file.** A frame with no piece near the digits
+  also why the whole file costs **1.8s across three games** — it never waits on the clock.
+- **The confetti's guard is the assertion that earns that pair.** A frame with no piece near the digits
   reports nothing painted over them however the stacking is set up, *including with the
   confetti deleted outright* — so the first check is that the pieces still fall across
   them. Four mutations: the header's `z-index` dropped and the component moved back inside
   `.callout` each fail only the paint-order assertion (all 226–255 samples), deleting the
   confetti fails only the guard, and the duplicate React key passes clean.
 - **The celebration's own timers are patched out, not waited through.** It clears itself
-  after 2600ms and a frame that has unmounted cannot be measured, so every `setTimeout` of
-  1000ms or more is dropped before the winning round is committed.
+  after 1600–2600ms depending on which overlay it is, and a frame that has unmounted cannot
+  be measured, so every `setTimeout` of 1000ms or more is dropped before the round is
+  committed.
 - **It waits on `.confetti-piece`, not on `.winner-banner`, and catches the timeout.** The
   banner comes straight off the reducer and the callout off an effect, so the banner is a
   render early and finds nothing; and with the confetti gone, an uncaught wait ends the run

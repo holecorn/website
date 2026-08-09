@@ -1063,9 +1063,22 @@
 .callout-text {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 72px;
+  line-height: 1;
   letter-spacing: 4px;
+  text-align: center;
   text-shadow: 0 3px 16px rgba(0, 0, 0, 0.8);
   animation: callout 1600ms ease-out forwards;
+}
+
+/* A four bagger on a round that also calls out is drawn here rather than by
+   `.four-bagger`, which is anchored to a lane card while this is anchored to the
+   viewport — measured, the two overlapped by 17.1% in landscape and took the `R!` off
+   FOUR BAGGER!. Inside `.callout-text` so the one animation scales both lines together,
+   and smaller because the outcome is the headline. */
+.callout-four {
+  display: block;
+  font-size: 30px;
+  letter-spacing: 3px;
 }
 
 @keyframes callout {

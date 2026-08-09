@@ -448,16 +448,15 @@ export default function App() {
   );
 
   // Flash a cornhole callout when a round is committed: WASH on a tie, GAME on
-  // the winning throw, SKUNK when the loser is left on zero.
+  // the winning throw, SKUNK when the loser is left on zero. A four bagger on one of
+  // those rounds is carried *by* the callout rather than firing `.four-bagger` beside
+  // it, because the two are separately anchored overlays of 44px and 72px display type
+  // and nothing keeps them apart — see `.claude/rules/scoring.md`.
   useEffect(() => {
     const count = game.rounds.length;
     if (count > prevRoundCount.current) {
       const last = game.rounds[count - 1];
-      const fbTeams = ['a', 'b'].filter((tm) => tierCounts(last[tm]).hole === 4);
-      if (fbTeams.length > 0) {
-        setFourBagger({ key: count, teams: fbTeams });
-        fourBaggerBuzz();
-      }
+      const fours = ['a', 'b'].filter((tm) => tierCounts(last[tm]).hole === 4);
       if (game.winner) {
         const final = totals(game);
         const loserTotal = game.winner === 'a' ? final.b : final.a;
@@ -465,13 +464,26 @@ export default function App() {
         setCallout({
           key: count,
           text: skunk ? 'SKUNK!' : 'GAME!',
+          four: fours.length,
           color: game.colors[game.winner],
           win: true,
           confetti: skunk ? 70 : 44,
         });
+        // The win pattern and not both: `navigator.vibrate` cancels whatever is already
+        // running, so the four-bagger buzz was only ever thrown away here.
         winBuzz();
       } else if (last.nets.a === 0 && last.nets.b === 0) {
-        setCallout({ key: count, text: 'WASH!', color: '#cfd8e3', win: false });
+        setCallout({
+          key: count,
+          text: 'WASH!',
+          four: fours.length,
+          color: '#cfd8e3',
+          win: false,
+        });
+        if (fours.length > 0) fourBaggerBuzz();
+      } else if (fours.length > 0) {
+        setFourBagger({ key: count, teams: fours });
+        fourBaggerBuzz();
       }
     }
     prevRoundCount.current = count;
@@ -1036,6 +1048,11 @@ export default function App() {
       {callout && (
         <div className="callout" key={callout.key} aria-hidden="true">
           <span className="callout-text team-ink" style={{ '--team': callout.color }}>
+            {callout.four > 0 && (
+              <span className="callout-four">
+                {callout.four > 1 ? 'FOUR BAGGERS!' : 'FOUR BAGGER!'}
+              </span>
+            )}
             {callout.text}
           </span>
         </div>

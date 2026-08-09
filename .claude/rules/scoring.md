@@ -288,6 +288,44 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     `getByRole` for the same reason it exists at all: a selector would still find a
     region an `aria-hidden` ancestor had taken out of the tree.
 
+## One overlay to a round
+
+- **A round that calls out carries its four bagger *on* the callout, and `.four-bagger`
+  does not fire beside it.** The reveal and the callout are separately anchored — one to a
+  lane card, the other to the viewport — so nothing kept them apart and the layout decided
+  whether they collided; `.claude/rules/layout.md` has the measurements and the sizing.
+  The round-commit effect in `App.jsx` is where it is decided, in three arms: a win, a
+  wash, or a four bagger on its own.
+  - **Nothing is lost, and that is a property of cancellation rather than a judgement.**
+    On a *winning* round only the winning side can have four-bagged — four in the hole is
+    12 raw and nothing beats it, so the other side nets 0 and the game cannot end there —
+    and the banner has already named them. On a *wash* it is always both sides, since 12
+    raw is only ever four holes, which is the same fact that has `roundReport` say
+    `Four baggers!` unattributed. So the reveal's one unique contribution, *which card*,
+    carries no information in exactly the rounds where it used to double up.
+  - **The sentence says both whatever the screen does.** `roundReport` has always had a
+    `Four bagger!` clause of its own, so the spoken half needed no change — which is what
+    made suppressing the overlay outright a live option. The words were kept on the
+    callout anyway, because the *seen* half would otherwise be the one channel that stops
+    mentioning the rarest thing in the game.
+  - **The haptics already worked this way by accident.** `navigator.vibrate` cancels
+    whatever is running, so calling `fourBaggerBuzz()` and then `winBuzz()` in the same
+    tick only ever played the win pattern. The arms make that explicit: a win buzzes the
+    win, and otherwise a four bagger buzzes the four bagger — so a four-bagger *wash*
+    keeps its buzz, where a rule of "a callout absorbs everything" would have left the
+    most spectacular round in the game with the least celebration. iOS has no Vibration
+    API at all, so none of this is felt there.
+  - **Measured, it is about 1% of games.** The sample archive is 1,246 rounds holding 11
+    four baggers, **one** of them on a winning round, and no double-four-bagger wash at
+    all. Worth knowing before spending anything more here — and worth knowing the fixture's
+    throw model is a modelled regular's, so a game with strangers in it four-bags less
+    often rather than more.
+  - **`verify-celebration.mjs` is the only thing that can see any of it**, because the
+    effect is in `App.jsx` and no unit test imports a `.jsx`. It needs the ordinary
+    mid-game four bagger as a **guard**: with `setFourBagger` deleted outright both
+    one-overlay assertions still pass, and that mutation is the one the guard alone kills.
+    All five checked mutations pass every unit test.
+
 ## `roundLine` is how a history row tells the two teams apart
 
 - **The round history failed both channels at once.** Measured from the accessibility

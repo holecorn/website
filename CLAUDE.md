@@ -196,7 +196,9 @@ project dependency. It starts and stops its own preview server.
   *every* thrown bag is in the hole (a four-bagger is alive), from two in the
   hole, ramping at three. The FOUR BAGGER reveal fires at round commit, not on
   the fourth tap. WASH/GAME/SKUNK callouts fire from the round-commit effect in
-  `App.jsx`.
+  `App.jsx`, and **a callout absorbs a four bagger on the same round** rather than the
+  two firing side by side — one overlay to a round, so anything new that celebrates one
+  belongs on the callout too.
   - **Those overlays are the seen half, and `roundReport` is the spoken one.** They are
     `aria-hidden` and the winner banner has no live region, so the play screen's one
     `role="status"` region is the only thing that reports a committed round to somebody
