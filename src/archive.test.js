@@ -295,6 +295,19 @@ describe('mergeMatches', () => {
     expect(merged[0].players.b[0]).toBe('Sigma Q');
   });
 
+  // The tie is what keeps an import from rewriting local history, and it has to
+  // be read off the body: `upsertMatch` keeps the local `endedAt` whichever copy
+  // wins, so the assertion above this cannot see the rule at all.
+  it('keeps the local copy when neither has been edited', () => {
+    const theirs = [{ ...mine[0], players: { ...mine[0].players, b: ['Sigma R', 'Player 2'] } }];
+    expect(mergeMatches(mine, theirs)[0].players.b[0]).toBe('Sigma');
+  });
+
+  it('keeps the local copy when both were edited at the same moment', () => {
+    const merged = mergeMatches(renamed(mine, 5000), renamePlayer(mine, 'Sigma', 'Sigma R', 5000));
+    expect(merged[0].players.b[0]).toBe('Sigma Q');
+  });
+
   it('is still idempotent once a match has been edited', () => {
     const edited = renamed(mine, 5000);
     expect(mergeMatches(edited, edited)).toEqual(edited);

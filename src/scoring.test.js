@@ -229,6 +229,16 @@ describe('undoRound', () => {
     expect(g.nextFirst).toBe('a');
   });
 
+  // The undone round's own opener, not whatever the game is holding. The case
+  // above cannot see the difference — A opened it and A scored it, so both
+  // answers are 'a' — and this is the half of the rule undo is responsible for.
+  it('gives the first throw back to whoever opened the undone round', () => {
+    let g = setFirst(newGame(), 'b');
+    g = playRound(g, ['hole', 'floor', 'floor', 'floor'], emptyPositions());
+    expect(g.nextFirst).toBe('a');
+    expect(undoRound(g).nextFirst).toBe('b');
+  });
+
   it('is a no-op with no committed rounds', () => {
     const g = newGame();
     expect(undoRound(g)).toEqual(g);
@@ -375,6 +385,16 @@ describe('round completeness', () => {
     g = place(g, 'b', ['floor', 'floor', 'floor', 'floor']);
     expect(unthrownCount(g)).toBe(0);
     expect(roundComplete(g)).toBe(true);
+  });
+
+  // The boundary rather than the two ends of it: a bag you forgot to score is
+  // exactly the case "End round" must stay disabled for, and the count going
+  // 4 -> 0 above passes whatever the comparison is.
+  it('is not complete with one bag still unthrown', () => {
+    let g = place(newGame(), 'a', ['hole', 'board', 'floor', 'floor']);
+    g = place(g, 'b', ['floor', 'floor', 'floor']);
+    expect(unthrownCount(g)).toBe(1);
+    expect(roundComplete(g)).toBe(false);
   });
 });
 

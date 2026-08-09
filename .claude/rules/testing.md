@@ -17,6 +17,24 @@ apply whatever you are testing.
 rules above. When changing scoring behaviour, update the tests too — and for a
 bug fix, add a test that fails without the fix first, and *check that it does*.
 
+**An assertion that passes for the wrong reason is as common in the unit suites as in
+the browser checks**, which the sections below catalogue at length. Four were found and
+fixed at once, and they share a shape — the fixture cannot tell the two answers apart:
+- **A symmetric fixture.** The form test played seven matches of `W L W L W L W`, where
+  the first five and the last five are *the same list*, so `slice(0, 5)` for `slice(-5)`
+  survived a test whose name is "keeps only the tail". It is a deliberately lopsided run
+  now. **A fixture for an ordering rule has to be asymmetric under it.**
+- **A bound the fixture never reaches.** `rows.every((r) => r.w <= 999)` over 120
+  matches is true of 120 whether the clamp exists or not, so deleting both `Math.min`
+  calls left the suite green. It builds 1,000 wins and reads 999 now.
+- **A field the code under test doesn't decide.** `mergeMatches`' tie rule was asserted
+  on `endedAt`, which `upsertMatch` keeps from the local copy *whichever* side wins the
+  merge — so `>=` for `>` survived. It is read off the players now, which is the half
+  the rule actually settles.
+- **A boundary tested only at its ends.** `roundComplete` went 8 → 4 → 0 unthrown, so
+  `=== 0` for `<= 1` survived — the state that matters, one bag you forgot to score, was
+  never in the fixture.
+
 The scoreboard's failure paths are covered by `src/scoreboardLink.test.js`, which
 drives the transport with a fake MQTT client, because the cases that matter — a
 lost acknowledgement, a refused subscription, a half-open socket — are ones a

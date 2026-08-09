@@ -435,17 +435,20 @@ const SWEEP = [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]];
 
 describe('form', () => {
   it('reads oldest first and keeps only the tail', () => {
-    // Seven matches, alternating who wins, so the cut is visible: Neil wins the
-    // odd-numbered ones.
-    const matches = Array.from({ length: 7 }, (_, i) =>
-      i % 2 === 0
+    // Deliberately **not** an alternating run. This was seven matches of W L W
+    // L W L W, where the first five and the last five are the same list — so it
+    // read as covering the cut while passing just as happily on the head.
+    const won = [false, false, true, false, true, true, true];
+    const matches = won.map((win, i) =>
+      win
         ? singles('Neil', 'Sigma', SWEEP, { id: `m${i}`, endedAt: i + 1 })
         : singles('Sigma', 'Neil', SWEEP, { id: `m${i}`, endedAt: i + 1 }),
     );
     const neil = find(playerStats(matches), 'Neil');
     expect(neil.matches).toBe(7);
-    // Results are W L W L W L W; the last five are W L W L W.
-    expect(neil.form).toEqual([true, false, true, false, true]);
+    // Results are L L W L W W W; the last five are W L W W W, the first five
+    // L L W L W.
+    expect(neil.form).toEqual([true, false, true, true, true]);
   });
 
   it('is shorter than the window for someone with fewer matches', () => {

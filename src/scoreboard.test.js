@@ -403,8 +403,16 @@ describe('the pre-game lineup', () => {
     const rows = lineupPayload(setup(), many).rows;
     expect(rows[0].w).toBe(120);
     expect(rows[1].l).toBe(120);
-    // Still bounded, because formatRecord writes into a fixed buffer.
-    expect(lineupPayload(setup(), many).rows.every((r) => r.w <= 999 && r.l <= 999)).toBe(true);
+  });
+
+  // The bound itself, which needs a fixture that actually reaches it: this was
+  // `rows.every((r) => r.w <= 999)` over the 120 above, true of 120 whether the
+  // clamp existed or not, so deleting it left the suite green.
+  it('still bounds the record at 999, because formatRecord has a fixed buffer', () => {
+    const many = Array.from({ length: 1000 }, (_, i) => won('Neil', 'Sigma', `m${i}`, i + 1));
+    const [neil, sigma] = lineupPayload(setup(), many).rows;
+    expect(neil.w).toBe(999);
+    expect(sigma.l).toBe(999);
   });
 
   it('caps the form string at what the panel draws', () => {
