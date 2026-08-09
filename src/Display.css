@@ -219,11 +219,35 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* `contents` so each row's four spans become grid cells and every row shares one
-   set of column widths — the whole point of a table here. */
+/* Every row shares one set of column widths — the whole point of a table here — and
+   `subgrid` buys that *and* leaves the row a box to paint, which `display: contents`
+   (what this was) does not. Measured in Chrome: every track width, every gap and every
+   clipped name is byte-identical either way, and the track definitions above are
+   untouched, so the `max-content`-on-a-clipped-cell shape that broke Safari on iPad is
+   not in play. It is still a grid-structure change on the one element with that history
+   — `verify-form-screen.mjs`'s rotation block is what would catch it, on a real iPad. */
 .form-head,
 .form-row {
-  display: contents;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: baseline;
+}
+
+/* A rail under each lane. The name track is the only `1fr` here, so it holds the whole
+   of the table's slack — measured, a short name sits **492px** from its own record on an
+   11in iPad in landscape (45% of the table's width), and across that run the eye had
+   nothing but a 145px lane to hold on a board read from the throw line. Costs 58px of
+   height and **not one character**, which is what rules out the two obvious
+   alternatives — see `.claude/rules/scoreboard.md`. Between the rows only: a rule under
+   the last one reads as a footer rather than as the last lane. Not on a fixture card,
+   which has two centred sides and no columns to rule. */
+.form-row {
+  padding-bottom: 0.14em;
+}
+
+.form-table:not(.is-card) .form-row:not(:last-child) {
+  border-bottom: 0.035em solid #2c353f;
 }
 
 .form-title {

@@ -104,6 +104,26 @@ const display = await open('?display=1&', { width: 1280, height: 800 });
   check('PPR is rendered from tenths', pprs[0] === '7.2', pprs[0]);
   const pips = await display.locator('.form-row').first().locator('.form-pip.is-win').count();
   check('a win pip per W in the form string', pips === 3, `${pips} of LWLWW`);
+  // The rail under each lane. The name track is the only `1fr` in the grid, so it holds
+  // the whole of the table's slack — a short name sits 492px from its own record on an
+  // 11in iPad in landscape, 542px here — and on a board read from the throw line the
+  // rule is the only thing the eye has to hold that lane by across the run.
+  // Read off the *painted box*, not the declaration: `display: contents` (what this row
+  // was) generates no box, so reverting it leaves the rule nothing to paint on and the
+  // widths collapse rather than the CSS failing to parse.
+  const rails = await display.evaluate(() => {
+    const table = document.querySelector('.form-table').getBoundingClientRect();
+    return [...document.querySelectorAll('.form-row')].map((r) => ({
+      slack: Math.round(table.width - r.getBoundingClientRect().width),
+      rule: Math.round(parseFloat(getComputedStyle(r).borderBottomWidth) * 100) / 100,
+    }));
+  });
+  check('each rule spans the whole row', rails.every((r) => r.slack === 0),
+    `short by ${rails.map((r) => r.slack).join(',')}px`);
+  check('every lane but the last is ruled', rails.slice(0, -1).every((r) => r.rule >= 1),
+    `widths ${rails.map((r) => r.rule).join(',')}`);
+  check('and the last is not, which would read as a footer', rails.at(-1).rule === 0,
+    `${rails.at(-1).rule}px`);
   // The whole point of the override: the scorer chose the score layout and the
   // seven-segment digits must not be on screen at all.
   check('no score digits while the lineup is up', (await display.locator('.seg-digit').count()) === 0);
@@ -556,6 +576,25 @@ await new Promise((r) => setTimeout(r, 2000));
   check('the display has no form table to show', (await display.locator('.form-ppr').count()) === 0);
   const sides = await display.locator('.form-side').allInnerTexts();
   check('so it names the two sides instead', sides.length === 2, sides.join(' v '));
+  // A card's rows are subgrids too, so this is where that change could have landed on a
+  // screen with no columns to share: two centred names, and no rails, because there is
+  // no run between a name and a number to hold.
+  const card = await display.evaluate(() => {
+    const t = document.querySelector('.form-table').getBoundingClientRect();
+    return [...document.querySelectorAll('.form-side')].map((el) => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const b = r.getBoundingClientRect();
+      return {
+        off: Math.round(b.left - t.left - (t.right - b.right)),
+        rule: parseFloat(getComputedStyle(el.closest('.form-row')).borderBottomWidth),
+      };
+    });
+  });
+  check('still centred in the table', card.every((c) => Math.abs(c.off) <= 2),
+    `offsets ${card.map((c) => c.off).join(',')}`);
+  check('and unruled, having no lane to rule', card.every((c) => c.rule === 0),
+    `widths ${card.map((c) => c.rule).join(',')}`);
   check('with the tie still captioned',
     (await display.locator('.form-title').innerText()).includes('SEMI-FINAL'));
   await display.screenshot({ path: `${dir}/tie-newcomers-display.png` });

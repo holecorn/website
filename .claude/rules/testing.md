@@ -611,7 +611,17 @@ both `?display=1` and `?panel=1`, plus a display opened late recovering the
 retained roster. It is also the only place a career rename can be watched reaching
 the board while the stats screen is still open, which is the window the app's own
 copy of the archive used to be stale in — see **Editing names** in
-`.claude/rules/archive.md`. Everything either
+`.claude/rules/archive.md`.
+
+**It is also where the display's form-table *layout* is asserted, and nothing in CI
+covers that** — the reach that caught the 12em cap, the record never wrapping, the
+rotation block, and now the rail under each lane. Not a choice: the table only exists
+while a lineup is retained, so nothing hermetic can reach it, and the panel's version is
+a canvas drawn by `panelRender.js` instead. So a layout regression here is caught by
+somebody running this file, not by a red deploy — **run it after touching
+`Display.css`.** The rotation block is the one that most needs a real iPad rather than
+this: Chrome cannot reproduce the Safari track-sizing bug it exists for, so it passes
+here whatever happens. Everything either
 side of that is covered without a broker: the
 payload and the clear in `scoreboard.test.js`, the retain-and-re-assert behaviour
 against a fake client in `scoreboardLink.test.js`, and the drawing itself by the

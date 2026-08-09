@@ -401,6 +401,56 @@ the broker on the LAN.
       `justify-content: space-between` over content-sized tracks spread it more evenly
       and is what this rules out — don't put it back without re-testing rotation on a
       real iPad.
+    - **So each lane is ruled, and the rule is why the rows are `subgrid` rather than
+      `display: contents`.** That slack sits *between* a short name and that name's own
+      record: measured, **492px on an 11in iPad in landscape** (472-516 across the four
+      rows, 45% of the table's width), 720-746 on a 1920x1080 monitor, 347-378 in
+      portrait — and across that run the eye had nothing but a 145px row lane to hold, on
+      a board read from the throw line. A hairline under each row is the rail. `contents`
+      shares one set of column widths and leaves **no box to paint**, which is the whole
+      reason for the change; painting the four cells instead comes out ragged, because
+      `align-items: baseline` gives `.form-pips` a 0.4em box against the text cells' 1em,
+      so their bottom edges sit at different heights.
+      - **It costs 58px of height and not one character.** Measured on an 11in iPad in
+        landscape, 707 -> 765px of a 834px viewport, and every track width, every gap and
+        every clipped-name count is byte-identical either way. That is the property that
+        rules out the alternatives below, all of which are paid for in characters.
+      - **Bigger text cannot do this job, and the ceiling is why.** The table's width is
+        pinned at 92vw, not by the font, so growing the font only shrinks the run through
+        the numeric columns' growth — measured, `8.25vw/11vh` (the documented ceiling)
+        buys 4.7% of font and takes the worst row 481 -> 452px, **6%**, for the 9th name
+        character, which is the whole margin over the panel's 8. `9vw/12vh` takes 18% off
+        the run and **overflows the landscape viewport by 8px**, which is the 12vh the
+        sizing note already refuses. And a rail *plus* `8.25vw/11vh` overflows by 4px: it
+        is one or the other, not both.
+      - **Right-aligning the names was built and measured, and is the other real answer.**
+        It closes the run outright — a flat 39-57px, the column gap and nothing else, at
+        every viewport and every roster — because it makes the name grow leftwards from
+        the numbers and every other cell in the row is right-aligned already. What it
+        costs is position: the block then sits right of centre with the slack banked at
+        the left edge, a third of a 16:9 monitor's width, and the heading has to follow it
+        or read as stranded. Same emptiness, moved out of the rows rather than bridged.
+        Not taken — the rail keeps the table balanced and buys the association for height
+        instead — but it is one declaration if the height ever becomes the scarcer thing.
+      - **A dotted leader is the wrong instrument here** and was rendered before being
+        dropped: at 0.045em it is a 0.76mm dot on an 11in iPad, which subtends 0.65 arcmin
+        at 4m and so falls under the eye's resolution. It reads well on a desk and
+        disappears exactly at the distance the problem is about. A rule is a continuous
+        feature and survives it.
+      - **Between the rows only.** A rule under the last one reads as a footer rather than
+        as the last lane, and the fixture card gets none at all — two centred sides, no
+        columns, no run to hold.
+      - **`subgrid` is still a grid-structure change on the one element with the Safari
+        history above**, even though the track definitions are untouched and so the
+        `max-content`-on-a-clipped-cell shape that broke it is not in play. Chrome cannot
+        reproduce that bug, so a green local run says nothing: `verify-form-screen.mjs`'s
+        rotation block is what would catch it, on a real iPad.
+      - **Three assertions in `verify-form-screen.mjs`, read off the painted box rather
+        than the declaration** — reverting to `contents` leaves the row no box at all, so
+        the widths collapse instead of the CSS failing to parse. Each of the three
+        mutations fails exactly one: `contents` reports every rule 1134px short, no border
+        reports four widths of 0, and dropping the `:not(:last-child)` reports 2px on the
+        last.
     - **`em` on `.form-table` itself was *suspected* of that and was not the cause.**
       `em` there does resolve against the `font-size` the same rule declares, and pinning
       a cap derived from the portrait font reproduced the symptom — but replacing it with
