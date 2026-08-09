@@ -23,7 +23,7 @@ const browser = await chromium.launch(process.env.CI ? {} : { channel: 'chrome' 
 
 async function open(
   viewport,
-  { mode = 'Doubles', names = ['Rho', 'Tau', 'Cat', 'Dan'], start = true } = {},
+  { mode = 'Doubles', names = ['Rho', 'Tau', 'Cat', 'Dan'], start = true, casual = false } = {},
 ) {
   const page = await browser.newPage({ viewport });
   page.on('pageerror', (e) => {
@@ -33,8 +33,11 @@ async function open(
   await page.goto(URL);
   await page.waitForSelector('.setup');
   await page.getByRole('button', { name: mode }).click();
+  // A guest game replaces the fields with the colour the team is playing as, so
+  // there is nothing to type — `players` keeps whatever the last game left there.
+  if (casual) await page.getByRole('button', { name: 'Guests' }).click();
   const inputs = page.locator('.team-name-input');
-  for (const [i, name] of names.entries()) await inputs.nth(i).fill(name);
+  if (!casual) for (const [i, name] of names.entries()) await inputs.nth(i).fill(name);
   if (start) await page.getByRole('button', { name: 'Start', exact: true }).click();
   return page;
 }
@@ -302,6 +305,36 @@ console.log('\nthe play screen deals only with scoring');
   const spoken = await page.locator('.scoreboard .visually-hidden').allInnerTexts();
   check('with the fact it carries said in words', spoken.join().includes('throws first'), spoken.join(', '));
   await page.close();
+}
+
+console.log('\nthe first-thrower bag sits on the row that is up, guests or not');
+{
+  // The index the header takes is an index into the rows it is *drawing*, and a
+  // guest game draws one row per team even in doubles — both partners carry the
+  // same colour word. `throwingEnd` still reaches 1 on odd rounds, so there was no
+  // row 1 for the bag to sit on and it vanished every other round. Nothing below
+  // `App.jsx` can see it: the row list and the index are each correct alone.
+  for (const casual of [false, true]) {
+    const who = casual ? 'guest' : 'named';
+    const page = await open(PHONE, { casual });
+    for (let round = 1; round <= 4; round += 1) {
+      const marked = await page.locator('.scoreboard .first-bag.is-first').count();
+      check(`${who} doubles, round ${round}: one bag marks the opener`, marked === 1, `${marked} drawn`);
+      // And on the row that is actually throwing, which is what stops the fix
+      // being "pin it to row 0" — that passes the count on every round.
+      const bag = await page
+        .locator('.scoreboard .name-row:has(.first-bag.is-first) .team-name')
+        .allInnerTexts();
+      const lanes = (await page.locator('.lanes-team').allInnerTexts()).map((s) => s.trim());
+      check(
+        `${who} doubles, round ${round}: on the row that is up`,
+        bag.length === 1 && lanes.includes(bag[0].trim()),
+        `bag ${bag} vs lanes ${lanes}`,
+      );
+      if (round < 4) await playRound(page);
+    }
+    await page.close();
+  }
 }
 
 console.log('\nthe biggest figure in the header is the committed score');

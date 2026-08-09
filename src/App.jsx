@@ -534,6 +534,10 @@ export default function App() {
     doubles && !game.casual
       ? [0, 1].map((i) => playerLabel(game, team, i))
       : [playerLabel(game, team, 0)];
+  // An index into the rows above, so it has to collapse with them: in a casual
+  // doubles game `throwingEnd` reaches 1 on odd rounds and there is no row 1 to
+  // carry the first-thrower bag, so it vanished every other round.
+  const headerActiveIdx = teamPlayers('a').length > 1 ? activeIdx : 0;
   const laneName = (team) => playerLabel(game, team, doubles ? activeIdx : 0);
   const t = totals(game);
   const preview = roundNets(game.current.a, game.current.b);
@@ -827,7 +831,7 @@ export default function App() {
       <header className="scoreboard">
         <TeamScore
           players={teamPlayers('a')}
-          activeIdx={activeIdx}
+          activeIdx={headerActiveIdx}
           score={t.a}
           color={colors.a}
           winner={game.winner === 'a'}
@@ -868,7 +872,7 @@ export default function App() {
         </div>
         <TeamScore
           players={teamPlayers('b')}
-          activeIdx={activeIdx}
+          activeIdx={headerActiveIdx}
           score={t.b}
           color={colors.b}
           winner={game.winner === 'b'}

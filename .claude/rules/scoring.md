@@ -48,6 +48,17 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     reading "Blue" are worse than one. Note the fold changes too: every round the
     team threw lands in its one row, where the slot-filtered version would give each
     half of them.
+  - **The header folds to one row too, so the index into those rows has to fold with
+    them.** `activeIdx` is the throwing *end* and reaches 1 on odd rounds, but a casual
+    doubles header draws a single row per team — so `TeamScore` was asked for row 1 of a
+    one-row list and the first-thrower bag simply vanished every other round. It is
+    `headerActiveIdx` in `App.jsx`, derived from the row list rather than from `casual`,
+    because the rows and the index are the pair that must agree. **Anything new that
+    indexes the labels `playerLabel` produces has the same trap**: the slot index is a
+    court position and stops being a row number the moment two slots share a label.
+    `verify-positions.mjs` is the only thing that can see it — the row list and the index
+    are each correct alone — and it needs the *named* doubles half as well, or pinning
+    the index to 0 passes.
   - **`lineupPayload` needs its own explicit casual guard**, and the `played` test is
     not enough: the slots still hold the last names typed, and those genuinely have
     history, so the board would show a stranger somebody else's form line. The setup
