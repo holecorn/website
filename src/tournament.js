@@ -87,6 +87,25 @@ export function shuffled(items, random = Math.random) {
   return out;
 }
 
+// Re-partner a doubles field: every name in it, shuffled and dealt back two at a time.
+//
+// **The draw randomises which pairs meet and never who is paired with whom** — `place`
+// seats partners in the order the chips were tapped, which is alphabetical for a `Select
+// all` — so this is the one arrangement no later randomness reaches. It is the same
+// `shuffled` and the same injected `random` as the draw, for the same reason.
+//
+// A blank slot is a value in the pool like any other, so a pair with a gap in it moves as
+// readily as a full one and the field keeps its length. Two gaps can land together and
+// leave one entrant empty, which `entrantFaults` already reports as `blank` — the shuffle
+// needs no rule of its own for it.
+export function shufflePairs(entrants, random = Math.random) {
+  const pool = shuffled(
+    entrants.flatMap((e) => [e[0] ?? '', e[1] ?? '']),
+    random,
+  );
+  return entrants.map((_, i) => [pool[i * 2], pool[i * 2 + 1]]);
+}
+
 // A side is one entrant: one name in singles, two in doubles, held as typed so the
 // bracket can show it, and identified by `sideKeyOf` so slot order never matters.
 function asSide(names) {

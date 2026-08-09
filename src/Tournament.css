@@ -822,8 +822,14 @@ button.tie {
   line-height: 1;
 }
 
+.entrant-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .entrant-add {
-  align-self: flex-start;
   padding: 8px 14px;
   border: 1px dashed var(--border);
   border-radius: 10px;
@@ -831,6 +837,23 @@ button.tie {
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
+}
+
+/* The same box as `Add new entrant` but solid, because a dashed one is this screen's
+   shape for an empty thing to fill in and this rearranges what is already there. */
+.entrant-shuffle {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.entrant-shuffle:disabled {
+  color: var(--muted);
+  opacity: 0.5;
 }
 
 .draw-hint {

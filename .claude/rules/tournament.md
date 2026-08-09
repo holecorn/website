@@ -135,6 +135,29 @@ the alternatives that were rejected; this section holds what breaks when you cha
   - **It is offered in doubles too**, where it pairs people in chip order. That is arbitrary,
     but so is any order, and the mode needing twice as many names typed is the one that can
     least afford to be left out. A wrong pair is two chips off and two on.
+  - **`Shuffle pairs` is what makes that arbitrary order not final, and it is the one
+    randomness the draw does not already supply.** The draw shuffles which pairs *meet*;
+    who is partnered with whom is fixed by `place` and nothing downstream touches it, so
+    without this a `Select all` doubles cup is played in alphabetical pairs for ever.
+    `shufflePairs` is the whole rule — the same `shuffled` and the same injected `random`
+    as the draw, so `tournament.js` stays deterministic — and the form only decides which
+    mode has pairs to shuffle.
+    - **A blank slot is a value in the pool**, so a half-filled pair's gap travels and can
+      end up beside somebody else. Two gaps can meet and leave a row nobody is in, which
+      `entrantFaults` already reports as `blank` — **don't add a rule dropping it**: the
+      field keeping its length is what makes the button a rearrangement rather than an
+      edit, and `toggle`'s drop-when-empty is a different act (you took somebody out).
+    - **Absent in singles rather than disabled, because a side is one person** — the
+      absent handler is the gate, the rule `Positions` follows. Below two entrants it is
+      *disabled*, `Select all`'s answer: one pair is one side and `sideKeyOf` reads a side
+      as a set, so there is nothing a shuffle of it could change.
+    - **`verify-tournament.mjs` is the only thing that can see the button**, its mode gate
+      or its disabled rule, all three being inside `Draw`. It seeds `Math.random` so the
+      run is reproducible and asserts properties rather than one arrangement. **The blank
+      assertion has to watch several presses**: dropping the blanks from the pool deals a
+      short list, which pins the gap at the end of the field, and "it is not where it
+      started" passes on a shuffle that never moves it again — this file's standing
+      failure mode, caught by mutation.
   - **The form opens on no rows at all, which moved the count hint's gate.** Every other
     fault waits for a name to be typed; the count deliberately did not, because dropping to
     one entrant is something you did. With nobody there on arrival that stopped being true,

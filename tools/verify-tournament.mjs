@@ -605,6 +605,119 @@ console.log('\nin doubles a tap fills the next half of a pair');
   await page.close();
 }
 
+console.log('\nShuffle pairs re-partners a doubles field');
+{
+  // The draw randomises which pairs *meet* and never who is paired with whom — `place`
+  // fills the next empty half, so a field entered by tapping is partnered in roster
+  // order, which is alphabetical. Nothing below `Draw` can see this: `shufflePairs` is
+  // pure and the button, its mode gate and its disabled rule all live in the form.
+  //
+  // `Math.random` is seeded so the run is reproducible, the same reason `shuffled` takes
+  // its randomness as an argument. The assertions are still properties rather than one
+  // fixed arrangement, so they do not pin the generator.
+  const page = await browser.newPage({ viewport: PHONE });
+  page.on('pageerror', (e) => {
+    console.log('  PAGE ERROR', e.message);
+    failures++;
+  });
+  await page.addInitScript(() => {
+    let s = 42;
+    Math.random = () => {
+      s = (s * 1103515245 + 12345) % 2147483648;
+      return s / 2147483648;
+    };
+  });
+  await page.goto(URL);
+  await page.waitForSelector('.setup');
+  await page.evaluate((names) => {
+    const recs = names.map((n, i) => ({
+      id: `s${i}`,
+      mode: 'singles',
+      players: { a: [n, ''], b: [names[(i + 1) % names.length], ''] },
+      winner: 'a',
+      final: { a: 21, b: 9 },
+      rounds: [],
+      endedAt: 1000 + i,
+    }));
+    localStorage.setItem('holecorn.matches.v1', JSON.stringify(recs));
+  }, ELEVEN.slice(0, 8));
+  await page.reload();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click();
+  await page.getByRole('button', { name: 'New tournament' }).click();
+
+  const shuffle = page.getByRole('button', { name: 'Shuffle pairs' });
+  const pairs = () =>
+    page.locator('.entrants li').evaluateAll((els) =>
+      els.map((li) => [...li.querySelectorAll('.entrant-name')].map((i) => i.value)),
+    );
+  // A side is one person in singles, so there is nothing to pair and the button is not
+  // there at all — the absent handler is the gate, the rule the court diagram follows.
+  check('it is not offered in singles', (await shuffle.count()) === 0);
+  await page.locator('.draw .mode-toggle').getByText('Doubles').click();
+  check('doubles offers it', (await shuffle.count()) === 1);
+  // Quiet rather than gone below two entrants, the answer `Select all` gives an empty
+  // form: one pair is one side, and a side reads as a set, so there is nothing a shuffle
+  // of it could change.
+  check('and it is quiet with nobody in', await shuffle.isDisabled());
+
+  const chips = await page.locator('.roster-chip').allInnerTexts();
+  await page.getByRole('button', { name: 'Select all' }).click();
+  const before = await pairs();
+  check(
+    'a full field pairs in roster order, which is what there is to shuffle',
+    JSON.stringify(before.flat()) === JSON.stringify(chips),
+    JSON.stringify(before),
+  );
+  check('with a field in, it is offered', await shuffle.isEnabled());
+
+  await shuffle.click();
+  const after = await pairs();
+  const set = (rows) => JSON.stringify(rows.map((r) => [...r].sort()).sort());
+  check(
+    'one press re-partners them',
+    set(after) !== set(before),
+    `${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+  );
+  check(
+    'without losing anybody or changing the size of the field',
+    after.length === before.length &&
+      JSON.stringify(after.flat().sort()) === JSON.stringify(before.flat().sort()),
+    JSON.stringify(after),
+  );
+  check(
+    'so the draw is still ready but for the name',
+    (await page.locator('.entrants .is-faulted').count()) === 0,
+  );
+
+  // A gap is a value in the pool like any other, so it travels — which is the half that
+  // makes a half-empty pair fixable by shuffling rather than only by retyping.
+  // A gap is a value in the pool like any other, so it travels — which is the half that
+  // makes a half-empty pair fixable by shuffling rather than only by retyping.
+  //
+  // **Where it lands over several presses, not merely that it moved once.** Dropping the
+  // blanks from the pool and dealing the names back deals a short list, which leaves the
+  // gap at the end of the field *every* time — so "it is not where it started" passes on
+  // a shuffle that pins it, which is this file's standing failure mode.
+  await page.getByRole('button', { name: ELEVEN[0], exact: true }).click();
+  const rowOfGap = async () => (await pairs()).findIndex((r) => r.some((v) => v === ''));
+  const landed = new Set();
+  let intact = true;
+  for (let i = 0; i < 8; i += 1) {
+    await shuffle.click();
+    landed.add(await rowOfGap());
+    const rows = await pairs();
+    intact &&= rows.length === 4 && rows.flat().filter((v) => v === '').length === 1;
+  }
+  check(
+    'the blank space shuffles like any other, rather than settling at one end',
+    landed.size > 1,
+    `landed in row(s) ${[...landed].join(', ')}`,
+  );
+  check('and there is still exactly one of it, in a field of four', intact);
+  await page.close();
+}
+
 console.log('\nthe header holds New tournament, on one line at every width');
 {
   // Drawing one is the reason for coming to this screen, so the button is in the header

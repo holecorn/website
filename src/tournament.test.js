@@ -28,6 +28,7 @@ import {
   seriesStats,
   splitSeriesName,
   removeTournament,
+  shufflePairs,
   shuffled,
   sideNames,
   tieLabels,
@@ -540,6 +541,83 @@ describe('shuffled', () => {
     const input = [...ELEVEN];
     shuffled(input, () => 0.9);
     expect(input).toEqual(ELEVEN);
+  });
+});
+
+describe('shufflePairs', () => {
+  // Every swap goes to index 0, which is a permutation rather than a rotation and is
+  // enough to move a name into a pair it was not in — the whole point of the button.
+  const FIRST = () => 0;
+
+  it('re-partners the field rather than reordering the pairs', () => {
+    expect(
+      shufflePairs(
+        [
+          ['Rho', 'Tau'],
+          ['Sigma', 'Phi'],
+        ],
+        FIRST,
+      ),
+    ).toEqual([
+      ['Tau', 'Sigma'],
+      ['Phi', 'Rho'],
+    ]);
+  });
+
+  it('keeps everybody exactly once and the field the length it was', () => {
+    const pairs = [
+      ['Rho', 'Tau'],
+      ['Sigma', 'Phi'],
+      ['Chi', 'Psi'],
+    ];
+    const out = shufflePairs(pairs, () => 0.5);
+    expect(out.length).toBe(pairs.length);
+    expect(out.flat().sort()).toEqual(pairs.flat().sort());
+  });
+
+  it('shuffles an empty slot like any other, so a gap moves to another pair', () => {
+    expect(
+      shufflePairs(
+        [
+          ['Rho', ''],
+          ['Sigma', 'Phi'],
+        ],
+        FIRST,
+      ),
+    ).toEqual([
+      ['', 'Sigma'],
+      ['Phi', 'Rho'],
+    ]);
+  });
+
+  // Two gaps can land together, which is a row nobody is in. Left to happen rather than
+  // dropped: the field keeping its length is what makes the button a rearrangement, and
+  // `entrantFaults` already refuses the result in exactly the way it did before.
+  it('leaves an entrant empty where two gaps meet, and it is still a fault', () => {
+    const out = shufflePairs(
+      [
+        ['Rho', ''],
+        ['', 'Phi'],
+      ],
+      FIRST,
+    );
+    expect(out).toEqual([
+      ['', ''],
+      ['Phi', 'Rho'],
+    ]);
+    expect(entrantFaults(out).map((f) => f.fault)).toEqual(['blank']);
+  });
+
+  it('does not mutate what it was given', () => {
+    const pairs = [
+      ['Rho', 'Tau'],
+      ['Sigma', 'Phi'],
+    ];
+    shufflePairs(pairs, FIRST);
+    expect(pairs).toEqual([
+      ['Rho', 'Tau'],
+      ['Sigma', 'Phi'],
+    ]);
   });
 });
 

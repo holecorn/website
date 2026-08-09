@@ -481,7 +481,15 @@ names from your archive — anyone the app already knows is a chip you tap to ad
 tap again to remove. **Select all** enters everybody at once, which is usually the
 field, and then you tap off whoever isn't here; it only adds people who aren't in
 yet, so anything already typed stays put. **Add new entrant** gives you a box for
-somebody the app has never seen. Give the tournament a name — several can run at
+somebody the app has never seen.
+
+In doubles, tapping names in pairs them in the order you tapped — alphabetical if you
+used **Select all** — and nothing about the draw ever changes that, since the draw
+decides which pairs *meet*. **Shuffle pairs**, beside **Add new entrant**, deals
+everybody back out at random. A half-filled pair shuffles like anyone else: the gap
+moves too, so it can end up waiting beside somebody different.
+
+Give the tournament a name — several can run at
 once and the lists show nothing but the name and a date, so a blank one is refused
 and so is one you have used before, however you capitalise it. Then
 **Make the draw**. The draw is random and final: it puts the excess into

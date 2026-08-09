@@ -29,6 +29,7 @@ import {
   routeFor,
   seatLabel,
   seriesStats,
+  shufflePairs,
   shuffled,
   sideNames,
   tieExtremes,
@@ -592,7 +593,17 @@ function Extreme({ label, view, found }) {
 // One row per entrant. In doubles an entrant is a pair, which is one side and one row
 // — `sideKeyOf` reads it as a set, so the order the two names are typed in never
 // matters, unlike the setup screen's slots where it decides who stands where.
-function Entrants({ entrants, mode, faults, knownNames, taken, onChange, onRemove, onAdd }) {
+function Entrants({
+  entrants,
+  mode,
+  faults,
+  knownNames,
+  taken,
+  onChange,
+  onRemove,
+  onAdd,
+  onShuffle,
+}) {
   const faulted = new Map(faults.map((f) => [f.index, f.fault]));
   // Everyone the archive knows, less everyone already entered. `entrantFaults` refuses a
   // repeat, but being refused after typing is correction — dropping the name from the
@@ -648,11 +659,26 @@ function Entrants({ entrants, mode, faults, knownNames, taken, onChange, onRemov
           </li>
         ))}
       </ol>
-      {/* "new", because the roster above is how somebody the app already knows gets in.
-          A field is for the person it has never heard of. */}
-      <button type="button" className="entrant-add" onClick={onAdd}>
-        Add new entrant
-      </button>
+      <div className="entrant-tools">
+        {/* "new", because the roster above is how somebody the app already knows gets in.
+            A field is for the person it has never heard of. */}
+        <button type="button" className="entrant-add" onClick={onAdd}>
+          Add new entrant
+        </button>
+        {/* Beside the rows it rearranges rather than up with the roster, which enters
+            people. Absent in singles, where a side is one person and there is nothing to
+            pair — the draw already randomises the order the rows are seated in. */}
+        {onShuffle && (
+          <button
+            type="button"
+            className="entrant-shuffle"
+            disabled={entrants.length < MIN_ENTRANTS}
+            onClick={onShuffle}
+          >
+            Shuffle pairs
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -763,6 +789,11 @@ function Draw({ knownNames, usedNames, suggestions, failed = false, onDrawn, onC
     setEntrants((list) =>
       knownNames.filter((n) => !taken.has(nameKey(n))).reduce(place, list),
     );
+  // Who is partnered with whom, re-dealt. `place` fills the next empty half, so a field
+  // entered by tapping — or in one press of `Select all` — is paired in roster order,
+  // which is alphabetical and nothing about the draw ever changes it. The whole rule is
+  // `shufflePairs`; this only says which mode has pairs to shuffle.
+  const rePair = () => setEntrants((list) => shufflePairs(list));
   const enough = entrants.length >= MIN_ENTRANTS;
   // **An untouched form is empty, not at fault.** A blank row is the app's rather than
   // anybody's, so reporting `blank` on it tells you off for not having typed yet — on a
@@ -914,6 +945,7 @@ function Draw({ knownNames, usedNames, suggestions, failed = false, onDrawn, onC
         }
         onRemove={(i) => setEntrants((list) => list.filter((_, n) => n !== i))}
         onAdd={() => setEntrants((list) => [...list, ['', '']])}
+        onShuffle={mode === 'doubles' ? rePair : undefined}
       />
       {hint.length > 0 && (
         <p className="draw-hint" id="draw-fault">
