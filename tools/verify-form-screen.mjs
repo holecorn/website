@@ -160,6 +160,49 @@ await new Promise((r) => setTimeout(r, 2000));
   await panel.screenshot({ path: `${dir}/form-cleared-panel.png` });
 }
 
+// The middle column is the only part of the score screen whose size depends on what has
+// arrived — the scores are two digits from the first frame — and the two boards sit either
+// side of it, so a round and a target landing used to spring them apart: measured on an
+// 11in iPad, the column 33.4 -> 55.2px, each score 10.9px outward and the round 19.9px up
+// its own column as the empty target line opened under it. The cold board is a code nothing
+// has ever published to, which is what a display waiting for the scorer is.
+console.log('\nthe middle column is the same size before and after the first message');
+{
+  const coldCode = `${code}cold`;
+  const cold = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  cold.on('pageerror', (e) => errors.push(e.message));
+  await cold.goto(`${BASE}?display=1&broker=${encodeURIComponent(broker)}&code=${coldCode}`);
+  await cold.waitForTimeout(2500);
+  const middle = (page) =>
+    page.evaluate(() => {
+      const round = document.querySelector('.display-round');
+      const box = document.querySelector('.display-middle').getBoundingClientRect();
+      const at = (n) => Math.round(n * 10) / 10;
+      return {
+        w: at(box.width),
+        h: at(box.height),
+        top: at(round.getBoundingClientRect().top),
+        round: round.innerText,
+        target: document.querySelector('.display-target').innerText,
+      };
+    });
+  const c = await middle(cold);
+  const l = await middle(display);
+  // Both states have to be asserted, or two boards showing the same thing would agree
+  // about their layout whatever the reservation did.
+  check('the cold board has no round or target yet', c.round === '—' && c.target === '',
+    `"${c.round}" "${c.target}"`);
+  check('and the live one is showing both', l.round === 'R3' && l.target === 'to 21',
+    `"${l.round}" "${l.target}"`);
+  check('the column is the width it will need', Math.abs(c.w - l.w) < 0.5,
+    `${c.w}px cold vs ${l.w}px live`);
+  check('and the height', Math.abs(c.h - l.h) < 0.5, `${c.h}px cold vs ${l.h}px live`);
+  check('so the round does not move when the score arrives', Math.abs(c.top - l.top) < 0.5,
+    `${c.top}px cold vs ${l.top}px live`);
+  await cold.screenshot({ path: `${dir}/display-cold-middle.png` });
+  await cold.close();
+}
+
 // A late joiner has to recover the form screen from the retained message with no
 // request of its own — the same property presence and the layout rely on.
 console.log('\na display opened after the fact recovers a retained lineup');

@@ -69,11 +69,28 @@
   color: #8b9aa8;
   font-family: 'Bebas Neue', system-ui, sans-serif;
   letter-spacing: 0.08em;
+  /* Declared here rather than on the two lines below so their `em` resolves against an
+     inherited size rather than one they set themselves — the trap `--form-size` exists
+     for further down. */
+  font-size: clamp(14px, 3.4vmin, 40px);
 }
 
+/* Both lines hold their box before the first message lands, because this column is what
+   the two scores sit either side of and it is the only part of the board whose size
+   depends on the payload. Measured cold against live: the column goes 33.4 -> 55.2px on
+   an 11in iPad, so each score springs 10.9px outward (6.3px at 874x402, 13.2px on a 1080p
+   monitor) and the round rises 19.9px as the empty target line opens under it.
+   `to 99` is the widest either line holds — `MAX_TARGET` is 99 — and it measures 1.89em on
+   the monitor against 2.18em at the clamp's 14px floor, where hinting costs proportionally
+   the most; 2.2em clears both, and `R100` (1.97em) with it. `1lh` is the line box the
+   filled span takes, so the empty one reserves exactly that and no measured number is
+   needed for the height. `text-align` is what keeps the text centred in a box it no longer
+   sizes. */
 .display-round,
 .display-target {
-  font-size: clamp(14px, 3.4vmin, 40px);
+  min-width: 2.2em;
+  min-height: 1lh;
+  text-align: center;
 }
 
 .display-dash {

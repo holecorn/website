@@ -278,6 +278,34 @@ the broker on the LAN.
   chosen against ~35mm for a 4m viewing distance; a 10" tablet gives 75mm and a
   24" monitor 185mm (the latter from the `vh` term). The portrait pair
   (`min(38vh, 45vw)`) has had no equivalent analysis.
+- **The middle column reserves its box, because it is the only part of the score screen
+  whose size depends on what has arrived.** The scores are two seven-segment digits from
+  the first frame, the team names sit inside a side the digits already make wider, and the
+  status line is absolute — so the round and the target were the whole of it, and the board
+  visibly re-laid itself the moment the first message landed. Measured cold against live on
+  an 11in iPad: the column 33.4 -> 55.2px, each score **10.9px outward** (6.3px at 874x402,
+  13.2px on a 1080p monitor) and the round **19.9px up** its own column as the empty target
+  line opened under it. Portrait moves no digits — the sides are stacked — but the row still
+  grew 98.9 -> 163.9px under them.
+  - **`min-width: 2.2em` on both lines, and the em is inherited rather than self-declared.**
+    `font-size` moved up to `.display-middle` for that: an `em` length on the element that
+    declares the `font-size` it resolves against is the shape `--form-size` exists to avoid.
+    The bound is `to 99`, since `MAX_TARGET` is 99 — measured **1.89em** on a 1080p monitor
+    against **2.18em** at the clamp's 14px floor, where hinting costs proportionally the
+    most, so one ratio for the whole clamp has to clear the floor's. `R100` is 1.97em and
+    rides under it. The price is that the column is ~7px wider than its content on an iPad,
+    which lands in the gap either side and moves the settled layout 3.6px.
+  - **The height is `1lh` and needs no measured number**, which is why it is not a second
+    `em` figure: it is the line box the filled span takes, so the empty one reserves exactly
+    that. `build.cssTarget` names `safari17.5`, well past the 16.4 that unit needs, and
+    Lightning CSS passes it through — checked in `dist`.
+  - **`verify-form-screen.mjs` holds it, against a *cold* board on a code nothing has ever
+    published to**, which is what a display waiting for the scorer is. Both states are
+    asserted, or two boards showing the same thing would agree about their layout whatever
+    the reservation did. Two mutations, each killed only by its own: the `min-width` removed
+    reports 32px cold against 57.7px live, and the `min-height` removed fails the height and
+    the round's position. Not in CI, like everything else in that file — **run it after
+    touching `Display.css`.**
 - **The display-link QR code is generated locally** (`uqr`, in
   `ScoreboardSettings.jsx`) because the link embeds the broker password — don't
   swap it for a QR web service, and don't move it off-device. The browser check

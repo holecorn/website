@@ -726,7 +726,11 @@ copy of the archive used to be stale in — see **Editing names** in
 covers that** — the reach that caught the 12em cap, the record never wrapping, the
 rotation block, and now the rail under each lane. Not a choice: the table only exists
 while a lineup is retained, so nothing hermetic can reach it, and the panel's version is
-a canvas drawn by `panelRender.js` instead. So a layout regression here is caught by
+a canvas drawn by `panelRender.js` instead. **The score screen's middle column is there
+for the same reason from the other side**: what it holds is that a board with nothing
+retained is laid out the same as one holding a round and a target, which needs a live
+message to compare against — see **The middle column reserves its box** in
+`.claude/rules/scoreboard.md`. So a layout regression here is caught by
 somebody running this file, not by a red deploy — **run it after touching
 `Display.css`.** The rotation block is the one that most needs a real iPad rather than
 this: Chrome cannot reproduce the Safari track-sizing bug it exists for, so it passes
