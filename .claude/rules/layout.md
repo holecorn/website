@@ -371,10 +371,17 @@ emitted light against reflected glare. It is 230.7 on the light scheme now.
 - **The stats screen caps at 1040px, the same number the play screen's wide tier uses**, so
   it fills an iPad rather than sitting in 237px gutters. It is capped *at all* because the
   components stop reading well well before a monitor's full width — the seven summary chips
-  would inflate to 265px each, and a Recent match row would put the score a foot from the
-  name. **`.stat-chips` is an auto-fit grid, so whether the seven chips orphan is a
-  function of the width available**, and 720px missed fitting all seven by *four pixels*
-  (`7 x 92 + 6 x 8 = 692` against 688), stranding SKUNKS on its own row.
+  would inflate to 265px each. **`.stat-chips` is an auto-fit grid, so whether the seven
+  chips orphan is a function of the width available**, and 720px missed fitting all seven by
+  *four pixels* (`7 x 92 + 6 x 8 = 692` against 688), stranding SKUNKS on its own row.
+  - **This note used to credit the cap with the Recent match row as well, and it never
+    bought that.** Measured with the sample archive loaded, the gap between the last name
+    and the score is 139px at 390px, 517px at 768px and **789px at the cap** — a foot,
+    which is what the 2026-08-06 review found. A cap cannot fix it, because the row is a
+    *line of text* and 1040px of it is ~114 characters at 14px `system-ui`; the same
+    line-length argument the durability paragraph is capped by, one section down. So it is
+    fixed on the row — see the next section — and what the cap still earns is the chips and
+    the gutters.
 - **The durability paragraph is capped separately, in `ch`.** Line length is a property of
   the text, not of the layout: at 1040px it runs to 136 characters against the 45-75 that
   reads comfortably. Don't fold it into the screen width — capping the screen for the sake
@@ -383,6 +390,46 @@ emitted light against reflected glare. It is 230.7 on the light scheme now.
   when first written: centring measured `.stats-screen` itself, whose gutters were correct
   throughout, and the prose bound was a pixel threshold looser than the container's own
   padding. Both now measure the drawn sections and the rendered character count.
+
+## The Recent match row holds its score against the matchup
+
+- **`.recent-teams` shrink-to-fits and `.recent-chevron` takes `margin-left: auto`**, so the
+  slack a wide screen leaves lands between the score and the disclosure marker rather than
+  between the matchup and its score. The gap is 10px — the row's own `gap` — at every width
+  from 320 to 1920px, against 139–789px before.
+- **The alignment that was given up carried no information, which is the whole argument.**
+  Growing the names box right-aligned the score into a column, and that column cannot be
+  read down: `22–8` is team a first, so which side won depends on the *names* beside it. The
+  rivals list is the same shape one section up and is right to keep it — a `W–L` from the
+  subject's point of view genuinely compares down the column, which is also why it carries a
+  caption and this row does not. **Don't unify the two.**
+- **A column also cannot close the gap even when capped**, because it has to be as wide as
+  the widest row: measured over all 156 records in the sample archive, the widest matchup is
+  201px (`Neil & Rho v Omega & Omicron`) against a **median of 76px**, so the typical row
+  would still sit 125px short of its own score.
+- **The phone is where this cost something, and it is a small aesthetic cost.** Clipping does
+  not move at all — 2 of 12 rows clip at 320px, 1 at 360px, none at 390px and above, before
+  and after — because the names box was already the only shrinkable item on the row. What
+  changes at 390px is that the score's left edge is ragged and the marker sits up to 138px
+  right of it, which is the gap the score used to sit at. A trailing disclosure marker on the
+  row's own edge is the ordinary pattern, and the rows read as sentences.
+- **Three alternatives, all measured, all rejected:**
+  - **Cap the card** (`.recent { max-width: 560px }`) — one declaration, provably a no-op
+    below the cap, and it reads exactly like the phone. But it leaves a 560px card under a
+    1008px table with 448px of dead space beside it, which reads as unfinished. Capping the
+    element rather than the screen is the right instinct; here the content can fill the width
+    once the score travels with the name.
+  - **Cap the names box** (`max-width` on `.recent-teams`) — keeps the column, but the score
+    then sits *left*-aligned at a fixed x with the row's right third empty, and a matchup
+    longer than the cap clips at 1194px where 800px is spare. Clipping a name where there is
+    room for it is what the sticky career column taught, in miniature.
+  - **A media query, so the phone keeps its column** — works, and buys an aesthetic at the
+    price of a breakpoint and of the row meaning two different things at two widths.
+- **`verify-stats.mjs`'s wide block holds both halves**, measured off the text's ink rather
+  than the box — the box is what used to grow, so reading the box reports no gap however far
+  the score has drifted. Restoring `flex: 1` fails the gap assertion at 770px and nothing
+  else; dropping the chevron's anchor fails the marker assertion at 774px and nothing else.
+  Both mutations pass all 770 unit tests.
 
 ## The side rail
 

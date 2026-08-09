@@ -11,8 +11,9 @@
   /* 1040px, the same cap the play screen's wide tier uses, so this screen fills an iPad
      the way that one does — 77px gutters rather than the 237px a 720px cap left. Capped
      at all because the components below stop reading well long before a 24" monitor's
-     full width: the seven chips would inflate to 265px each, and a Recent match row
-     would put the score a foot from the name. */
+     full width: the seven chips would inflate to 265px each. It does *not* fix the
+     Recent match row — 1040px still put the score 789px from the name — which is why
+     `.recent-teams` no longer grows. */
   max-width: 1040px;
   gap: 20px;
   padding-top: 24px;
@@ -174,6 +175,9 @@
 
 .recent-chevron {
   flex: none;
+  /* Anchored to the row's trailing edge, so the slack a wide screen leaves lands here
+     rather than between the matchup and its score. */
+  margin-left: auto;
   display: inline-block;
   color: var(--muted);
   font-size: 13px;
@@ -215,8 +219,12 @@
   font-size: 12px;
 }
 
+/* Shrink-to-fit, deliberately not `flex: 1`. Growing this box right-aligns the score into
+   a column, which looks tidier and cannot be read down — `22–8` says nothing until you
+   have read which name comes first — and it put the score 789px from the last name on a
+   1194px iPad. The score belongs to the matchup, so it travels with it; the date column
+   is what keeps the names aligned. */
 .recent-teams {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -735,9 +743,9 @@
 
 /* A tournament tie. The accent lives *inside* the row's existing 14px left padding and is
    absolutely positioned, so it takes nothing at all from the names — which matters more
-   here than anywhere: `.recent-teams` is `flex: 1`, so it sits at zero slack by
-   construction and already clips at 393px with long names. Measured, any badge on this row
-   comes straight out of the name. */
+   here than anywhere, because the phone has no slack to give it: 2 of 12 rows already clip
+   at 320px and 1 at 360px. Measured, any badge in the flow comes straight out of the name,
+   and the width a wide screen has spare is not the width this has to survive. */
 .recent li.is-tie .recent-open {
   position: relative;
 }

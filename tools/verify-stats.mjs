@@ -1005,6 +1005,27 @@ check(
       // it should not have to.
       tableOverflows: scroller.scrollWidth > scroller.clientWidth + 1,
       chipRows: chipTops.size,
+      // The score belongs to the matchup and has to stay beside it. `.recent-teams` used
+      // to grow, which right-aligned the score into a column that looks tidier and reads
+      // down to nothing — `22–8` says nothing until you know which name is first — and put
+      // it 789px from the last name at exactly this width. Measured off the *text*: the
+      // box is what grows, so reading the box reports no gap however far the score drifts.
+      scoreGap: (() => {
+        const teams = document.querySelector('.recent-teams');
+        const range = document.createRange();
+        range.selectNodeContents(teams);
+        const ink = range.getBoundingClientRect().right;
+        range.detach();
+        const score = document.querySelector('.recent-score').getBoundingClientRect();
+        return Math.round(score.left - Math.min(ink, teams.getBoundingClientRect().right));
+      })(),
+      // The slack goes here instead, so the disclosure marker still marks the edge of the
+      // row it opens rather than floating mid-row.
+      chevronInset: (() => {
+        const row = document.querySelector('.recent-open').getBoundingClientRect();
+        const chev = document.querySelector('.recent-chevron').getBoundingClientRect();
+        return Math.round(row.right - chev.right);
+      })(),
       // Characters per line, not pixels: the paragraph is capped independently of the
       // screen because line length is a property of the text, and uncapped at 1040px it
       // runs to ~119 characters against the 45-75 that reads comfortably. Measured by
@@ -1033,6 +1054,10 @@ check(
   check('so the career table need not scroll sideways', !m.tableOverflows);
   check('the seven summary chips fit one row', m.chipRows === 1, `${m.chipRows} rows`);
   check('and the prose stays a readable line length', m.proseChars <= 85, `~${m.proseChars} chars`);
+  // The 1040px cap does not fix this and was credited with it for a while — at the cap the
+  // row is still 114 characters wide, so the gap has to be closed on the row itself.
+  check('a recent row keeps its score beside the matchup', m.scoreGap <= 24, `${m.scoreGap}px away`);
+  check('and its marker on the row edge', m.chevronInset <= 20, `${m.chevronInset}px in`);
   await wide.close();
 }
 
