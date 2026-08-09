@@ -344,6 +344,18 @@ manual for a while and drifted twice — a fixture that claimed to be "exactly
 what `scoreboardPayload()` produces" but was missing a field, and two characters
 `FONT_CHARS` advertised with blank glyphs behind them.
 
+**The glyph step puts the tracked files back, and that is not tidiness — without it
+the check repaired itself.** It regenerates *over* `glyphs.h` and `src/panelGlyphs.js`
+and then diffs, so a stale tree used to go: run 1 FAILED, runs 2 and 3 PASSED, with both
+tracked files silently rewritten and nothing having said so. CI never saw it — a fresh
+checkout runs this once — so the whole cost fell on whoever ran it locally, and it turns
+the standing "don't trust a single failed run, check it's consistent across runs" habit
+into a green run plus two uncommitted rewrites. It restores from the snapshot it was
+already holding, and the message now says to run the generator rather than to commit a
+result it has just undone. **Anything else here that regenerates in place needs the same
+restore.** The logo step doesn't: it can't regenerate without a browser, so it compares a
+source hash instead.
+
 The fixture card is covered by `verify-form-screen.mjs` rather than there, because it
 needs a broker. Everything about *what* it draws is pinned by the pixel check, so what is
 left for a browser is the wiring, and the block that matters most is the last one: it

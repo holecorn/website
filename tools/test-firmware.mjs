@@ -14,7 +14,7 @@
 // generator.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 
@@ -58,14 +58,24 @@ step('ArduinoJson', () => {
 // src/panelRender.js quantise the same polygon differently.
 const GENERATED = ['firmware/hub75/glyphs.h', 'src/panelGlyphs.js'];
 
+// **The tracked files go back exactly as they were, and that is the whole point
+// of holding `before`.** The generator writes over them in place, so a check that
+// only diffed left a stale tree *repairing itself*: measured, run 1 FAILED and
+// runs 2 and 3 PASSED with both tracked files silently rewritten. CI never saw it
+// — a fresh checkout runs this once — so the cost fell on whoever ran it locally,
+// and it converts the standing "don't trust a single failed run, check it's
+// consistent" habit into a green run plus two uncommitted rewrites. Restoring is
+// what makes the failure repeat until somebody fixes it.
 step('the generated glyph tables match src/segments.js', () => {
   const read = () => GENERATED.map((f) => readFileSync(resolve(root, f), 'utf8'));
   const before = read();
   run('node', ['firmware/hub75/generate_glyphs.mjs'], root);
-  const stale = GENERATED.filter((_, i) => before[i] !== read()[i]);
+  const after = read();
+  const stale = GENERATED.filter((_, i) => before[i] !== after[i]);
+  stale.forEach((f) => writeFileSync(resolve(root, f), before[GENERATED.indexOf(f)]));
   if (stale.length > 0) {
     throw new Error(
-      `${stale.join(' and ')} stale — regenerated, commit the result.\n` +
+      `${stale.join(' and ')} stale — run: node firmware/hub75/generate_glyphs.mjs\n` +
         '   The source is src/segments.js and tools/panel-preview/font5x7.mjs.',
     );
   }
