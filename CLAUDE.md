@@ -518,3 +518,13 @@ anything in `tools/`, or the firmware host suites.
 Push to `main` → `.github/workflows/deploy.yml` runs `npm ci → npm test →
 npm run build → deploy` to GitHub Pages. The custom domain is pinned by
 `public/CNAME`. No manual steps.
+
+**The two publishing steps carry `if: ${{ !env.ACT }}`, so a green `act` run means
+everything up to and including `test:browser` passed and nothing about the deploy.**
+They fail locally by their nature — `upload-pages-artifact` wants an artifact service
+and `deploy-pages` an OIDC token, and act has neither (`--artifact-server-path` gets
+past the token and then dies on `ECONNRESET`). Skipping them costs no coverage a local
+run ever had. **On the step and never the job**: GitHub does not expose the `env`
+context in a job-level `if`, so `if: ${{ !env.ACT }}` on `deploy:` is a parse error
+that fails the real deploy — which is why the one-step `deploy` job is gated on its
+step instead. `actions/cache` needs no gate; it warns and carries on.

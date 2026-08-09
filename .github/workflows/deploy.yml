@@ -64,7 +64,12 @@ jobs:
       # v5 excludes dotfiles from the artifact unless include-hidden-files is set.
       # Checked rather than assumed: dist/ has none, and CNAME is not one, so the
       # custom domain is unaffected.
+      #
+      # Skipped under `act`, which has no artifact service to upload to — the
+      # step is what fails a local run, and it only hands dist/ to GitHub, so
+      # nothing a local run is for goes unchecked by skipping it.
       - uses: actions/upload-pages-artifact@v5
+        if: ${{ !env.ACT }}
         with:
           path: dist
 
@@ -96,5 +101,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Skipped under `act` for the same reason as the upload, plus an OIDC
+      # token it cannot mint. On the step and not the job: GitHub does not
+      # expose the `env` context in a job-level `if`, so that spelling is a
+      # workflow parse error rather than a skip.
       - id: deployment
+        if: ${{ !env.ACT }}
         uses: actions/deploy-pages@v5
