@@ -149,12 +149,14 @@ fighting the sun.
 ## Where everyone stands
 
 **Positions** draws the court from above — both boards, each flanked by its two
-pitcher's boxes — and shows who is standing where this round. Whoever is throwing
-is outlined in their team colour, with a bag marking the box that throws first,
-an arrow pointing at the board they're aiming at, and anyone waiting their turn
-dimmed. It's a toggle on phones, opening just below the buttons; on wide landscape
-screens it's permanently on show at the top of the right-hand column, above the
-round history.
+pitcher's boxes — and shows who is standing where this round. The starting board
+is the top row, so its hole sits at the top of it the way a cornhole board is
+usually pictured, and the far board below is drawn the other way up. Whoever is
+throwing is outlined in their team colour, with a bag marking the box that throws
+first, an arrow pointing at the board they're aiming at, and anyone waiting their
+turn dimmed. It's a toggle on phones, opening just below the buttons; on wide
+landscape screens it's permanently on show at the top of the right-hand column,
+above the round history.
 
 In **singles** both players walk down to the other board after every round,
 keeping to their own side of the court, so only the end they throw from changes.

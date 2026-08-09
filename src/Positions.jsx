@@ -101,14 +101,8 @@ export default function Positions({ game, onSwapSides, setup }) {
     <div className="positions">
       <p className="visually-hidden">{spoken(positions, oneEnd)}</p>
       <div className="court">
-        {!oneEnd && (
-          <>
-            <End data={ends[1]} place="far" colors={colors} first={first} />
-            <div className="throw-dir" aria-hidden="true">
-              {throwingEnd === 0 ? '▲' : '▼'}
-            </div>
-          </>
-        )}
+        {/* Drawn first so a lone singles board has its hole at the top, which is
+            where a cornhole board is recognisable. */}
         <End
           data={ends[0]}
           place="near"
@@ -117,6 +111,14 @@ export default function Positions({ game, onSwapSides, setup }) {
           // The starting board carries it because startSide names that board.
           onSwapSides={onSwapSides && (() => onSwapSides(otherSide(game.startSide)))}
         />
+        {!oneEnd && (
+          <>
+            <div className="throw-dir" aria-hidden="true">
+              {throwingEnd === 0 ? '▼' : '▲'}
+            </div>
+            <End data={ends[1]} place="far" colors={colors} first={first} />
+          </>
+        )}
       </div>
       <p className="positions-hint">
         {walks

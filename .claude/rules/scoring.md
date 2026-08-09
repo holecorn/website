@@ -437,6 +437,19 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     this round's swap puts it. Using the current round for both ends makes the
     far row flip on odd rounds without those players ever moving, which reads as
     a bug. One test covers exactly this and nothing else does.
+  - **The starting board is the top row, and that is a 180° rotation rather than a
+    new rule.** The hole sits at the raised end of a board, away from whoever is
+    throwing at it, which is the outer edge of the diagram whichever way round the
+    two rows go — so the flip swapped only which class takes which edge
+    (`at-near` top, `at-far` bottom) and inverted the throw arrow. What it buys is
+    the singles setup screen, where one board is drawn and a hole at its foot reads
+    as an unlabelled rectangle: a cornhole board is pictured with the circle at the
+    top. It also puts the rows in the order the name fields list the slots, which is
+    what retired the chip's inversion argument above.
+    - **`.swap-sides` moved to the foot of the starting board**, because the hole
+      took the head of it. That board is the only one carrying the control, so
+      nothing else is affected, and the `::before` target reaches back to 16px
+      against the hole's 13px — don't grow it upwards.
   - **The setup screen draws one board in singles and the play screen draws
     two**, and the divergence is the point rather than an oversight. Which end a
     singles pair starts at is not part of the arrangement — nobody changes box, so
@@ -479,13 +492,14 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
       cannot express.
     - **It is only meaningful on setup, where `rounds.length` is 0**, which is what
       makes the throwing end 0 and a slot index mean "the board they stand at".
-    - **The chip states the board rather than pointing.** An up/down arrow was the
-      obvious control and is wrong: the form lists slot 0 **first** and the court
-      draws it **last** (far row on top), so a direction is correct in one place and
-      inverted in the other. The visible text is where they stand, and the
-      `aria-label` has to contain that text as well as saying what pressing does
-      (WCAG Label in Name), hence "Rho at the far board, press to move to the start
-      board".
+    - **The chip states the board rather than pointing**, and the reason has changed
+      out from under it. It used to be that a direction was correct in one place and
+      inverted in the other — the form lists slot 0 **first** and the court drew it
+      **last** — which the court's orientation has since settled (see below), so an
+      arrow would now agree with both. It stays text because the `aria-label` has to
+      contain the visible text as well as saying what pressing does (WCAG Label in
+      Name), and "far board" is what the label needs to say either way: "Rho at the
+      far board, press to move to the start board".
     - **The bag needs the setup gate as much as the chip does**, because a slot-1
       bag is `swapEnds` + `setFirst`, not just `setFirst`.
     - **`Toss for first` is a coin flip on `nextFirst` and nothing else**, because

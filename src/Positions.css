@@ -54,22 +54,25 @@
 }
 
 /* The hole sits at the raised end of the board, away from whoever is throwing
-   at it — so on both boards that is the outer edge of the diagram. */
-.court-end.at-far .board-hole {
+   at it — so on both boards that is the outer edge of the diagram. The starting
+   board is the top row, which is what puts a lone singles board's hole at the
+   top. */
+.court-end.at-near .board-hole {
   top: 6px;
 }
 
-.court-end.at-near .board-hole {
+.court-end.at-far .board-hole {
   bottom: 6px;
 }
 
 /* Mirroring the court is the one adjustment with nowhere to live in the name
    fields, so it sits between the two boxes it swaps. The glyph stays small
    enough not to fight the board's 2ft x 4ft proportion; ::before is what makes
-   the target big enough to hit. */
+   the target big enough to hit. It sits at the foot of the board because the
+   hole is now at the head of it, and the enlarged target reaches back to 16px. */
 .swap-sides {
   position: absolute;
-  top: 3px;
+  bottom: 3px;
   left: 50%;
   transform: translateX(-50%);
   width: 22px;
@@ -191,14 +194,14 @@
     height: 5px;
     margin-left: -2.5px;
   }
-  .court-end.at-far .board-hole {
+  .court-end.at-near .board-hole {
     top: 5px;
   }
-  .court-end.at-near .board-hole {
+  .court-end.at-far .board-hole {
     bottom: 5px;
   }
   .swap-sides {
-    top: 1px;
+    bottom: 1px;
     width: 18px;
     height: 18px;
   }
