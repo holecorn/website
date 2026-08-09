@@ -562,3 +562,33 @@ describe('contrast', () => {
     expect(inline).toEqual([]);
   });
 });
+
+// The third thing only a stylesheet knows: which of two pieces of text is the smaller one.
+// `NOT RECORDED` in the play screen's header is the only thing on that screen saying the
+// game won't be filed, and it sat at 10px — the floor of the scale, and the size that
+// column spends on a *label* (`PROJECTED`) rather than on a fact. Nothing renders wrongly
+// at 10px, so neither a browser check nor a component test has anything to fail on.
+//
+// A relation rather than `=== 12px`, because the relation is the reason: the note may not
+// be smaller than the target it sits under. **The caption between them is exempt and has
+// to stay 10px** — measured, `.projection-cap` at 12px takes the centre column from 64.9px
+// to 76.6px and clips `Bartholomew` by 12px instead of 6px at 375px, in *every* game. The
+// note escapes that budget because it only draws in a casual one, where the names are
+// colour words: at 12px it is 102.7px wide and the worst case measured (360x640, Yellow v
+// Green) still leaves each team column 28.8px of slack. See `.claude/rules/layout.md`.
+describe('type', () => {
+  const app = sheets.find((s) => s.file === 'App.css').text;
+  const sizeOf = (sel) => {
+    const rule = new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`);
+    const body = rule.exec(app)?.[1] ?? '';
+    return Number(/(?:^|;)\s*font-size\s*:\s*([\d.]+)px/.exec(body)?.[1]);
+  };
+
+  it('the casual note is not smaller than the target above it', () => {
+    // Named, because an absent declaration parses as NaN and the comparison below then
+    // fails saying nothing about which of the two went missing.
+    expect(sizeOf('.target'), '.target sets no font-size in px').toBeGreaterThan(0);
+    expect(sizeOf('.casual-note'), '.casual-note sets no font-size in px').toBeGreaterThan(0);
+    expect(sizeOf('.casual-note')).toBeGreaterThanOrEqual(sizeOf('.target'));
+  });
+});

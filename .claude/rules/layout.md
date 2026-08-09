@@ -154,6 +154,39 @@ source-order traps themselves — read those first, they bite hardest.
   The `.first-bag` glyph *is* shared on purpose — nothing redeclares it, only
   `.field-row .first-bag::before` adds a target.
 
+## The header's centre column
+
+- **`.scoreboard` is `1fr auto 1fr`, so every pixel the middle column takes comes straight
+  out of the two names.** The `auto` track is sized by its widest child, and the team cards
+  either side hold a name that ellipsizes. Measured at 375px with `Alexandra`/`Bartholomew`
+  in the lineup: the column sits at its 64.9px floor and `Bartholomew` is already clipped by
+  6px. So a caption in that column is not a free label — it is spent off the names, which is
+  why `.projection-cap` says `PROJECTED` and not `IF IT ENDS NOW` (25px, two characters off
+  every name).
+  - **`.projection-cap` has to stay 10px.** At 12px it goes 64.9px → 76.6px and the same
+    fixture clips by 12px instead of 6px, 19px instead of 13px at 360px — and it pays that
+    in *every* game, because the projection is always mounted.
+- **`.casual-note` is the exception, and it is 12px deliberately.** It reads as the same kind
+  of caption sitting in the same budget, so shrinking it back to match its neighbour is the
+  plausible tidy-up; the reason it is exempt is that it only draws in a **casual** game,
+  where `playerLabel` has replaced the names with colour words. Measured worst case —
+  360x640, the two longest colour names, two-digit scores — the note is 102.7px and each
+  team column still has **28.8px of slack** (104.6px wide against a 72px name row), with no
+  name clipped, no score overflow and no horizontal overflow at any of five sizes.
+  - **It is sized to `.target`, not merely bumped.** `TO 21` above it is 12px with the same
+    transform, letter-spacing and `--muted`, so the note now reads as a fact in that column
+    rather than as a label for one — and `--muted` was never the problem, measuring 6.29:1
+    on the dark scheme and 5.53:1 on the light. `src/css.test.js` holds the relation rather
+    than the value; the exemption above is the comment beside it.
+  - **In landscape the note sets the header's height**, which is the one thing it costs:
+    70px → 71.3px at 12px, and the centre column overtakes the team cards there. Absorbed
+    with nothing to give back — measured across three landscape sizes, the lane stays 84px
+    and the page still does not scroll. In portrait it costs nothing at all (76/82/94px
+    unchanged), because the team cards are taller.
+  - **Wrapping to two lines was the alternative and it is the wrong trade.** `NOT` over
+    `RECORDED` holds the column at 64.9px, but costs 10.8px of height — spending the
+    contended axis in landscape to save the one with 28.8px spare.
+
 ## The two colour schemes
 
 The app was dark-only, and the phone is the thing held in the sun. Measured before this,

@@ -111,6 +111,18 @@ check could see it. Matching inner `{…}` pairs fails a fourth way: a value hol
 template literal makes the template's own braces the innermost pair, so the object's keys
 are never read. Verified by mutation, each naming its file and its key.
 
+**And a third thing: which of two pieces of text is the smaller one.** One assertion, that
+`.casual-note` is no smaller than the `.target` above it — the play screen's `NOT RECORDED`
+is the only thing saying a guest game won't be filed and it sat at 10px, the floor of the
+scale and the size that column spends on the `PROJECTED` *label*. Nothing renders wrongly at
+10px, so no browser check and no component test has anything to fail on. Written as the
+relation rather than as `=== 12px` because the relation is the reason, and because the next
+thing to touch this is a type-scale pass that would otherwise quietly undo it. Two
+mutations, each naming its own fault: back to 10px fails on the comparison, and the
+declaration removed fails on the named guard rather than on a bare `NaN`. **`.projection-cap`
+is exempt and must stay 10px** — see **The header's centre column** in
+`.claude/rules/layout.md` for what it costs every game.
+
 `tools/verify-schemes.mjs` covers what none of that can: whether the light scheme *fires*,
 and whether the browser understands the derivation. Both fail silently and in opposite
 directions — the app renders perfectly with the light values simply never reached, and an

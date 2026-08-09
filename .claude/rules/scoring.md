@@ -66,10 +66,17 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     record and didn't has no other symptom. Measured at 390x844, it costs no height —
     the header stays 94px and the lanes 168px whether or not the note is drawn, because
     `.center-readout` is shorter than the team score blocks either side of it. It does
-    cost width, and it is the *widest* thing in that column at 87px against the
+    cost width, and it is the *widest* thing in that column at 102.7px against the
     projection's 65px, so a casual game is the case where the header names are tightest —
     which is also the case where they are colour names. See **The header's big figure is
     the committed score**.
+    - **And it is 12px, not the 10px its neighbour in that column is**, because it is the
+      one thing on screen saying the game won't be filed and it sat at the floor of the
+      type scale. It escapes the column's width budget for exactly the reason above: the
+      names are colour words, so the slack is there and no other game pays for it. The
+      measured figures, the landscape height it does cost, and why `.projection-cap` may
+      *not* follow it up are in **The header's centre column** in
+      `.claude/rules/layout.md`; `css.test.js` holds it at no smaller than `to 21`.
   - **The toggle shares `.setup-top` with the mode and `Start`, and that row is the
     tightest space on the screen.** It started as its own row below and cost 58px of
     height for a control that is off almost always. Three things bought the space and

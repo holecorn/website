@@ -736,9 +736,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Sized like the target, not like the 10px caption between them, and past this column's
+   width budget on purpose: a casual game's names are colour words, so the slack is there. */
 .casual-note {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   white-space: nowrap;
