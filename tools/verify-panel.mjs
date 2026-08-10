@@ -126,6 +126,31 @@ console.log('?panel=1 routes to the panel, not the app');
   await page.close();
 }
 
+// Add to Home Screen reads the manifest, so the app's `start_url: '/'` is what a board
+// icon opened before this — the scorer, on the tablet propped against the fence. Only a
+// browser can see main.jsx swap the link, and the two halves have to be checked together:
+// a board manifest that named a `start_url` would install just as cleanly and still throw
+// the query string away, which is the broker, the code and the password.
+console.log('\nthe board views link a manifest that keeps the query string');
+for (const [view, file] of [
+  ['panel', 'panel.webmanifest'],
+  ['display', 'display.webmanifest'],
+]) {
+  const page = await browser.newPage();
+  await page.goto(`${BASE}?${view}=1&${OFFLINE}`);
+  const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+  check(`?${view}=1 links its own manifest`, href === `/${file}`, href ?? 'no manifest link');
+  const manifest = href && (await page.evaluate((h) => fetch(h).then((r) => r.json()), href));
+  // Absent, not `/?panel=1`: the fallback for a missing start_url is the page that linked
+  // the manifest, which is the only route by which the broker details reach a fresh
+  // install — a home-screen web app does not get the storage this tab wrote them to.
+  check('and names no start_url', Boolean(manifest) && !('start_url' in manifest));
+  // Without this iOS adds a Safari bookmark rather than a web app, and the board loses
+  // both the fullscreen tap and any chance of the wake lock.
+  check('and still installs standalone', manifest && manifest.display === 'standalone');
+  await page.close();
+}
+
 // The pixel check proves drawSplash draws the wordmark, every offset every bag passes
 // through and both boards' knocks; it cannot see whether Panel.jsx ever puts it on screen,
 // that it hands over a clock that moves, or that it gets out of the way again. All three

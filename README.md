@@ -647,6 +647,14 @@ display keeps its own screen awake where the browser allows it, and tapping
 anywhere on it toggles fullscreen (browser chrome otherwise eats the height the
 digits want; iOS Safari won't fullscreen a page, so it does nothing there).
 
+**The board can live on the tablet's home screen.** Open the display link and add
+it from the Share menu: the icon keeps the whole link, so it opens straight onto
+the scoreboard with the broker details already in it, and it installs as its own
+app called **Board** rather than as another copy of the scorer. `&panel=1` does
+the same and installs as **Panel**. Note the tablet's copy of the settings starts
+empty — a home-screen app doesn't share storage with the browser — so add it to
+the home screen from a full display link rather than from a bare `?display=1`.
+
 The digits are sized for reading across a pitch: roughly 75mm tall on a 10"
 tablet and 185mm on a 24" monitor, against the ~35mm that a 4m viewing distance
 needs. Brightness, not size, is the limit outdoors — a tablet is very readable in

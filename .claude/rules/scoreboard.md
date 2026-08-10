@@ -374,6 +374,40 @@ the broker on the LAN.
   `ScoreboardSettings.jsx`) because the link embeds the broker password — don't
   swap it for a QR web service, and don't move it off-device. The browser check
   in `tools/verify-copy-link.mjs` decodes the rendered QR to prove it scans.
+- **A board installs from its own manifest, and what that manifest has to do is name no
+  `start_url`.** Add to Home Screen reads the manifest rather than the URL on screen, so
+  with only the app's manifest on the page a board bookmarked from `?display=1` installed
+  an icon that opened the *scorer* — the symptom is the query string vanishing, and it is
+  being replaced rather than stripped. Omitted, the spec falls back to the page that
+  linked the manifest, which is the link with the broker, the code and the password on it.
+  `public/panel.webmanifest` and `public/display.webmanifest` are that, and `main.jsx`
+  points the link at whichever view is routing.
+  - **The fallback is the feature, not a shortcut around writing a `start_url` out.** A
+    home-screen web app gets its own storage container, so the config `Panel.jsx` and
+    `Display.jsx` saved while the link was open in Safari is *not there* on first launch
+    of the icon. A manifest naming `/?panel=1` would install just as cleanly and open a
+    board with nothing to connect to, showing the "open the display link" message.
+  - **Two static files and one href, rather than a manifest generated at runtime.** The
+    credentials are per-setup, so a baked `start_url` was never available; a `blob:` or
+    `data:` manifest carrying the real one is the alternative and is unnecessary once the
+    fallback does the work — and Safari's support for those is unverified where the
+    fallback is in the spec. The link element is *created* when missing because
+    vite-plugin-pwa injects it into the built `index.html` and not into the dev server's.
+  - **`display: standalone` is what makes it a web app rather than a Safari bookmark**,
+    which the display's fullscreen tap and any chance of the wake lock ride on. The board
+    manifests carry their own `name` for the same reason the two views are separate files
+    — a home screen holding both wants to tell them apart.
+  - **Both halves are held by `verify-panel.mjs`**, because only a browser sees `main.jsx`
+    swap the link and a board manifest that grew a `start_url` would install perfectly and
+    still throw the credentials away. Verified by mutation: a `start_url` fails only the
+    one assertion, and dropping the swap fails the four naming the files.
+  - **What no check here can reach is whether WebKit applies that fallback**, and as of
+    2026-08-10 it is unconfirmed on the iPad — it is in the manifest processing algorithm
+    and the assertions above only prove the manifest is what the page links. The tell is
+    the Add to Home Screen sheet showing the query string rather than `holecorn.com/`. **If
+    it does not**, the next move is dropping the manifest link outright on the board views:
+    iOS then falls back to the legacy `apple-mobile-web-app-capable` path in `index.html`,
+    which keeps the URL for certain, at the cost of standing on a deprecated meta tag.
 - **The link carries a *second* credential pair when there is one, and `linkCredentials`
   is the whole rule.** A publisher writes and a board only ever subscribes, so the pair
   that goes into a link — copied, shown as a QR, and left in a tablet's `localStorage`

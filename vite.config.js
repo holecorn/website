@@ -13,6 +13,10 @@ export default defineConfig({
         'icon.svg',
         'apple-touch-icon.png',
         'fonts/BebasNeue-Regular.ttf',
+        // The two board views swap the manifest link for one of these, so installing a
+        // board on a field with no internet has to find them in the precache.
+        'display.webmanifest',
+        'panel.webmanifest',
       ],
       manifest: {
         name: 'Holecorn',
