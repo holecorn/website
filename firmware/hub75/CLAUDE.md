@@ -228,13 +228,20 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
   the library applies, not a linear channel share — so raw `lit%` over-states draw by
   ~2.5x. **Yellow is the expensive team colour** (CIE share 0.49 against green's 0.17),
   so a worst case is drawn in two yellows. Full reasoning in `README.md`'s `Power`.
-  - **The constant term is what retired two risks this file used to carry**: the board
-    refusing to start under switch-on load (it has started on both supplies since
-    2026-08-03), and the 1.4%-duty no-state screen being too quiet to keep the supply
-    awake — the board cannot draw under ~390 mA whatever is on screen, against a 100 mA
-    cutoff. **The 10k pull-up on OE this used to hold as a last-resort fix is gone
-    entirely**: it was for a bright pre-`begin()` window that this panel does not have —
-    see the FM6126A note below.
+  - **The constant term retired the no-state screen being too quiet to keep the supply
+    awake** — the board cannot draw under ~390 mA whatever is on screen, against a
+    100 mA cutoff. **The 10k pull-up on OE this used to hold as a last-resort fix is
+    gone entirely**: it was for a bright pre-`begin()` window that this panel does not
+    have — see the FM6126A note below.
+  - **It did not retire the board refusing to start, and that claim is now wrong.** The
+    C300X will not start the board from cold with the cable already in — **station on,
+    *then* plug the board in**. Observed 2026-08-10 on all three ports, with two cables,
+    with the panels unbolted, and RESET does not revive it; the cause is unattributed
+    and `README.md`'s `Running off a battery` lists the five mechanisms ruled out. What
+    this used to say — that it had started on both supplies — was true and answered a
+    different question: every one of those starts was into a supply already on. **The
+    OE pull-up stays gone even though a supply now does refuse to start the board**,
+    because its premise is false for an FM6126A panel.
 - **One USB-C cable feeds everything, through the controller.** The MatrixPortal's two
   M3 standoffs either side of the HUB75 socket are USB power brought straight out, and
   Adafruit's instruction is to power from USB and hang the matrix off them — so there

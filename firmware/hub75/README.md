@@ -1169,11 +1169,37 @@ A session is a couple of hours, so **runtime is not a constraint at any brightne
 the worst case is still ten sessions on a charge. **Two risks this section used to
 carry are now retired, and both were artefacts of the model having no constant term:**
 
-- **The board starts.** It has run off both supplies since first light on 2026-08-03,
-  so neither switch-on inrush nor the OE window (a HUB75 panel does not power up dark —
-  see `How to destroy it`) stops it here. **A 10k pull-up on OE is therefore not a thing
-  to fit pre-emptively**; it stays written down as the first fix to try *if* a future
-  supply refuses to start the board, which is the only symptom it addresses.
+- **The board starts off a live supply — but the C300X will not start it from cold.**
+  Switch the station on with the cable already in and the port stays dark indefinitely;
+  pull the cable and push it back in and the board comes up every time. **So the setup
+  routine is: station on, *then* plug the board in.** One step, and it is what the
+  replug amounts to anyway.
+  - **What this bullet used to say — that the board had started on both supplies since
+    first light — is true and answers a different question.** Every one of those starts
+    was into a supply that was already on, which is how you naturally use a small bank.
+    The configuration that fails had never been tried.
+  - **The cause is unattributed, and five mechanisms are ruled out.** Observed
+    2026-08-10: not the cable (two of them, including the one in the bank's box); not
+    the port (**USB-C1, USB-C2 and USB-A all fail**, and a USB-A port has no CC layer,
+    which rules out attach detection); not capacitor inrush (it still fails with the
+    panels unbolted from the 5 V terminals, so there is no bulk capacitance left to
+    charge); not the S3's power-on reset losing a slow VBUS ramp (pressing RESET while
+    it sits there does nothing); and not the station's low-load cutoff, which needs two
+    continuous hours under threshold and so cannot act in the first second. The router
+    on the neighbouring port starts from cold every time. Each of those looked like the
+    answer in turn — the point of listing them is that the next person spends the effort
+    somewhere new.
+  - **The 10k pull-up on OE is not the fix, even though this is the exact symptom it was
+    written down for.** It addressed a bright pre-`begin()` window, and this panel is
+    FM6126A: with no register init it is *completely dark*, so there is no such window
+    and nothing to suppress. It is gone from this file entirely — see the FM6126A note
+    in `CLAUDE.md`.
+  - **The station has no low-current or trickle mode**, checked 2026-08-10. That was
+    the likeliest clean fix — it is the feature vendors add for exactly this symptom —
+    so its absence is why the plug-it-in-second step is being kept rather than chased.
+  - **The cheapest thing still untried is the Belkin**, which would split a board fault
+    from a C300X one and needs no new hardware. Deliberately not run: the remedy costs
+    one step either way, and knowing which of the two is at fault would not change it.
 - **The idle screen cannot shut the port down.** The old worry was that the 1.4%-duty
   no-state screen drew ~110 mA against a 50-100 mA cutoff. The measured constant term
   means the board **cannot draw less than ~1.95 W, or 390 mA**, whatever is on screen —
@@ -1275,15 +1301,18 @@ to be the meter this section said to borrow, permanently on site and free. What 
 cannot do is resolve better than 1 W, so the constant term is known to about +/-0.25 W
 and everything derived from it inherits that.
 
-**An inline USB meter would still add little, and first power-up stays deliberately
-uninstrumented:**
+**An inline USB meter would refine nothing that matters — but first power-up is no
+longer uninstrumented by choice, and it is the one thing here a meter could answer:**
 
-- **Inrush is beyond it.** A UM24C-class meter updates at a few Hz; the switch-on
-  event is milliseconds. It would read a comfortable steady current either side of
-  a spike that trips the supply, so the meter cannot distinguish inrush from the OE
-  window from a wiring fault. The fix ladder — 10k pull-up on OE, then lower
-  brightness, then a different supply — is the same whatever it displayed. **Nothing
-  on that ladder has been needed**: the board has started on both supplies.
+- **Switch-on is beyond the readout, and that now costs something.** A UM24C-class
+  meter updates at a few Hz and the station's own per-port display needs Bluetooth,
+  which means the board has to be alive before you can see it — so neither can watch
+  the millisecond that matters. That was academic until 2026-08-10, when the C300X
+  turned out not to start the board from cold with the cable already in (see `Running
+  off a battery`). Five mechanisms are ruled out and none survives, and a meter that
+  could see VBUS appear and go is the one instrument that would settle it. **Still not
+  worth buying**, because the remedy is to plug the cable in second — but this is the
+  first time anything here has wanted one.
 - **A better meter would refine a number nothing depends on.** The worst case is 44%
   of the port and the port folds back, so a figure wrong by half is still safe. Borrow
   one **the day the battery is swapped for mains, or the board is moved to an AC

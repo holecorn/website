@@ -120,6 +120,13 @@ and `?panel=1` resolve offline despite the query string.
     Known GL-MT3000 behaviour with PD sources — a CC-negotiation quirk, not a fault. The
     station's USB-A port runs a 2 W router fine, but it shares a 20 W ceiling with
     USB-C1, so don't hang the phone on that pair as well.
+  - **Switch the station on first, then plug the board in.** With the board's cable
+    already in at switch-on the port never comes up, on any of the three; the router is
+    unaffected and starts from cold on USB-C2. Cause unattributed after five mechanisms
+    were ruled out — `firmware/hub75/README.md`'s `Running off a battery` has the list.
+  - **Don't swap the two over.** Board on USB-C1 and router on USB-C2 is the better of
+    the two arrangements: the router additionally fails to cold-start on USB-C1, which
+    is the CC quirk above, so swapping them gets you *neither* device rather than one.
 
 ## One-time setup
 
