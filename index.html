@@ -6,6 +6,10 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0f1419" />
+    <!-- Deprecated in favour of the manifest's `display`, and still what makes an icon a
+         standalone web app on /board/ — which is this page with the manifest link stripped
+         out, because Add to Home Screen would otherwise replace a scoreboard's URL with the
+         manifest's start_url and lose its whole configuration. See vite.config.js. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Holecorn" />

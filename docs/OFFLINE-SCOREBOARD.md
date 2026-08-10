@@ -78,6 +78,14 @@ service worker cache with no network at all — verified in the built `sw.js`, w
 registers a `NavigationRoute` bound to the cached `index.html`, so `?display=1`
 and `?panel=1` resolve offline despite the query string.
 
+The display link points at `/board/` rather than `/`, which is the same page with
+the manifest link stripped so a tablet can keep it on its home screen — see
+`.claude/rules/scoreboard.md`. That page is precached too, and reaching it offline
+depends on `ignoreURLParametersMatching` in the workbox config: without it a
+navigation carrying a query matches nothing in the precache and the
+`NavigationRoute` above answers with `index.html`, which is the wrong page here
+rather than merely a slow one.
+
 ## What was rejected, so nobody re-derives it
 
 - **An iPhone Personal Hotspot.** It is cellular tethering: Apple document it as

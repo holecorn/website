@@ -196,6 +196,14 @@ describe('display link', () => {
     });
   });
 
+  it('points at /board/, the copy of the page with no manifest in it', () => {
+    // Not cosmetic and not a second router: Add to Home Screen replaces the URL on
+    // screen with the manifest's start_url, so a link at `/` installs a scoreboard icon
+    // that opens the scorer with none of this configuration. `/?display=1` still works
+    // for links already copied — it just cannot be added to a home screen.
+    expect(new URL(displayUrl('https://holecorn.com', config)).pathname).toBe('/board/');
+  });
+
   it('omits credentials that were never set', () => {
     const url = new URL(
       displayUrl('https://holecorn.com', { ...config, username: '', password: '' }),

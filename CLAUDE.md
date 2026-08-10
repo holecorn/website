@@ -348,8 +348,19 @@ project dependency. It starts and stops its own preview server.
     `vite.config.js` names browsers with `light-dark()` — **don't loosen it**: Lightning CSS
     silently rewrites the function into a `prefers-color-scheme` switch that answers to
     nothing, and the app goes on looking right while the board reads blank.
-- **Custom domain served from root**, so Vite `base` stays `/` and the PWA
-  `scope`/`start_url` are `/`. Don't add a base path.
+- **Custom domain served from root**, so Vite `base` stays `/`. Don't add a base path.
+- **`/board/` is `index.html` with the manifest link stripped, and it is a build step
+  because it has to be** — `boardPage()` in `vite.config.js`. Add to Home Screen replaces
+  the URL on screen with the manifest's `start_url`, so a scoreboard added from
+  `/?display=1&…` installed an icon that opened the scorer with none of the configuration
+  that query string carries, and a home-screen web app gets its own storage, so the link is
+  the only way it arrives. It must be gone from the HTML **as served**: removing the link
+  from `main.jsx` was tried twice and Safari has taken the manifest before a module script
+  runs. `index.html`'s three `apple-mobile-web-app-*` tags are what make the icon
+  standalone, and `ignoreURLParametersMatching` in the workbox config is what stops the
+  service worker answering `/board/` with the cached `index.html`. **Four things that each
+  read as tidy-uppable and are not**, in files no rule glob reaches; the measurements and
+  the three rejected versions are in `.claude/rules/scoreboard.md`.
 - **iOS has no Web Vibration API** — the haptic buzz silently no-ops on iPhone
   (installed or not). The visual jitter still works. Not a bug to "fix".
 - **A dev server reached by LAN IP is not a secure context**, and that is how

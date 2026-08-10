@@ -16,7 +16,11 @@ const CONFIG = {
   displayUsername: 'viewer-u',
   displayPassword: 'viewer-p',
 };
-const LINK = `${URL}?display=1&code=ab12c&broker=${encodeURIComponent(CONFIG.broker)}&user=viewer-u&pass=viewer-p`;
+// `board/`, because that is the copy of the page with no manifest link in it and so the
+// only one that survives being added to a home screen — see `displayUrl`. Written out
+// rather than derived, so a link that quietly went back to `/` fails here as well as in
+// the unit test.
+const LINK = `${URL}board/?display=1&code=ab12c&broker=${encodeURIComponent(CONFIG.broker)}&user=viewer-u&pass=viewer-p`;
 const leaksScorer = (link) =>
   link.includes(CONFIG.username) || link.includes(CONFIG.password);
 

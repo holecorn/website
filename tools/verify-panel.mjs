@@ -126,28 +126,59 @@ console.log('?panel=1 routes to the panel, not the app');
   await page.close();
 }
 
-// Add to Home Screen reads the manifest, so the app's `start_url: '/'` is what a board
-// icon opened before this — the scorer, on the tablet propped against the fence. Only a
-// browser can see main.jsx swap the link, and the two halves have to be checked together:
-// a board manifest that named a `start_url` would install just as cleanly and still throw
-// the query string away, which is the broker, the code and the password.
-console.log('\nthe board views link a manifest that keeps the query string');
-for (const [view, file] of [
-  ['panel', 'panel.webmanifest'],
-  ['display', 'display.webmanifest'],
-]) {
+// Add to Home Screen replaces the URL on screen with the manifest's `start_url`, so a
+// board added from `/?display=1&…` installed an icon that opened the scorer with none of
+// its configuration — and that query string is the only way the broker details reach it.
+// `/board/` is the same page with the manifest link stripped at build time (`boardPage()`
+// in vite.config.js); the scorer keeps its own, and with it Chrome's install prompt.
+// Measured on an iPad: no manifest keeps the query, a manifest loses it whatever it says
+// and whenever JS removes the link — which is why this is a build step and not a branch.
+//
+// The last of these is the one that matters, and it is the reason the block is a browser
+// check at all: with a service worker in front of it, `/board/?display=1&…` is a
+// navigation that matches nothing in the precache by default and gets answered with the
+// cached `index.html` — the very page with the manifest. Silent, and only from the second
+// visit onwards, which is every visit that is not the one you tested.
+console.log('\n/board/ has no manifest, so an icon keeps the query string');
+{
   const page = await browser.newPage();
-  await page.goto(`${BASE}?${view}=1&${OFFLINE}`);
-  const href = await page.locator('link[rel="manifest"]').getAttribute('href');
-  check(`?${view}=1 links its own manifest`, href === `/${file}`, href ?? 'no manifest link');
-  const manifest = href && (await page.evaluate((h) => fetch(h).then((r) => r.json()), href));
-  // Absent, not `/?panel=1`: the fallback for a missing start_url is the page that linked
-  // the manifest, which is the only route by which the broker details reach a fresh
-  // install — a home-screen web app does not get the storage this tab wrote them to.
-  check('and names no start_url', Boolean(manifest) && !('start_url' in manifest));
-  // Without this iOS adds a Safari bookmark rather than a web app, and the board loses
-  // both the fullscreen tap and any chance of the wake lock.
-  check('and still installs standalone', manifest && manifest.display === 'standalone');
+  await page.goto(`${BASE}board/?display=1&${OFFLINE}`);
+  check(
+    '/board/ links no manifest',
+    (await page.locator('link[rel="manifest"]').count()) === 0,
+  );
+  check(
+    'and is the board rather than the scorer',
+    (await appeared(page, '.display')) && (await page.locator('.setup').count()) === 0,
+  );
+  // Still the pre-manifest path that makes an icon a standalone web app, and the board is
+  // the page that has nothing else to say it.
+  const capable = await page.locator('meta[name="apple-mobile-web-app-capable"]').count();
+  check('and still claims to be web-app capable', capable === 1);
+
+  await page.goto(BASE);
+  check(
+    'the scorer keeps its manifest',
+    (await page.locator('link[rel="manifest"]').count()) === 1,
+  );
+
+  // Now with the service worker actually in control, which is the state the precache
+  // routing decides — before this the page came straight off the preview server and the
+  // question had not been asked.
+  const ready = await page.evaluate(() =>
+    navigator.serviceWorker.ready.then(
+      () => true,
+      () => false,
+    ),
+  );
+  check('the service worker registered', ready);
+  await page.goto(`${BASE}board/?display=1&${OFFLINE}`);
+  const served = await page.evaluate(() => Boolean(navigator.serviceWorker.controller));
+  check(
+    'and serves /board/ from the board page, not the cached index.html',
+    served && (await page.locator('link[rel="manifest"]').count()) === 0,
+    served ? '' : 'the page was not controlled, so this proved nothing',
+  );
   await page.close();
 }
 

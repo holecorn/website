@@ -374,40 +374,68 @@ the broker on the LAN.
   `ScoreboardSettings.jsx`) because the link embeds the broker password — don't
   swap it for a QR web service, and don't move it off-device. The browser check
   in `tools/verify-copy-link.mjs` decodes the rendered QR to prove it scans.
-- **A board installs from its own manifest, and what that manifest has to do is name no
-  `start_url`.** Add to Home Screen reads the manifest rather than the URL on screen, so
-  with only the app's manifest on the page a board bookmarked from `?display=1` installed
-  an icon that opened the *scorer* — the symptom is the query string vanishing, and it is
-  being replaced rather than stripped. Omitted, the spec falls back to the page that
-  linked the manifest, which is the link with the broker, the code and the password on it.
-  `public/panel.webmanifest` and `public/display.webmanifest` are that, and `main.jsx`
-  points the link at whichever view is routing.
-  - **The fallback is the feature, not a shortcut around writing a `start_url` out.** A
+- **`/board/` exists so a scoreboard can be added to a home screen, and the manifest is
+  why.** Add to Home Screen reads a manifest and *replaces* the URL on screen with its
+  `start_url` — so a board added from `/?display=1&…` installed an icon that opened the
+  **scorer**, with none of the configuration that query string carries. The symptom reads
+  as the query being stripped when it is being substituted. `boardPage()` in
+  `vite.config.js` emits `dist/board/index.html`: the built `index.html` with the manifest
+  link taken out, which is the entire difference. `displayUrl` points there, and
+  `index.html`'s apple meta tags are what still make the icon a standalone web app.
+  **Confirmed on the iPad, 2026-08-10** — both the board icon keeping its query and the
+  scorer still installing from `/` with its manifest.
+  - **A board's whole address is its query string, and there is no second route for it.** A
     home-screen web app gets its own storage container, so the config `Panel.jsx` and
-    `Display.jsx` saved while the link was open in Safari is *not there* on first launch
-    of the icon. A manifest naming `/?panel=1` would install just as cleanly and open a
-    board with nothing to connect to, showing the "open the display link" message.
-  - **Two static files and one href, rather than a manifest generated at runtime.** The
-    credentials are per-setup, so a baked `start_url` was never available; a `blob:` or
-    `data:` manifest carrying the real one is the alternative and is unnecessary once the
-    fallback does the work — and Safari's support for those is unverified where the
-    fallback is in the spec. The link element is *created* when missing because
-    vite-plugin-pwa injects it into the built `index.html` and not into the dev server's.
-  - **`display: standalone` is what makes it a web app rather than a Safari bookmark**,
-    which the display's fullscreen tap and any chance of the wake lock ride on. The board
-    manifests carry their own `name` for the same reason the two views are separate files
-    — a home screen holding both wants to tell them apart.
-  - **Both halves are held by `verify-panel.mjs`**, because only a browser sees `main.jsx`
-    swap the link and a board manifest that grew a `start_url` would install perfectly and
-    still throw the credentials away. Verified by mutation: a `start_url` fails only the
-    one assertion, and dropping the swap fails the four naming the files.
-  - **What no check here can reach is whether WebKit applies that fallback**, and as of
-    2026-08-10 it is unconfirmed on the iPad — it is in the manifest processing algorithm
-    and the assertions above only prove the manifest is what the page links. The tell is
-    the Add to Home Screen sheet showing the query string rather than `holecorn.com/`. **If
-    it does not**, the next move is dropping the manifest link outright on the board views:
-    iOS then falls back to the legacy `apple-mobile-web-app-capable` path in `index.html`,
-    which keeps the URL for certain, at the cost of standing on a deprecated meta tag.
+    `Display.jsx` saved while the link was open in Safari is *not there* on first launch of
+    the icon. An icon opening a bare `?display=1` is a board with nothing to connect to and
+    no settings form to fix it — **which is the shape of the work if this ever has to be
+    solved another way**: a paste-the-link box on the unconfigured display, and a stored
+    "this device is the board" role, since neither the view nor the credentials would be in
+    the URL any more.
+  - **The path carries nothing but the absence of the manifest.** The query still says
+    which view, so `/?display=1` and `&panel=1` are unchanged, every link already copied
+    keeps working, and `main.jsx` never learned about the path — it just cannot be
+    installed. Two ways to reach a board is the price, and the cheap one.
+    - **Dropping `display=1` from the link was considered and left alone.** `/board/`
+      could imply the view, which would shorten the link and stop it reading redundantly,
+      and nothing but `main.jsx` reads the param — `configFromSearch` ignores it. Rejected
+      because it makes *which view* depend on where the page is served from, at the moment
+      that has two answers: a link that loses its path works today and would then render
+      the **scorer** on the tablet, silently. The cost is that `/board/` with no query
+      renders the scorer too, which is incoherent and harmless.
+  - **A copy of the built page, not a second source file**, so the two cannot drift and
+    nothing repeats the bundle's hashed asset names. The strip **checks that it matched**,
+    the `generate_logo.mjs` lesson — a board page that quietly kept its manifest looks
+    perfect and installs the scorer.
+  - **`ignoreURLParametersMatching: [/.*/]` is what keeps `/board/` from being answered
+    with `index.html`.** Every URL this app opens carries a query, and on workbox's default
+    (utm_ and fbclid) no navigation matches the precache, so they all fall through the
+    `NavigationRoute` to the cached `index.html` — right for `/?display=1`, and exactly the
+    bug here, since the board page differs from it only by the link it must not have.
+    Silent, and only from the **second** visit on, when the service worker has taken over.
+  - **Three smaller versions were built and two of them shipped, all measured on an iPad on
+    2026-08-10.** Per-view manifests naming no `start_url` — the spec falls back to the page
+    that linked the manifest, and Chrome does, and Safari offered `holecorn.com/`
+    regardless. Then `main.jsx` removing the link outright, which failed the same way.
+    **The lesson is the timing**: Safari has taken the manifest before a module script runs,
+    so *nothing done from JS can matter*, and a runtime `blob:` manifest carrying
+    `location.href` as an explicit `start_url` fails for the same reason. Then dropping the
+    manifest app-wide, which works and costs Chrome's install prompt for everybody — the
+    board is an iPad, but the app is public, so a build step here beats a capability
+    removed from every Android user.
+  - **Isolated probes are what settled it, not the app**: two throwaway pages on a LAN
+    server, one with no manifest and one with a static `start_url` carrying a query. Both
+    kept their query on the sheet, which is what proved the mechanism was right and the
+    *timing* was the fault. Reach for that shape again — the app has a service worker, a
+    manifest and a router in the way, and none of them was the question.
+  - **`verify-panel.mjs` holds it, and the service-worker half is the reason it is a
+    browser check at all.** It loads `/board/` cold, asserts no manifest and that the
+    *display* rendered, checks the scorer still has one, then reloads `/board/` **with the
+    service worker in control** — the state the precache rule decides, which the cold load
+    never asks about. Verified by mutation: dropping `ignoreURLParametersMatching` fails
+    only that last assertion, and it would also catch the board page missing from the
+    precache. Plugin order is *not* load-bearing, measured: vite-plugin-pwa generates the
+    service worker after every `closeBundle`, so either order precaches the page.
 - **The link carries a *second* credential pair when there is one, and `linkCredentials`
   is the whole rule.** A publisher writes and a board only ever subscribes, so the pair
   that goes into a link — copied, shown as a QR, and left in a tablet's `localStorage`

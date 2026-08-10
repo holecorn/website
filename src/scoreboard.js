@@ -357,13 +357,20 @@ export function linkCredentials(config) {
 
 // A link that opens the display view already configured, so the tablet acting
 // as the scoreboard never has to have the broker details typed into it.
+//
+// **`/board/` and not `/`, so the tablet can keep it on its home screen.** That page is
+// `index.html` with the manifest link stripped out (`boardPage()` in `vite.config.js`),
+// because Add to Home Screen replaces the URL on screen with the manifest's `start_url` —
+// and this query string is the configuration. The path is the only thing that carries: the
+// query still says which view, so `/?display=1&…` keeps working for every link already
+// copied, it just cannot be installed.
 export function displayUrl(origin, config) {
   const params = new URLSearchParams({ display: '1', code: normalizeCode(config.code) });
   if (config.broker) params.set('broker', config.broker);
   const { username, password } = linkCredentials(config);
   if (username) params.set('user', username);
   if (password) params.set('pass', password);
-  return `${origin}/?${params}`;
+  return `${origin}/board/?${params}`;
 }
 
 // Blank-padded rather than zero-padded, the way a real scoreboard reads, and
