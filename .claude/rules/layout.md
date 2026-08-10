@@ -35,6 +35,30 @@ source-order traps themselves — read those first, they bite hardest.
   there the two team cards sit side by side, and 408px between them collapses the
   lanes to about 28px. The token is centred with auto margins rather than a
   `translateX`, because the vibrate animation owns `transform`.
+- **The card's border is the only team colour the lanes gained, and the three louder
+  versions were each rendered and measured before being rejected.** The card was almost
+  entirely neutral — `--panel`, `--border`, and black/white band washes — so the two teams
+  were told apart by the name and the bags alone, which is thin when half the bags are
+  unthrown and grey. `border-color: var(--team-accent)` follows
+  `.pitch-box.is-throwing` and `.first-bag.at-throwing`, and is free: it repaints nothing
+  that a bag or any text sits on. Worst case over all four colours on both schemes is
+  **4.61:1** against `--panel` and 4.81 against `--bg`, well clear of the 3:1 a graphic
+  this size wants. It costs **1.15/255** of the light scheme's mean luminance (229.9 →
+  228.8), which is the whole of that figure's drift.
+  - **A 5px edge rail was the strongest-looking and fails `verify-lanes.mjs`.** Four extra
+    pixels of card come straight out of the lane track wherever the 408px `.main` cap
+    bites — measured, 72.0px → **71.9px** on iPad portrait, iPad landscape and desktop
+    alike, which is exactly the reaches-the-cap assertion. It is recoverable
+    (`padding-left: 7px` puts it back to 72.0), so if this is ever revisited the rail has
+    to pay for itself out of the padding.
+  - **Tinting the card, or the bands themselves, spends headroom that is already spent.**
+    Both repaint what the bag rests on. A 12% card tint takes bag-against-card from 9.36
+    to 7.55 on the light scheme and **4.81 to 4.08** on the dark one, and the black-alpha
+    band washes over a coloured card muddy the darker-is-hole depth cue. Team-coloured
+    bands are worse again: a red bag on a red hole band visibly loses the separation the
+    band alphas were re-tuned for (see **The lane's three bands** below). **More colour is
+    a second channel getting louder, not a new one** — the name is what actually carries
+    which team this is.
 - **`tools/verify-lanes.mjs` is what holds all of those numbers**, because none of
   them is reachable from a unit test. The one worth understanding: it asserts the
   lane *reaches* 72px where there's room, not merely that nothing overflows. The
@@ -261,7 +285,7 @@ somebody may reach for, which is how the drift got in.
 The app was dark-only, and the phone is the thing held in the sun. Measured before this,
 the play screen's mean luminance was **33.6/255** with 0.4% of pixels above mid-grey —
 about 13% of what a light UI emits at the same backlight, where outdoors the limit is
-emitted light against reflected glare. It is 230.7 on the light scheme now.
+emitted light against reflected glare. It is 228.8 on the light scheme now.
 
 - **There is no in-app toggle, and that is the design rather than a stage it hasn't
   reached.** The trigger for this is sunlight, and the OS already has the control: on iOS

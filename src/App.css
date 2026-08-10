@@ -784,10 +784,14 @@
   touch-action: manipulation;
 }
 
+/* The border takes the team's colour, the way `.pitch-box.is-throwing` and
+   `.first-bag.at-throwing` already do. It is the *only* thing here that may: a card
+   tint or a team-coloured band repaints what the bag rests on, and that headroom is
+   already spent — see `.claude/rules/layout.md`. */
 .team-lanes {
   position: relative;
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1px solid var(--team-accent);
   border-radius: 14px;
   padding: 10px 12px 14px;
 }

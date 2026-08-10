@@ -325,7 +325,7 @@ project dependency. It starts and stops its own preview server.
     is `#448def` rather than the `#2f80ed` it was. See `.claude/rules/layout.md`.
 - **The app follows the phone's light/dark setting, and there is no toggle in it.** The
   constraint is sunlight — dark-only measured **33.6/255** mean luminance on the play
-  screen, against 230.7 on the light scheme — and the control already exists one swipe
+  screen, against 228.8 on the light scheme — and the control already exists one swipe
   away, under the brightness slider in Control Centre. Every colour is a single
   `light-dark(light, dark)` in `index.css` and **nothing re-declares a palette anywhere**.
   `.claude/rules/layout.md` holds the measured detail and loads with any stylesheet.

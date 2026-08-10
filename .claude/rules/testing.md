@@ -186,7 +186,7 @@ directions — the app renders perfectly with the light values simply never reac
 unsupported `oklch(from …)` makes the whole declaration invalid at parse time, so every
 team name inherits `--text` on **both** schemes and the app quietly loses its second
 channel while staying perfectly legible. It measures the play screen's mean luminance
-(33.6/255 before this existed, 230.7 now), that the two team inks differ from each other
+(33.6/255 before this existed, 228.8 now), that the two team inks differ from each other
 and from the body ink, and a bag against the band it is resting on, which is a gradient
 stop against a derived colour and therefore exists only once a browser has resolved both.
 - **It also holds the `WASH` tag on an expanded match**, which is the only *text* saying
