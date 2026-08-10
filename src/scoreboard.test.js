@@ -13,6 +13,7 @@ import {
   layoutTopic,
   lineupPayload,
   lineupTopic,
+  linkCredentials,
   loadScoreboardConfig,
   normalizeCode,
   normalizeLayout,
@@ -205,6 +206,46 @@ describe('display link', () => {
 
   it('ignores params the link did not carry', () => {
     expect(configFromSearch('?display=1&code=abc')).toEqual({ code: 'abc' });
+  });
+
+  it('carries the display pair instead of the scorer’s when one is set', () => {
+    const url = new URL(
+      displayUrl('https://holecorn.com', {
+        ...config,
+        displayUsername: 'viewer',
+        displayPassword: 'lookonly',
+      }),
+    );
+    expect(url.searchParams.get('user')).toBe('viewer');
+    expect(url.searchParams.get('pass')).toBe('lookonly');
+    // The whole point: the writable pair is nowhere in a link that gets copied,
+    // shown as a QR and left in a tablet's localStorage.
+    expect(url.search).not.toContain(config.username);
+    expect(url.search).not.toContain(config.password);
+  });
+
+  it('falls back to the scorer’s pair when the display one is blank', () => {
+    expect(linkCredentials({ ...config, displayUsername: '', displayPassword: '' })).toEqual(
+      { username: 'board', password: 'sekrit' },
+    );
+    expect(linkCredentials({ broker: '', code: '' })).toEqual({
+      username: '',
+      password: '',
+    });
+  });
+
+  it('takes the display pair as a unit, so a half-filled one cannot leak the scorer’s', () => {
+    // Falling back field by field would put the writable password into a link the
+    // person filling these boxes believes they have just locked down. A pair the
+    // broker refuses is the safe failure.
+    expect(linkCredentials({ ...config, displayUsername: 'viewer', displayPassword: '' }))
+      .toEqual({ username: 'viewer', password: '' });
+    expect(linkCredentials({ ...config, displayUsername: '', displayPassword: 'lookonly' }))
+      .toEqual({ username: '', password: 'lookonly' });
+    const url = new URL(
+      displayUrl('https://holecorn.com', { ...config, displayUsername: 'viewer' }),
+    );
+    expect(url.searchParams.has('pass')).toBe(false);
   });
 });
 

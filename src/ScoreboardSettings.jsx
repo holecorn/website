@@ -25,6 +25,8 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
   const linkInputRef = useRef(null);
   const ready = configComplete(config);
   const link = ready ? displayUrl(window.location.origin, config) : '';
+  // What the link in hand actually carries, rather than prose covering both cases.
+  const readOnly = Boolean(config.displayUsername || config.displayPassword);
 
   useEffect(() => {
     if (!copied) return undefined;
@@ -109,7 +111,7 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
 
       <div className="sb-pair">
         <label className="sb-field">
-          Username
+          Scorer username
           <input
             value={config.username}
             autoCapitalize="none"
@@ -119,10 +121,35 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
           />
         </label>
         <label className="sb-field">
-          Password
+          Scorer password
           <input type="password" value={config.password} onChange={set('password')} />
         </label>
       </div>
+
+      <div className="sb-pair">
+        <label className="sb-field">
+          Display username
+          <input
+            value={config.displayUsername ?? ''}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck="false"
+            onChange={set('displayUsername')}
+          />
+        </label>
+        <label className="sb-field">
+          Display password
+          <input
+            type="password"
+            value={config.displayPassword ?? ''}
+            onChange={set('displayPassword')}
+          />
+        </label>
+      </div>
+      <p className="sb-hint">
+        A read-only broker account for the display and the panel. Leave both blank and
+        the link carries the scorer&apos;s instead.
+      </p>
 
       <fieldset className="sb-layout">
         <legend>Panel layout</legend>
@@ -187,8 +214,10 @@ export default function ScoreboardSettings({ config, onChange, status, error }) 
 
       {status === 'error' && error && <p className="sb-error">{error}</p>}
       <p className="sb-hint">
-        The display connects to the same broker and game code. Anyone with these
-        details can post to your scoreboard, so keep the code to yourself.
+        The display connects to the same broker and game code.{' '}
+        {readOnly
+          ? 'The link carries the display credentials, so a copy of it can watch the game but not post to it.'
+          : 'The link carries the scorer’s credentials, so anyone holding it can post to your scoreboard — keep it to yourself.'}
       </p>
     </details>
   );

@@ -27,6 +27,10 @@ const EMPTY_CONFIG = {
   broker: '',
   username: '',
   password: '',
+  // The pair the display link carries instead, when the broker has a read-only
+  // account to offer. See `linkCredentials`.
+  displayUsername: '',
+  displayPassword: '',
   code: '',
   enabled: false,
   layout: 'full',
@@ -333,13 +337,32 @@ export function configFromSearch(search) {
   return picked;
 }
 
+// Which credentials the display link hands out. The scorer's pair publishes; a
+// board only ever subscribes, so where the broker offers a read-only account the
+// link should carry that instead — `docs/OFFLINE-SCOREBOARD.md` provisions exactly
+// that split as `scorer` and `viewer`. Left blank the link keeps carrying the
+// scorer's, which is what every setup did before these fields existed.
+//
+// **All-or-nothing, never field by field.** Falling back per field would take a
+// half-filled display pair and put the *scorer's password* into a link the person
+// filling those boxes believes they have just locked down — the one outcome this
+// exists to prevent. Taken as a unit a half-filled pair is simply refused by the
+// broker, which is visible.
+export function linkCredentials(config) {
+  const username = String(config.displayUsername ?? '');
+  const password = String(config.displayPassword ?? '');
+  if (username || password) return { username, password };
+  return { username: config.username ?? '', password: config.password ?? '' };
+}
+
 // A link that opens the display view already configured, so the tablet acting
 // as the scoreboard never has to have the broker details typed into it.
 export function displayUrl(origin, config) {
   const params = new URLSearchParams({ display: '1', code: normalizeCode(config.code) });
   if (config.broker) params.set('broker', config.broker);
-  if (config.username) params.set('user', config.username);
-  if (config.password) params.set('pass', config.password);
+  const { username, password } = linkCredentials(config);
+  if (username) params.set('user', username);
+  if (password) params.set('pass', password);
   return `${origin}/?${params}`;
 }
 

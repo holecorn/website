@@ -399,6 +399,20 @@ topic read holecorn/#
 link cannot inject a score — worth having, since that link carries the password
 in its query string.
 
+**The app has fields for both pairs, and it needs them or this split buys
+nothing.** `scorer` goes in **Scorer username**/**Scorer password** and `viewer`
+in **Display username**/**Display password**; the display link then carries
+`viewer` and the writable pair never leaves the phone. Left blank the link falls
+back to the scorer's, which is the shape that made these ACLs decorative — the
+aclfile was written before the app could tell the two apart.
+`.claude/rules/scoreboard.md` holds the app side.
+
+**The LED panel was already on `viewer`** — `MQTT_USER` in its gitignored
+`secrets.h` — so it was only the browser board, `?display=1` and `?panel=1`, that
+still connected as the scorer, because the link is where it gets its credentials
+from. That is the gap these fields close, and it is why the firmware needs no
+change.
+
 **The certificate is copied here rather than read where `acme` leaves it.**
 mosquitto drops privileges to the `mosquitto` user, and acme.sh creates its
 domain directories mode 0700 — so `/etc/acme` cannot even be traversed, and

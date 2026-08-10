@@ -639,9 +639,9 @@ without signing up, the public test broker `wss://broker.emqx.io:8084/mqtt`
 works with no username or password (it's public, so pick an obscure game code).
 
 On the setup screen, open **External scoreboard** and fill in the broker URL,
-credentials and a **game code** (the **New** button generates one), then tick
-**Publish the score**. **Copy display link** gives you a URL that opens the
-display already configured — send it to the tablet and open it there, or press
+the **scorer** credentials and a **game code** (the **New** button generates
+one), then tick **Publish the score**. **Copy display link** gives you a URL that
+opens the display already configured — send it to the tablet and open it there, or press
 **QR code** and scan it with the tablet's camera instead. The
 display keeps its own screen awake where the browser allows it, and tapping
 anywhere on it toggles fullscreen (browser chrome otherwise eats the height the
@@ -663,9 +663,19 @@ ends need internet; a phone hotspot is enough, though note ESP32-class hardware
 is 2.4GHz-only, so a hotspot serving one needs **Maximize Compatibility** on.
 
 Anyone who knows your broker details and game code can post to your scoreboard,
-so treat the display link as a shared secret — note it carries your broker
+so treat the display link as a shared secret — note it carries a broker
 **password** in the query string, so it ends up in browser history and in
 whatever you paste it into. Use a broker user you can revoke.
+
+**Give the display its own credentials if your broker will let you.** A board
+only ever subscribes, so if you can make a second, read-only account there, put
+it in **Display username** and **Display password** and the link will carry that
+one instead of the scorer's — a link that leaks can then be watched but cannot
+post a score. The hint under the buttons tells you which pair the link in your
+hand is actually carrying. Left blank it carries the scorer's, which is what it
+always did. The two boxes are a pair: fill in one and the link takes that one
+alone rather than borrowing the scorer's other half. `docs/OFFLINE-SCOREBOARD.md`
+sets up exactly this split on a broker of your own, as `scorer` and `viewer`.
 
 ### Watching the LED panel
 

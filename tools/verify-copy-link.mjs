@@ -2,14 +2,23 @@ import jsQR from 'jsqr';
 import { chromium } from 'playwright';
 
 const URL = 'http://localhost:4173/';
+// A scorer pair *and* a display pair, because the property worth seeing end to end
+// is that the copied link and the scanned QR carry the read-only one — the writable
+// credentials must not leave the phone. `scoreboard.test.js` covers the fallback and
+// the half-filled pair; only a browser can see which pair the settings panel builds
+// its link from.
 const CONFIG = {
   enabled: false,
   code: 'ab12c',
   broker: 'wss://example.invalid:8884/mqtt',
-  username: 'u',
-  password: 'p',
+  username: 'scorer-u',
+  password: 'scorer-p',
+  displayUsername: 'viewer-u',
+  displayPassword: 'viewer-p',
 };
-const LINK = `${URL}?display=1&code=ab12c&broker=${encodeURIComponent(CONFIG.broker)}&user=u&pass=p`;
+const LINK = `${URL}?display=1&code=ab12c&broker=${encodeURIComponent(CONFIG.broker)}&user=viewer-u&pass=viewer-p`;
+const leaksScorer = (link) =>
+  link.includes(CONFIG.username) || link.includes(CONFIG.password);
 
 let failures = 0;
 const check = (label, cond, detail = '') => {
@@ -61,6 +70,7 @@ console.log('copies the link when the clipboard is available');
   check('button acknowledges', await appears(page.getByRole('button', { name: 'Copied' })));
   const contents = await page.evaluate(() => navigator.clipboard.readText());
   check('clipboard holds the display link', contents === LINK, contents);
+  check('the copied link carries no writable credentials', !leaksScorer(contents));
   check('no fallback dialog', !(await page.locator('.sb-link-dialog').count()));
   await page.context().close();
 }
@@ -123,6 +133,10 @@ console.log('shows a QR code that decodes to the display link');
     });
     const decoded = jsQR(Uint8ClampedArray.from(image.data), image.width, image.height);
     check('QR decodes to the display link', decoded?.data === LINK, decoded?.data ?? 'no decode');
+    check(
+      'the scanned link carries no writable credentials',
+      Boolean(decoded?.data) && !leaksScorer(decoded.data),
+    );
   }
   await page.context().close();
 }

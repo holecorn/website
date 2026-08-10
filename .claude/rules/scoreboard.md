@@ -374,6 +374,38 @@ the broker on the LAN.
   `ScoreboardSettings.jsx`) because the link embeds the broker password — don't
   swap it for a QR web service, and don't move it off-device. The browser check
   in `tools/verify-copy-link.mjs` decodes the rendered QR to prove it scans.
+- **The link carries a *second* credential pair when there is one, and `linkCredentials`
+  is the whole rule.** A publisher writes and a board only ever subscribes, so the pair
+  that goes into a link — copied, shown as a QR, and left in a tablet's `localStorage`
+  and its browser history — should be a read-only account. `docs/OFFLINE-SCOREBOARD.md`
+  has provisioned `scorer` and `viewer` on the LAN broker since before the app could use
+  them; `displayUsername`/`displayPassword` are the app catching up. Blank, the link
+  carries the scorer's, which is what every setup did before the fields existed — so
+  nothing needed migrating and `configFromSearch` is untouched, because the board still
+  receives one `user`/`pass` pair and neither `Display.jsx` nor `Panel.jsx` knows there
+  was a choice.
+  - **All-or-nothing, never field by field, and that is the security property rather
+    than tidiness.** Falling back per field takes a half-filled display pair and puts the
+    *scorer's password* into a link the person filling those boxes believes they have
+    just locked down — the one outcome the feature exists to prevent. As a unit a
+    half-filled pair is merely refused by the broker, which is visible. Neither form
+    grants write access, so the fault is the leak and not the connection;
+    `scoreboard.test.js` pins it and the per-field mutation fails exactly that one test.
+  - **`useScoreboardPublisher` still reads `username`/`password` and must keep to it.**
+    The scoring phone is the one thing that needs write, so the new fields are read by
+    `displayUrl` and by nothing else — a publisher that picked them up would be a board
+    that cannot publish, on a broker where that is the *correct* refusal and so reads as
+    an app bug.
+  - **The bottom hint names which pair the link in hand carries**, rather than prose
+    covering both cases. It is one boolean and it is the only place the choice is visible
+    — the fields are two blank boxes either way, and a password field shows nothing.
+  - **`verify-copy-link.mjs` seeds both pairs**, so the clipboard and the decoded QR are
+    each asserted to carry the viewer's and to contain neither scorer string. That is the
+    `App.jsx`-hands-the-wrong-value gap: unit tests cover `linkCredentials`, but only a
+    browser sees which fields the settings panel built its link from. Note it ran green
+    against a **stale `dist/`** first — `with-preview.mjs` does not build, and CI does it
+    in a separate step, so **`npm run build` before `npm run test:browser` locally** or
+    the checks silently measure the last bundle.
 - **The pre-game form screen is chosen by a retained topic being *present*, not by
   a layout id.** `holecorn/<code>/lineup` carries the roster while `gameStarted` is
   false and is published **empty** — which deletes the retained message — the moment
