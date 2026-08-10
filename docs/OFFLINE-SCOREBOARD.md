@@ -101,6 +101,52 @@ and `?panel=1` resolve offline despite the query string.
 
 ## One-time setup
 
+### Getting a shell
+
+Deliberately unnumbered: every step below needs it, and the ten numbered steps are
+cross-referenced from the status notes above.
+
+```bash
+ssh-copy-id root@192.168.8.1
+ssh -o PasswordAuthentication=no root@192.168.8.1 'echo ok'
+```
+
+Root's password is the GL.iNet admin password — the web UI and the shell are the
+same account. **The second line is the point of the pair**: it proves the *key*
+authenticated, which the first cannot tell you, because a successful
+`ssh-copy-id` says only that the password worked.
+
+**If it prompts, the key is in a file dropbear does not read.** `ssh-copy-id`
+writes `~/.ssh/authorized_keys`; OpenWrt's dropbear reads root's keys from
+`/etc/dropbear/authorized_keys`. Whether it also falls back to the home directory
+varies by build and **is still unknown here** — on this router `/root/.ssh` does not
+exist at all, so nothing has tested the fallback. Putting the key where it is
+certainly read is one line and settles it:
+
+```bash
+ssh root@192.168.8.1 \
+  'cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys' \
+  < ~/.ssh/id_ed25519.pub
+```
+
+**Done on 2026-08-10 with a key created for this router**, and confirmed by the
+no-password check above. `/etc/dropbear/authorized_keys` is mode 600 and holds the
+one key. A `beryl` host alias in `~/.ssh/config` makes every `root@192.168.8.1`
+below a plain `ssh beryl`.
+
+**The `chmod` is load-bearing.** Dropbear ignores an `authorized_keys` that is
+group- or world-writable and logs nothing about it, so the symptom is identical to
+a key it has never seen. LuCI's System → Administration → SSH-Keys writes the same
+file if you would rather paste than pipe.
+
+**Leave password authentication on.** SSH is reachable only from the LAN — step 8's
+WAN reject policy — and the recovery from a lost key on a device with no console is
+the U-Boot path in step 1, which wipes the other nine steps with it.
+
+**A factory reset or a `sysupgrade` without preserving configuration takes the key
+too.** That is the same restore as everything else here, so it is worth knowing
+rather than worth planning around.
+
 ### 1. Firmware: try stock first
 
 GL.iNet's own MT3000 firmware is OpenWrt 23.05 with the open `mt76` driver and
@@ -658,6 +704,7 @@ failure mode.
 | --- | --- |
 | Board shows four dashes and stays dim | It never subscribed: `viewer` credentials, or the ACL |
 | Board never joins the Wi-Fi | `psk2` and `ieee80211w '0'`; a WPA3/PMF refusal looks like a wrong password |
+| Key is on the router and it still asks for a password | `/etc/dropbear/authorized_keys` versus `~/.ssh/authorized_keys`, then the file's mode — dropbear ignores a group-writable one silently, which looks the same as a key it has never seen |
 | App reports a broker error, no detail | `logread -e mosquitto` — certificate expiry first, then whether the TLS listener started at all (key permissions). No output at all means `log_dest` is missing, not that nothing is wrong |
 | App says the subscription was refused | The ACL file — that message exists for exactly this |
 | Name will not resolve on the phone | A manually configured DNS server on the device — it outranks DHCP and is unreachable with no WAN, and on macOS it is set per *service*, not per network. Then iCloud Private Relay or a DoH profile, then the `dnsmasq` local address entry. Tell them apart with `dig board.holecorn.com @192.168.8.1`: an answer there means the router is fine and the device is asking somewhere else |
