@@ -16,6 +16,9 @@ import {
   saveScoreboardConfig,
 } from './scoreboard.js';
 import {
+  LINK_NO_BROKER,
+  LINK_NO_SCORER,
+  LINK_NO_WIFI,
   PANEL_H,
   PANEL_W,
   SPLASH_ANIM_MS,
@@ -113,10 +116,46 @@ function splashOrders() {
   });
 }
 
+// The board's `connectState()` asks two separate things — `WiFi.status()`, then the MQTT
+// client — and the emulator has to ask two as well. `navigator.onLine` is the browser's
+// answer to the first: whether this device is attached to a network at all, saying
+// nothing about what is reachable on it, which is exactly what `WiFi.status()` does and
+// does not tell you. Everything past that is the socket.
+//
+// **A failed socket is not a missing network**, and reading it as one is what this
+// replaces. mqtt.js cycles offline → connecting → error against an unreachable broker,
+// so mapping anything-but-connecting to LINK_NO_WIFI made a laptop that never lost its
+// network flip between NO WIFI and NO BROKER — the exact confusion the line exists to
+// remove, shown on the screen that removes it.
+function linkState(status, online) {
+  if (!online) return LINK_NO_WIFI;
+  return status === 'connected' ? LINK_NO_SCORER : LINK_NO_BROKER;
+}
+
+// Tracked rather than read once, because the socket cannot stand in for it: with the
+// broker already unreachable the MQTT status is the same before and after the network
+// goes away, so nothing else here would re-render the line.
+function useOnline() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+  return online;
+}
+
+// The same three states in prose, for the canvas's `role="img"` label — the panel's own
+// words are drawn pixels and so reach nobody reading the page aloud. Indexed by
+// linkState, not written beside it, so the two cannot fall out of step.
+const LINK_LABELS = ['no network', 'no broker', 'waiting for the scorer'];
+
 // The board shows the wordmark while WiFi and MQTT come up, so the emulator does too —
-// it is the only way to see the splash without the hardware. The indicator reads the
-// same three-step progress the board's does; a browser has no WiFi state of its own,
-// so a connecting socket stands in for the middle one.
+// it is the only way to see the splash without the hardware.
 //
 // `elapsed` is what throws the letters into the two boards, and drawSplash turns it into
 // offsets — so the flight is the firmware's and this only holds the clock. Animated until
@@ -129,7 +168,7 @@ function splashOrders() {
 // throws look at the board's own rate is the question the emulator exists to answer.
 // Repeating a value is also a render React drops, so the canvas is repainted only on the
 // ticks.
-function useSplash(status) {
+function useSplash() {
   const [showing, setShowing] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -145,8 +184,7 @@ function useSplash(status) {
       clearTimeout(id);
     };
   }, []);
-  const connect = status === 'connected' ? 2 : status === 'connecting' ? 1 : 0;
-  return { showing, elapsed, connect };
+  return { showing, elapsed };
 }
 
 function useCell(ref) {
@@ -196,7 +234,9 @@ export default function Panel() {
     draw: drawnCard,
   });
 
-  const splash = useSplash(status);
+  const splash = useSplash();
+  const online = useOnline();
+  const connect = linkState(status, online);
   const [splashColors] = useState(splashPair);
   const [splashOrder] = useState(splashOrders);
 
@@ -208,7 +248,7 @@ export default function Panel() {
     if (!canvasRef.current) return;
     const fb = createFramebuffer();
     if (splash.showing) {
-      drawSplash(fb, splashColors[0], splashColors[1], splash.connect, splash.elapsed, splashOrder);
+      drawSplash(fb, splashColors[0], splashColors[1], connect, splash.elapsed, splashOrder);
     } else {
       renderBoard(
         fb,
@@ -220,6 +260,7 @@ export default function Panel() {
         drawn,
         drawnTie,
         drawnCard,
+        connect,
       );
     }
     paintPanel(canvasRef.current, fb, cell);
@@ -235,6 +276,7 @@ export default function Panel() {
     splash,
     splashColors,
     splashOrder,
+    connect,
   ]);
 
   if (!configComplete(config)) {
@@ -271,17 +313,18 @@ export default function Panel() {
                     `${payload.teamB ?? 'team B'} in the ${tie.r}`
                   : screen === 'form'
                     ? `Panel showing pre-game form for ${drawn.count} players`
-                    : payload
-                      ? `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                    : screen === 'no-state'
+                      ? `Panel showing no score yet: ${LINK_LABELS[connect]}`
+                      : `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
                         `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
-                      : 'Panel showing no score yet'
           }
         />
       </div>
       <p className="panel-caption">
         {PANEL_W}x{PANEL_H} · {PANEL_MM} ·{' '}
         {/* The form screen overrides the layout, so naming the layout while it is
-            up would describe something not on screen. */}
+            up would describe something not on screen — and the no-state dashes ignore
+            it outright, which is why they are named here too. */}
         {splash.showing
           ? 'Starting up'
           : screen === 'draw'
@@ -290,7 +333,9 @@ export default function Panel() {
               ? 'Tournament tie'
               : screen === 'form'
                 ? 'Pre-game form'
-                : (LAYOUT_LABELS[layout] ?? layout)}{' '}
+                : screen === 'no-state'
+                  ? 'No score yet'
+                  : (LAYOUT_LABELS[layout] ?? layout)}{' '}
         ·{' '}
         {status === 'connected'
           ? live

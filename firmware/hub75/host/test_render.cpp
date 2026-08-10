@@ -304,7 +304,7 @@ static std::string drawJson(const DrawState* d) {
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
                    bool blinkOn, PanelLayout layout, const LineupState* lineup,
                    const TieState* tie = nullptr, const SplashScene* splash = nullptr,
-                   const DrawState* draw = nullptr) {
+                   const DrawState* draw = nullptr, int connect = LINK_NONE) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
   scenes.push_back(
       "{\"name\":" + quoted(name.c_str()) +
@@ -318,6 +318,7 @@ static void record(const std::string& name, const BoardState& s, bool haveState,
       ",\"teamB\":" + quoted(s.teamB) + ",\"colorA\":" + colorJson(s.colorA) +
       ",\"colorB\":" + colorJson(s.colorB) + ",\"haveState\":" + flag(haveState) +
       ",\"live\":" + flag(live) + ",\"blinkOn\":" + flag(blinkOn) +
+      ",\"connect\":" + std::to_string(connect) +
       ",\"splash\":" + splashJson(splash) + "}");
 }
 
@@ -378,11 +379,11 @@ static void writeScenes() {
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
                         bool live, bool blinkOn, PanelLayout layout = PANEL_FULL,
                         const LineupState* lineup = nullptr, const TieState* tie = nullptr,
-                        const DrawState* draw = nullptr) {
+                        const DrawState* draw = nullptr, int connect = LINK_NONE) {
   Framebuffer fb;
-  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup, tie, draw);
+  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup, tie, draw, connect);
   fb.write(name);
-  record(name, s, haveState, live, blinkOn, layout, lineup, tie, nullptr, draw);
+  record(name, s, haveState, live, blinkOn, layout, lineup, tie, nullptr, draw, connect);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -481,6 +482,25 @@ int main() {
   const Framebuffer scoreWinOn = shot("score-winner-on", won, true, true, true, PANEL_SCORE);
   const Framebuffer scoreWinOff = shot("score-winner-off", won, true, true, false, PANEL_SCORE);
   const Framebuffer scoreWorst = shot("score-worst", big, true, true, true, PANEL_SCORE);
+  // The no-state screen with the board's own link state written on it, which is what it
+  // shows from switch-on until the phone appears. Stale, because that is the honest
+  // pairing: nothing is on the state topic, so nobody is feeding it. `score-link` is
+  // through the other layout, which this screen deliberately ignores.
+  const Framebuffer linkNoWifi = shot("link-no-wifi", play, false, false, true, PANEL_FULL,
+                                      nullptr, nullptr, nullptr, LINK_NO_WIFI);
+  const Framebuffer linkNoBroker = shot("link-no-broker", play, false, false, true,
+                                        PANEL_FULL, nullptr, nullptr, nullptr,
+                                        LINK_NO_BROKER);
+  const Framebuffer linkNoScorer = shot("link-no-scorer", play, false, false, true,
+                                        PANEL_FULL, nullptr, nullptr, nullptr,
+                                        LINK_NO_SCORER);
+  const Framebuffer linkScore = shot("score-link-no-scorer", play, false, false, true,
+                                     PANEL_SCORE, nullptr, nullptr, nullptr,
+                                     LINK_NO_SCORER);
+  // The same screen with nothing to say, which is the state every scene above this
+  // block is still asking for and the baseline the assertions measure against.
+  const Framebuffer linkNone = shot("link-none", play, false, false, true, PANEL_FULL,
+                                    nullptr, nullptr, nullptr, LINK_NONE);
   shot("score-overflow", overflow, true, true, true, PANEL_SCORE);
   // Doubles through the score layout, where the second mark appears. `ruledSingle`
   // above is the singles counterpart and must stay unmarked on the other side, so
@@ -811,6 +831,50 @@ int main() {
   // synthesises it. An empty glyph here means a blank board before the first
   // message, which reads as broken rather than waiting.
   check(noState.lit() > 0, "no-state must draw dashes, not nothing");
+
+  // The status line on the no-state screen. Three problems draw the same dashes and
+  // have three different fixes, so what is asserted is that they are told apart, that
+  // the line is added rather than traded against the dashes, and that it is not dimmed
+  // with them.
+  {
+    const Framebuffer* const shown[LINK_STATES] = {&linkNoWifi, &linkNoBroker,
+                                                   &linkNoScorer};
+    for (int i = 0; i < LINK_STATES; i++) {
+      // Undimmed, and read off the panel rather than off `level`: the whole point of
+      // the line is that it is live where the dashes are stale, and scaling it with
+      // them is a one-character change that no count of lit pixels would catch.
+      check(shown[i]->hasColor(LINK_COLORS[i]),
+            "each link state writes its line at full brightness");
+      // Added to the dashes, never in place of them. Comparing against the same screen
+      // with nothing to say is what says the digit rows are untouched.
+      check(shown[i]->lit() > linkNone.lit(), "the line is drawn on top of the dashes");
+      for (int y = DIGIT_Y; y < DIGIT_Y + GLYPH_SMALL_H; y++) {
+        check(memcmp(shown[i]->px_ + y * PANEL_W * 3, linkNone.px_ + y * PANEL_W * 3,
+                     PANEL_W * 3) == 0,
+              "and leaves the dashes exactly as they were");
+      }
+      // It has to fit above them or it would be drawing over the score to come.
+      check(!shown[i]->litRow(FONT_H, 0, PANEL_W), "the line clears the digit rows");
+    }
+    // Three states, three different screens, told apart with the colour thrown away —
+    // which is the whole reason this is a line of words and not a second corner dot.
+    // A byte comparison would pass on three identical words in three hues.
+    const auto sameLitPixels = [](const Framebuffer& a, const Framebuffer& b) {
+      for (int y = 0; y < PANEL_H; y++) {
+        for (int x = 0; x < PANEL_W; x++) {
+          if (a.litAt(x, y) != b.litAt(x, y)) return false;
+        }
+      }
+      return true;
+    };
+    check(!sameLitPixels(linkNoWifi, linkNoBroker) &&
+              !sameLitPixels(linkNoBroker, linkNoScorer) &&
+              !sameLitPixels(linkNoWifi, linkNoScorer),
+          "the three link states read differently in greyscale, not only in colour");
+    // The one the layout ignores — same screen through PANEL_SCORE.
+    check(memcmp(linkScore.px_, linkNoScorer.px_, sizeof noState.px_) == 0,
+          "the status line is drawn whichever layout is chosen");
+  }
   check(winOff.lit() < winOn.lit(), "winner blink should blank the winning pair");
   // The loser's score and both names must survive the flash, or the board
   // stops being readable for half of every beat.
@@ -1042,6 +1106,11 @@ int main() {
   }
   check(scoreWorst.lit() > worst.lit(), "score layout should light more than full — it is bigger");
   check(scoreNoState.lit() > 0, "score no-state must draw dashes, not nothing");
+  // The dashes ignore the chosen layout, which is what frees the name row for the line
+  // below — a byte comparison, because the two layouts differ in digit size and
+  // position and a count of lit pixels would not notice either.
+  check(memcmp(scoreNoState.px_, noState.px_, sizeof noState.px_) == 0,
+        "the no-state screen draws the same whichever layout is chosen");
   check(scoreWinOff.lit() < scoreWinOn.lit(), "score winner blink should blank the winning pair");
   check(scoreWinOff.lit() > 100, "score winner blink blanked too much");
   // The middle column has to clear both pairs at this digit width, or the round

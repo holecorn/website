@@ -204,6 +204,49 @@ static const char DRAW_PLAYS[] = "PLAYS";
 static const char DRAW_PLAYS_WINNER[] = "PLAYS WINNER OF";
 static const char DRAW_TITLE[] = "DRAW";
 
+// ------------------------------------------------- no-state screen geometry --
+//
+// The dashes, and a line saying why they are dashes.
+//
+// Three quite different problems draw the same screen — no WiFi, WiFi but no broker,
+// and a broker with no scorer on it — and they have three different fixes: the router,
+// the broker, the phone. This is the one screen where telling them apart is worth
+// pixels, because it is what the board sits on from switch-on until the app is opened,
+// **every session**: the LAN broker deliberately runs without `persistence`
+// (docs/OFFLINE-SCOREBOARD.md), so a router reboot leaves nothing retained to recover.
+//
+// Words rather than the splash's corner dot. The dot is 2px, which leans the whole
+// distinction on hue — the one channel the app refuses to let anything stand on alone —
+// and this screen is read at arm's length while the kit is being set up, not at 7m. The
+// colour is still there as the second channel. The dot also cannot do this job even
+// where it is drawn: `RECONNECT_INTERVAL` gates the first MQTT attempt to t=5000ms and
+// SPLASH_MS is 5000, so it can never reach its own third state — see CLAUDE.md, where
+// firing earlier is rejected because it freezes the splash mid-throw.
+//
+// LINK_NONE is what a caller passes when it has nothing to say, and the line is then
+// simply absent — which is what test_render.cpp's older no-state scenes still ask for.
+static const int LINK_NONE = -1;
+static const int LINK_NO_WIFI = 0;
+static const int LINK_NO_BROKER = 1;
+static const int LINK_NO_SCORER = 2;
+static const int LINK_STATES = 3;
+static const char* const LINK_TEXT[LINK_STATES] = {"NO WIFI", "NO BROKER",
+                                                   "WAITING FOR SCORER"};
+// The widest of the three, which is 107 of the panel's 128 columns.
+static const int LINK_CHARS = 18;
+// The full layout's name row, which on this screen has no name in it. That is the whole
+// reason the dashes ignore the chosen layout below: PANEL_SCORE gives all 32 rows to
+// DIGITS_BIG, and 150mm dashes against 100mm ones is a distinction with nothing behind
+// it. The scorer's choice is untouched underneath and returns with the first score.
+static const int LINK_TEXT_Y = NAME_Y;
+
+// Three of the app's own team colours, indexed by the state above and shared with the
+// splash's dot — one concept, and two spellings of it could disagree about which end is
+// which. A randomly coloured wordmark can therefore share a hue with the dot; that stays
+// readable because of where it is, not what colour it is.
+static const Rgb LINK_COLORS[LINK_STATES] = {
+    {0xeb, 0x57, 0x57}, {0xf2, 0xc9, 0x4c}, {0x27, 0xae, 0x60}};
+
 // ---------------------------------------------------- splash layout geometry --
 //
 // The wordmark, shown while the board comes up. The masks in logo.h are the panel's
@@ -318,13 +361,6 @@ inline int splashLetterAt(const LogoRect* letters, int x, int y) {
   }
   return -1;
 }
-
-// No wifi yet, wifi but no broker, subscribed. Three of the app's own team colours,
-// which means a randomly coloured wordmark can share a hue with the indicator — it
-// stays readable because of where it is, not what colour it is.
-static const int SPLASH_CONNECT_STATES = 3;
-static const Rgb SPLASH_CONNECT[SPLASH_CONNECT_STATES] = {
-    {0xeb, 0x57, 0x57}, {0xf2, 0xc9, 0x4c}, {0x27, 0xae, 0x60}};
 
 // Logo.jsx tints the wordmark toward white so it reads as chalk rather than as two
 // coloured outlines, and a random pair needs that as much as the default one does.
@@ -1001,7 +1037,7 @@ void drawSplashBoard(Canvas& c, const uint8_t map[LOGO_H][LOGO_STRIDE],
 // decided here rather than baked into the asset. CORN's board is drawn second because it
 // owns the overlap where the two boxes cross, which is the order the SVG paints them in.
 //
-// `connect` indexes SPLASH_CONNECT, or is out of range for no indicator at all.
+// `connect` indexes LINK_COLORS, or is LINK_NONE for no indicator at all.
 // `elapsed` is milliseconds since the board came up. `order` is which letter each board
 // throws at each slot, 0-3 left to right.
 //
@@ -1017,8 +1053,8 @@ void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed
                 const uint8_t order[SPLASH_BOARDS][LOGO_LETTERS]) {
   drawSplashBoard(c, LOGO_HOLE, LOGO_HOLE_LETTERS, order[0], 0, -1, chalk(colorA), elapsed);
   drawSplashBoard(c, LOGO_CORN, LOGO_CORN_LETTERS, order[1], 1, +1, chalk(colorB), elapsed);
-  if (connect >= 0 && connect < SPLASH_CONNECT_STATES) {
-    drawBlock(c, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, SPLASH_CONNECT[connect]);
+  if (connect >= 0 && connect < LINK_STATES) {
+    drawBlock(c, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, LINK_COLORS[connect]);
   }
 }
 
@@ -1041,10 +1077,15 @@ void drawSplash(Canvas& c, Rgb colorA, Rgb colorB, int connect, uint32_t elapsed
 // published while the names are still being pulled out of a hat, before any tie has been
 // picked and before any game exists, so whatever score is retained underneath is last
 // week's. Nothing below it can be about the draw, so the order is not a judgement.
+//
+// `connect` indexes LINK_TEXT and is read by the no-state screen alone. Every other
+// screen has something published on it, and there the whole panel dimming already says
+// the link went — a second indicator would be repeating it.
 template <typename Canvas>
 void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool blinkOn,
                  PanelLayout layout = PANEL_FULL, const LineupState* lineup = nullptr,
-                 const TieState* tie = nullptr, const DrawState* draw = nullptr) {
+                 const TieState* tie = nullptr, const DrawState* draw = nullptr,
+                 int connect = LINK_NONE) {
   const uint8_t level = live ? LEVEL_LIVE : LEVEL_STALE;
   const bool score = layout == PANEL_SCORE;
 
@@ -1064,12 +1105,18 @@ void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, bool
   }
 
   if (!haveState) {
+    // The full layout's geometry whatever `layout` says, so the row the status line
+    // needs is free on both — see the no-state section.
     const Rgb grey = scaled(MARKER_COLOR, level);
-    const DigitFont& f = score ? DIGITS_BIG : DIGITS_SMALL;
-    const int y = score ? SCORE_DIGIT_Y : DIGIT_Y;
     const char dashes[3] = {'-', '-', '\0'};
-    drawPair(c, dashes, score ? SCORE_LEFT_X : LEFT_X, y, grey, f);
-    drawPair(c, dashes, score ? SCORE_RIGHT_X : RIGHT_X, y, grey, f);
+    drawPair(c, dashes, LEFT_X, DIGIT_Y, grey, DIGITS_SMALL);
+    drawPair(c, dashes, RIGHT_X, DIGIT_Y, grey, DIGITS_SMALL);
+    if (connect >= 0 && connect < LINK_STATES) {
+      // Full brightness where the dashes are dim, and that is not an oversight: dim
+      // means "nobody is feeding this any more", which is exactly what the dashes are
+      // saying and exactly what this line is not. It is the freshest thing on the panel.
+      drawTextCentred(c, LINK_TEXT[connect], LINK_TEXT_Y, LINK_COLORS[connect], LINK_CHARS);
+    }
     return;
   }
 

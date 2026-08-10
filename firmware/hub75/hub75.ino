@@ -173,12 +173,18 @@ void pickSplashOrder() {
   }
 }
 
-// Indexes SPLASH_CONNECT: no wifi, wifi but no broker, subscribed. Only the splash
-// shows this — once a score is up, a dropped link is already said by the whole panel
-// dimming, so a corner dot would be repeating it.
+// Indexes LINK_TEXT and LINK_COLORS: no wifi, wifi but no broker, subscribed. The
+// splash draws it as a corner dot and the no-state screen writes it out in words;
+// every other screen has something published on it, and there the whole panel dimming
+// already says the link went.
+//
+// The third state is "subscribed", which on the no-state screen means the phone: with
+// the link up and nothing retained on the state topic, the scorer is what is missing.
+// `scorerOnline` is deliberately not consulted — it is false at that point too, so it
+// would only say the same thing twice.
 int connectState() {
-  if (WiFi.status() != WL_CONNECTED) return 0;
-  return client.connected() ? 2 : 1;
+  if (WiFi.status() != WL_CONNECTED) return LINK_NO_WIFI;
+  return client.connected() ? LINK_NO_SCORER : LINK_NO_BROKER;
 }
 
 bool splashing() { return millis() - splashStart < SPLASH_MS; }
@@ -203,7 +209,8 @@ void render() {
     return;
   }
 
-  renderBoard(canvas, state, haveState, live, blinkOn, layout, &lineup, &tie, &draw);
+  renderBoard(canvas, state, haveState, live, blinkOn, layout, &lineup, &tie, &draw,
+              connectState());
 }
 
 // ------------------------------------------------------------------- mqtt ----

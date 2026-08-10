@@ -290,6 +290,8 @@ if (!ran['test_render.cpp']) {
           scene.tie ? panel.tieState(scene.tie) : null,
           // And the draw card, through drawState().
           scene.draw ? panel.drawState(scene.draw) : null,
+          // The board's link state, which only the no-state screen reads.
+          scene.connect,
         );
       }
 

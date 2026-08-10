@@ -131,13 +131,24 @@ export const SPLASH_RENDER_INTERVAL = 25;
 export const SPLASH_DOT = 2;
 const SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
 const SPLASH_DOT_Y = 0;
-const SPLASH_CONNECT = [
+const CHALK_PCT = 28;
+
+// The no-state screen's status line, and the splash dot's colours — one index, shared,
+// because two spellings of it could disagree about which end is which. See render.h for
+// why the line is words rather than a second dot, and why the dashes stop reading the
+// chosen layout. LINK_TEXT is down with the other codes() literals.
+export const LINK_NONE = -1;
+export const LINK_NO_WIFI = 0;
+export const LINK_NO_BROKER = 1;
+export const LINK_NO_SCORER = 2;
+export const LINK_STATES = 3;
+const LINK_CHARS = 18;
+const LINK_TEXT_Y = NAME_Y;
+const LINK_COLORS = [
   { r: 0xeb, g: 0x57, b: 0x57 },
   { r: 0xf2, g: 0xc9, b: 0x4c },
   { r: 0x27, g: 0xae, b: 0x60 },
 ];
-export const SPLASH_CONNECT_STATES = SPLASH_CONNECT.length;
-const CHALK_PCT = 28;
 
 export const LINEUP_MAX = 4;
 const LINEUP_NAME_MAX = 49;
@@ -173,6 +184,7 @@ const DRAW_PULLING = codes('PULLING...');
 const DRAW_PLAYS = codes('PLAYS');
 const DRAW_PLAYS_WINNER = codes('PLAYS WINNER OF');
 const DRAW_TITLE = codes('DRAW');
+const LINK_TEXT = ['NO WIFI', 'NO BROKER', 'WAITING FOR SCORER'].map(codes);
 
 // Unknown characters fall back to index 0 — a space in both tables — rather
 // than being skipped, so a name the font can't draw still takes up its slots.
@@ -922,8 +934,8 @@ function drawSplashBoard(fb, map, letters, order, board, dir, color, elapsed) {
 export function drawSplash(fb, colorA, colorB, connect, elapsed, order) {
   drawSplashBoard(fb, LOGO_HOLE, LOGO_HOLE_LETTERS, order[0], 0, -1, chalk(colorA), elapsed);
   drawSplashBoard(fb, LOGO_CORN, LOGO_CORN_LETTERS, order[1], 1, +1, chalk(colorB), elapsed);
-  if (connect >= 0 && connect < SPLASH_CONNECT.length) {
-    drawBlock(fb, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, SPLASH_CONNECT[connect]);
+  if (connect >= 0 && connect < LINK_STATES) {
+    drawBlock(fb, SPLASH_DOT_X, SPLASH_DOT_Y, SPLASH_DOT, SPLASH_DOT, LINK_COLORS[connect]);
   }
 }
 
@@ -960,6 +972,7 @@ export function renderBoard(
   lineup = null,
   tie = null,
   draw = null,
+  connect = LINK_NONE,
 ) {
   const level = live ? LEVEL_LIVE : LEVEL_STALE;
   const score = layout === 'score';
@@ -981,12 +994,14 @@ export function renderBoard(
   }
 
   if (screen === 'no-state') {
+    // The full layout's geometry whatever `layout` says — see the LINK_ block above.
     const grey = scaled(MARKER_COLOR, level);
-    const font = score ? GLYPH_BIG : GLYPH_SMALL;
-    const y = score ? SCORE_DIGIT_Y : DIGIT_Y;
     const dashes = [DASH, DASH];
-    drawPair(fb, dashes, score ? SCORE_LEFT_X : LEFT_X, y, grey, font);
-    drawPair(fb, dashes, score ? SCORE_RIGHT_X : RIGHT_X, y, grey, font);
+    drawPair(fb, dashes, LEFT_X, DIGIT_Y, grey, GLYPH_SMALL);
+    drawPair(fb, dashes, RIGHT_X, DIGIT_Y, grey, GLYPH_SMALL);
+    if (connect >= 0 && connect < LINK_STATES) {
+      drawTextCentred(fb, LINK_TEXT[connect], LINK_TEXT_Y, LINK_COLORS[connect], LINK_CHARS);
+    }
     return fb;
   }
 

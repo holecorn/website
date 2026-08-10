@@ -766,6 +766,65 @@ the broker on the LAN.
     Duty is **15.5%** across every draw scene and **5.5%** for the opening card, against
     the tie card's 22.7% and `DUTY_CEILING`'s 30%, so this is not a screen the ceiling
     needed re-checking for. Re-measure rather than assuming before adding to it.
+- **The no-state dashes carry a line saying *why* they are dashes**, in words: `NO WIFI`,
+  `NO BROKER`, `WAITING FOR SCORER`. Three different problems drew the same screen and
+  they have three different fixes — the router, the broker, the phone — and this is the
+  screen the board sits on from switch-on until the app is opened, **every session**,
+  because the LAN broker deliberately runs without `persistence` and a router reboot
+  leaves nothing retained to recover. `connectState()` in `hub75.ino` already computed
+  all three facts for the splash dot; `renderBoard` takes it as a trailing `connect` and
+  no other screen reads it. **All three states confirmed on the panel 2026-08-10** — `NO
+  WIFI` with the Beryl off, `NO BROKER` with it up and mosquitto stopped over SSH,
+  `WAITING FOR SCORER` once the broker was running, then the score screen when the phone
+  published. Stopping mosquitto is the only deliberate way to reach the middle state, so
+  it is the reproduction to reach for; a wrong `MQTT_HOST` would need a reflash.
+  - **The dot could not have done this job, for two independent reasons.** It is 2px, so
+    the whole distinction rests on hue — the channel the app refuses to let anything
+    stand on alone — and this screen is read at arm's length while the kit is being set
+    up, not at 7m. And `RECONNECT_INTERVAL` gates the first MQTT attempt to t=5000ms
+    against `SPLASH_MS`'s 5000, so **the dot can never reach its own third state**; that
+    is deliberate and firing earlier would freeze the splash mid-throw, so the words are
+    the only place the third state can appear at all. The colour is still there as the
+    second channel, which is why `LINK_COLORS` is one array shared with the dot rather
+    than a second spelling of the same three states.
+  - **The dashes stopped reading the chosen layout**, and that is a deletion rather than
+    an exception: `PANEL_SCORE` gives all 32 rows to `DIGITS_BIG`, leaving no row for a
+    line, and 150mm dashes against 100mm ones is a distinction with nothing behind it.
+    `test_render.cpp` asserts `score-no-state` is byte-identical to `no-state`. The
+    scorer's choice is untouched underneath and returns with the first score.
+  - **The line is at `LEVEL_LIVE` where the dashes are stale**, asserted through
+    `hasColor` rather than off `level`, because scaling it with them is a one-character
+    change no count of lit pixels would catch. Dim means "nobody is feeding this any
+    more", which is what the dashes say and what this line does not.
+  - **Three states, three screens, told apart with the colour thrown away.** The check
+    compares lit pixels and not bytes — three identical words in three hues would pass a
+    `memcmp`. Duty is 7.6% at the widest, against `DUTY_CEILING`'s 30%, and the whole
+    feature cost **+0.14 kB gzipped** of the main chunk with no CSS change.
+  - **The emulator asks two questions like the board does, and `navigator.onLine` is the
+    first one.** `connectState()` reads `WiFi.status()` and then the MQTT client; a
+    browser's equivalent of the first is `navigator.onLine`, which answers the same
+    question — is this device attached to a network at all — and is equally silent about
+    what is reachable on it. **A failed socket is not a missing network**: mapping
+    anything-but-connecting to `LINK_NO_WIFI` shipped first, and because mqtt.js cycles
+    offline → connecting → error against an unreachable broker, a laptop that never lost
+    its network watched the board flip between `NO WIFI` and `NO BROKER` — the exact
+    confusion the line exists to remove, on the screen that removes it. It is tracked
+    through the `online`/`offline` events rather than read once, because with the broker
+    already unreachable the MQTT status is identical before and after the network goes,
+    so nothing else would re-render the line.
+  - **`verify-panel.mjs` is the only thing that can see any of this**, since `render.h`
+    draws from an argument and whether `Panel.jsx` passes the right one is a crossing no
+    framebuffer comparison reaches. It pins **both** branches — `no broker` held across
+    12 samples over 3s, which is what makes it an assertion about the state rather than
+    about where in the reconnect cycle the read landed, and `no network` under
+    `context.setOffline(true)`, the only way to reach the screen a board that never
+    joined the AP would show. Read off the canvas's `aria-label`, which is the same
+    `connect` the framebuffer was drawn from and something a scan of a 5x7 row cannot
+    spell; the pixel assertions above it are what tie that label to what is lit.
+    Verified by mutation: the socket-only mapping fails exactly that one assertion, 12
+    of 12 samples wrong. Note the fix also moved that file's blank-row sample from row 0
+    to row 31 — row 0 is where the line goes, so it had been taking the status line as
+    the brightness floor.
 - **The splash is a fourth screen and the second with no layout id**, so it has its own
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at
@@ -932,9 +991,10 @@ the broker on the LAN.
     it leaves `lastLive` at 0 for a link that came up during the splash and dropped
     straight after, so the board would dim the instant the splash cleared instead of
     holding its grace period.
-  - **The connect indicator is splash-only.** Once a score is up, the whole panel
-    dimming already says the link went, so a corner dot repeats it — and `full` has no
-    corner to spare, its name row spans the width.
+  - **The connect indicator is splash-only, and the no-state screen says it in words
+    instead.** Once a score is up, the whole panel dimming already says the link went, so
+    a corner dot repeats it — and `full` has no corner to spare, its name row spans the
+    width. The dashes are the exception, below.
   - **`generate_logo.mjs` needs a browser, so its staleness check doesn't regenerate.**
     The SVG is set in Bebas Neue and drawn through `feTurbulence`, which is also why the
     masks are baked rather than drawn on the board. The glyph tables are checked by

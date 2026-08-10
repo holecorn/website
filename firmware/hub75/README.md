@@ -321,13 +321,69 @@ adapter**, so a 5 V barrel supply now has a ready-made path onto fork terminals.
 It takes two deliberate steps rather than one slip, but the guarantee is a
 convention now, not a physical impossibility.
 
-The laptop is then paying for the panels: ~185 mA at `PANEL_BRIGHTNESS = 40`,
-~980 mA at full brightness. Fine for a USB-C port advertising 3 A, but above the
-900 mA a bare USB 3 port guarantees, so a port that cuts out mid-flash is a
-budget problem rather than a fault — as is the power-up window, which spikes
-harder than any firmware asks for. **Do not fix that by putting the bank on the
-standoffs to take the load off**; that is back-feeding, now with a laptop on the
-other end. Lower the brightness or use a powered hub.
+The laptop is then paying for the panels once the sketch is *running*: ~185 mA at
+`PANEL_BRIGHTNESS = 40`, ~980 mA at full brightness. Fine for a USB-C port
+advertising 3 A, but above the 900 mA a bare USB 3 port guarantees. **Do not fix
+that by putting the bank on the standoffs to take the load off**; that is
+back-feeding, now with a laptop on the other end. Lower the brightness or use a
+powered hub.
+
+**The flash itself is not part of that, and this paragraph used to imply it was.**
+It said a port cutting out mid-flash was a budget problem, "as is the power-up
+window, which spikes harder than any firmware asks for". Observed 2026-08-10: the
+panel is **dark for the whole of a flash**, because the sketch never runs and so the
+FM6126A register init never happens — and without it this panel shows nothing at all.
+A board left with an erased app partition sat blank and stayed enumerated over USB
+for minutes rather than browning out. So a flash draws about what a bare ESP32-S3
+draws, and **a flashing failure is not a power budget problem**; reaching for one
+sent an afternoon down the wrong path. See `Things that will bite` for what it
+actually was.
+
+### Flashing it
+
+`arduino-cli upload` **does not work on this board.** It fails at
+`Uploading stub flasher...` with *"Serial data stream stopped: Possible serial noise
+or corruption"* — a message that points at cables and wiring and means neither. The
+chip is on USB-Serial/JTAG, which esptool names in its own output, and the stub
+flasher is unreliable over it. With `--no-stub` everything works.
+
+1. **Hold BOOT, tap RESET, release BOOT.** This is the only thing that reliably gets
+   it into download mode. Against a board that had stopped answering,
+   `--before default-reset`, `--before usb-reset` and `--before no-reset` all gave
+   *"No serial data received"*.
+2. **Run esptool directly** — not `arduino-cli upload`, and not the platform's
+   `tools/flasher.py` — with `--no-stub --before no-reset --after hard-reset`. Get the
+   five images and their offsets from `arduino-cli upload -v`, which prints the command
+   it would have run before it fails.
+3. **Tap RESET when it finishes.** `--after hard-reset` toggles RTS, which does not
+   release a BOOT-latched download mode, so a complete flash can look like a failed
+   one. The board enumerates as `ESP32 Family Device` while it is in the ROM loader and
+   as `Adafruit MatrixPortal ESP32-S3` once the sketch is running — that name is how to
+   tell it booted, without opening the port and without the game code reaching a log.
+
+**Skip `flasher.py` if the flash state is unknown.** All it contributes is
+`--diff-with`, which skips sectors that match saved copies of the previous flash — so
+after an interrupted write it can skip sectors that are actually erased. A full
+unconditional write of all five images takes about 9 seconds, so the optimisation buys
+very little against the risk of trusting it at the wrong moment.
+
+**An interrupted write cannot brick it.** One attempt died 0.6% into the app at
+`0x10000` with the partition already erased, leaving a board that would not boot; BOOT
+plus RESET plus a full rewrite recovered it. The bootloader at `0x0` and the partition
+table at `0x8000` are separate images and verified untouched the whole way through, and
+the ROM loader is in mask ROM, so there is no way to lose the route back in.
+
+**Two things not to conclude from that episode.** The serial port renaming itself —
+`/dev/cu.usbmodem101` becoming the MAC-named `/dev/cu.usbmodem68EE8FF39B441` — was read
+as the cause, on the theory that esptool was writing to a port that had ceased to exist.
+It is a *symptom* of the chip resetting, and download mode came up on plain
+`usbmodem101` on the run that worked, so either name can appear and neither means
+anything. And the cause of the reset was **never established**: a long USB-C cable was
+swapped for the 1 m Apple one at the same moment the board was put into a clean
+BOOT-latched download mode, so the fix carries two variables. The app then wrote in
+6.8 s where it had died before, which is suggestive of a marginal cable and is not
+evidence. Re-running the long cable against a board known to be in download mode is the
+test that would settle it; until someone does, this is unattributed.
 
 ## Host renderer
 

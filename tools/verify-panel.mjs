@@ -14,7 +14,7 @@
 // so only the firmware suite compares the alternatives.
 
 import { chromium } from 'playwright';
-import { GLYPH_SMALL } from '../src/panelGlyphs.js';
+import { FONT_H, GLYPH_SMALL } from '../src/panelGlyphs.js';
 // Which square each letter lands on, so the splash block can ask whether the bags are
 // still in the air without knowing the order they were thrown in.
 import { LOGO_CORN_LETTERS, LOGO_HOLE_LETTERS } from '../src/panelLogo.js';
@@ -34,6 +34,10 @@ const OFFLINE = 'broker=wss://127.0.0.1:1/mqtt&code=abc12';
 // rather than written out, so moving the digits doesn't leave this sampling a row
 // of unlit LEDs and calling it a pass.
 const DASH_ROW = DIGIT_Y + Math.trunc(GLYPH_SMALL.h / 2) - 1;
+// A row through the middle of the 5x7 link line, which sits in the name row. Derived
+// the same way and for the same reason: pinned to 0 it would sample the glyphs' top
+// edge, where several characters have nothing.
+const LINK_ROW = Math.trunc(FONT_H / 2);
 
 let failures = 0;
 const check = (label, cond, detail = '') => {
@@ -290,7 +294,10 @@ console.log('\nthe emulator draws the framebuffer onto the canvas');
     { timeout: SPLASH_MS + 5000 },
   );
 
-  const [dash, other] = await scanRows(page, cell, [DASH_ROW, 0]);
+  // The blank row is the panel's last, not its first: the full layout leaves rows
+  // 30-31 dark, and row 0 is where the no-state screen's link line goes. Sampling
+  // there made the *status line* the floor, which put the dim dashes under it.
+  const [dash, other, link] = await scanRows(page, cell, [DASH_ROW, PANEL_H - 1, LINK_ROW]);
   const floor = Math.max(...other);
   const lit = dash.map((v) => v > floor);
   const litCount = lit.filter(Boolean).length;
@@ -305,6 +312,50 @@ console.log('\nthe emulator draws the framebuffer onto the canvas');
   let runs = 0;
   for (let x = 0; x < lit.length; x++) if (lit[x] && !lit[x - 1]) runs++;
   check('four dashes are drawn', runs === 4, `${runs} runs, ${litCount} LEDs`);
+
+  // The link line, which is the one thing about this screen a browser can see and the
+  // pixel check cannot: render.h draws it from an argument, and whether `Panel.jsx`
+  // ever passes that argument is a crossing only this reaches.
+  const linkLit = link.filter((v) => v > floor).length;
+  check('the link line is drawn above the dashes', linkLit > 0, `${linkLit} LEDs lit`);
+  check(
+    'and is brighter than the stale dashes it explains',
+    Math.max(...link) > Math.max(...dash),
+    `link ${Math.max(...link)} vs dash ${Math.max(...dash)}`,
+  );
+
+  // *Which* state, read off the canvas's own label rather than the pixels — it is the
+  // same `connect` the framebuffer was drawn from, and no scan of a 5x7 row can spell.
+  //
+  // This is the assertion the block exists for now. The broker is unreachable and the
+  // machine's network is not, so the answer is "no broker" and it does not move:
+  // mqtt.js cycles offline → connecting → error underneath, and a status line that
+  // followed the socket's mood flipped between "no network" and "no broker" for the
+  // whole run — on the one screen whose job is to say which of those it is. Polled
+  // because the cycle is what it must survive, not a state it can be caught before.
+  const label = () => page.locator('.panel-canvas').getAttribute('aria-label');
+  let wrong = 0;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (!(await label()).includes('no broker')) wrong += 1;
+    await page.waitForTimeout(250);
+  }
+  check(
+    'and says "no broker" throughout, never "no network"',
+    wrong === 0,
+    `${wrong} of 12 samples wrong, last "${await label()}"`,
+  );
+
+  // The other branch, which only a browser can reach: the board reads WiFi.status()
+  // and the emulator reads navigator.onLine, so taking the context offline is the one
+  // way to see the screen a board that never joined the AP would show.
+  await page.context().setOffline(true);
+  await page.waitForFunction(() => navigator.onLine === false, null, { timeout: 5000 });
+  check(
+    'and "no network" once the machine really has none',
+    (await label()).includes('no network'),
+    await label(),
+  );
+  await page.context().setOffline(false);
 
   // Polled rather than read once: with an unreachable broker the status cycles
   // offline → connecting → error every RECONNECT_PERIOD, so a single read can
