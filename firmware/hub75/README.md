@@ -635,14 +635,32 @@ different arrangement every boot, which is a truer picture of a round and a wors
   four frames. **`?panel=1` steps its clock in the same increments**, so the emulator
   shows the board's cadence rather than the browser's 60 Hz — see `Panel.jsx`, and
   CLAUDE.md for why no check covers that.
-- **Whether the animation can stutter on real hardware is untested**, since nothing has
-  run on a board. `ensureWifi()` cannot block, and the blocking call —
-  `client.connect()` — is reached only once WiFi is up, which typically takes 1-3 s. That
-  falls **inside** the 3.58 s of throws now rather than clearing them as the 0.8 s
-  slide did, so **a warm reconnect that meets an unreachable broker would freeze the
-  animation part-filled** — likelier and more visible the longer the animation runs, and
-  the first thing to look at if the mark ever appears half-thrown. It is also the one cost
-  of the slower pace worth writing down.
+- **A reconnect cannot stall the throws, and the gate rather than the timing is why.**
+  `ensureWifi()` cannot block, so the only blocking call in `loop()` is
+  `client.connect()` — and `lastReconnectAttempt` starts at 0 against a 5 s
+  `RECONNECT_INTERVAL`, so the first one can fire no earlier than t = 5000 ms, where
+  `SPLASH_ANIM_MS` lands the last bag at 3.58 s. A warm reconnect associating at 1-3 s
+  still cannot reach it.
+  **An earlier note here said the opposite** — that a warm reconnect meeting an
+  unreachable broker would freeze the mark part-thrown — and it was reasoned from the
+  flight duration alone, without the gate. Left as a warning about *this* file: the two
+  constants live in different sections and agreeing with only one of them looks sound.
+  The residue is real but harmless: the gate counts from boot and the splash from
+  `splashStart`, which is stamped after `panel->begin()`, so a block can land in the last
+  few milliseconds of the splash — holding the **settled** mark, never a part-thrown one.
+- **All three power-up orderings are proven on hardware, 2026-08-10**, which is what
+  retires this as a worry — nothing controls whether the panel or the router comes up
+  first, so all three are the real-world case.
+  - **Board first, network ~30 s later**: the splash ran through, and the board
+    associated, connected and scored **with no reset**. `ensureWifi()`'s retry loop
+    evidenced rather than reasoned about.
+  - **Both together**: works, and is simply slower — the router has to boot before
+    there is an AP to find.
+  - **Network already up, board power-cycled**: connects. The fast-association case,
+    which is the one the freeze was theorised about.
+  The dead-broker variant of that last case is still untested and does not need
+  testing: the gate above puts the first `client.connect()` after the throws whatever
+  the broker is doing, so there is no state of the broker that can reach the animation.
 - **The indicator is only on the splash.** Once a score is up, a dropped link is
   already said by the whole panel dimming, so a corner dot would be repeating it. The
   four pixels would fit the `score` layout's margins but not `full`, whose name row

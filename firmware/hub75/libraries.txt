@@ -45,3 +45,10 @@ cu.usbmodem<MAC> and the running sketch as cu.usbmodem101.
 
 Running on both panels the same day: wordmark, score layout, the full chain, and the
 brightness buttons. Still untested: the power figures, and brightness 40 at dusk.
+
+Rebuilt and reflashed 2026-08-10 against the same core and library versions, still
+clean: 999,159 bytes of flash (47%) and 81,060 of global RAM (24%), so the draw card
+and the first-thrower marks together cost 2,732 bytes of flash and 8 of static RAM.
+Run that night against the router's own broker with no WAN anywhere in the path —
+phone on the AP, app scoring onto the panel. That is the first time the board has
+been proven on the offline broker rather than the public one.

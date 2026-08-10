@@ -4,7 +4,8 @@ How to run the external scoreboard with **no internet and no third-party broker*
 a travel router carries the MQTT broker and the TLS certificate, the app stays on
 `holecorn.com`, and the whole thing works in a field with no signal.
 
-Status: **half built.** As of 2026-08-04 the board runs against mosquitto on the
+Status: **working end to end with no internet, as of 2026-08-10.** As of 2026-08-04
+the board runs against mosquitto on the
 router: packages installed on **stock GL.iNet firmware** with no need to flash
 vanilla, a plain 1883 listener bound to the LAN address, and the LED board joining
 the router's 2.4 GHz AP and rendering a hand-published retained state. Steps 1, 3
@@ -34,9 +35,18 @@ name locally, completing TLS against the new certificate, authenticating as
 `scorer` over WebSockets on 8884, and getting `rc0` on a retained QoS 1 publish to
 `holecorn/<code>/state`. That closes every step from 1 to 9 for the scoring phone.
 
-Renew-on-plug (step 7) is in place the same night. **What is left**: the board and
-the display device (step 10 and the second half of step 9), neither of which has
-connected to this broker with credentials yet.
+Renew-on-plug (step 7) is in place the same night.
+
+**The whole chain then ran with no WAN on 2026-08-10**, which is the result this
+document exists for: the board flashed with the offline credentials, the router
+plugged in with nothing upstream, a phone joined to its AP, and the app scoring
+onto the panel. Every numbered step is therefore proven rather than planned, and
+proven in the configuration it will actually be used in — no internet anywhere in
+the path.
+
+**What is left is not this design**: the tablet on `?display=1` has still not
+connected to this broker, and the backer and the mount are unbuilt (see
+`firmware/hub75/README.md`).
 
 Substitute one value throughout: the router's LAN address, written here as
 `192.168.8.1`.
