@@ -102,12 +102,24 @@ and `?panel=1` resolve offline despite the query string.
 - **GL.iNet GL-MT3000 (Beryl AX).** The deciding spec is 256 MiB flash and 512 MiB
   RAM; the Wi-Fi 6 is irrelevant to the board, which is 2.4 GHz-only. 5 V over
   USB-C. Vendor figure is `<8 W`.
-- **Its own power bank.** Not shared with the board: a "15 W" bank is 15 W *total*
-  across ports, so the router would eat the panel's budget and leave ~0.4 A of
-  the 3 A fold-back — and a transmit burst tripping the bank takes the scoreboard
-  down mid-game, which reads as a firmware bug. At 8 W a 10,000 mAh bank runs it
-  ~3.7 hours; at the ~3 W it will actually draw serving one AP with no WAN,
-  nearer 10.
+- **One supply, shared with the board — and the reason it used to need its own is
+  gone.** That reason was real while the supply was a 10,000 mAh bank: a "15 W" bank is
+  15 W *total* across ports, so the router would have eaten the panel's budget and left
+  ~0.4 A of the 3 A fold-back, and a transmit burst tripping the bank takes the
+  scoreboard down mid-game, which reads as a firmware bug. **An Anker SOLIX C300X gives
+  5 V/3 A on each port independently**, so nothing competes: board on USB-C1, router on
+  USB-C2, measured 2026-08-10 at 2 W each and **48 h for the pair**. Two banks to
+  remember to charge was the cost, and it bought nothing once the ports stopped sharing
+  a budget.
+  - **Power the router from USB-C, not from its own mains plug in the station's AC
+    socket.** The plug it ships with is a plain 5 V/3 A USB-C brick, so that route runs
+    DC→AC→DC to recreate a supply the station already has: measured against a ~2 W
+    router, the inverter's own overhead is the larger load, and the station shuts an AC
+    outlet down after 2 h it reads as standby. The C-to-C cable is the whole answer.
+  - **If the router won't power up over C-to-C, try A-to-C before suspecting the port.**
+    Known GL-MT3000 behaviour with PD sources — a CC-negotiation quirk, not a fault. The
+    station's USB-A port runs a 2 W router fine, but it shares a 20 W ceiling with
+    USB-C1, so don't hang the phone on that pair as well.
 
 ## One-time setup
 

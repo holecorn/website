@@ -148,21 +148,36 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
     faint thing was judged: `COVERAGE_FLOOR` drops splash pixels under ~40% *because*
     at brightness 40 they read as off, and a loss pip is one pixel. Neither has been
     seen on hardware, so **a darker step waits until the pip has been eyeballed at
-    dusk.** The ceiling is the power budget — 0.98 A worst case against a 3 A fold-back.
+    dusk**, and nothing about power argues against one: measured, the board's draw only
+    doubles between 40 and 255, because ~1.95 W of it is a constant brightness cannot
+    touch. The ceiling is the power budget — 1.33 A worst case against a 3 A fold-back.
   - **It clamps rather than wrapping**, which is the only reason the step is a tested
     function instead of arithmetic: wrapping puts one press between darkest and 255.
     Not persisted across a reboot — brightness tracks the light on the day, and 40 is
     the step that cannot dazzle.
   - **No on-screen indicator**: the panel is the readout, and drawing one would put it
     inside the pixel-checked renderer to say what the eye already has.
-- **It runs off a USB power bank, so there is no fuse and no supply to size.** A 15 W
-  bank is itself the current limit and folds back, so a fuse downstream protects
+- **It runs off a battery over USB-C, so there is no fuse and no supply to size.** A
+  5 V/3 A port is itself the current limit and folds back, so a fuse downstream protects
   nothing — the docs said to fuse for the 40 W peak back when mains was assumed, and
-  **that advice is gone.** Overrunning the budget trips the bank rather than being
-  unsafe, and the layout draws a third of it even at full brightness, so power does not
-  constrain `PANEL_BRIGHTNESS` either. The risks
-  are the opposite of overcurrent: the bank refusing to start under switch-on load,
-  and the **1.4%-duty no-state screen** being too quiet to keep it awake.
+  **that advice is gone.** Overrunning the budget trips the port rather than being
+  unsafe, and the layout measures 44% of it at full brightness, so power does not
+  constrain `PANEL_BRIGHTNESS` either. **Feeding the board from an AC outlet through a
+  5 V brick is the one change that removes that bound** — easy to do by accident now the
+  supply is a station with sockets on it.
+- **Board power is `1.95 W + 40 W x CIE-duty x brightness/255`, measured 2026-08-10.**
+  Two things a duty-only model gets wrong, both worth knowing before quoting a figure:
+  there is a **~1.95 W constant** (the ESP32 plus the panels' own scan) which at boot
+  brightness is six times the lit-pixel term, and current follows the **CIE1931** curve
+  the library applies, not a linear channel share — so raw `lit%` over-states draw by
+  ~2.5x. **Yellow is the expensive team colour** (CIE share 0.49 against green's 0.17),
+  so a worst case is drawn in two yellows. Full reasoning in `README.md`'s `Power`.
+  - **The constant term is what retired two risks this file used to carry**: the board
+    refusing to start under switch-on load (it has started on both supplies since
+    2026-08-03), and the 1.4%-duty no-state screen being too quiet to keep the supply
+    awake — the board cannot draw under ~390 mA whatever is on screen, against a 100 mA
+    cutoff. **A 10k pull-up on OE is not a thing to fit pre-emptively**; it stays the
+    first fix to try only if a future supply won't start the board.
 - **One USB-C cable feeds everything, through the controller.** The MatrixPortal's two
   M3 standoffs either side of the HUB75 socket are USB power brought straight out, and
   Adafruit's instruction is to power from USB and hang the matrix off them — so there
@@ -176,15 +191,16 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
     the lug end is the one place in the build where polarity is unprotected.
 - **Two independent bounds make that safe, and one is fragile.** Adafruit say
   multi-panel builds need their own supply, but that assumes ~4 A per panel all-white,
-  as does the vendor's "≤20 W per panel". This layout measures 19.8% duty worst case,
-  so ~0.98 A for both at full brightness — bound one, asserted by `test_render.cpp` as
-  `DUTY_CEILING` (30%), because nothing else would notice a layout change that filled
-  the panel. Bound two is the bank folding back at 3 A, so no fault can pull the 8 A
-  the panels are rated for. **Swapping the bank for mains removes bound two**, and then
+  as does the vendor's "≤20 W per panel". This layout measures 11.7% CIE-duty worst
+  case, so **1.33 A** for both at full brightness — bound one, asserted by
+  `test_render.cpp` as `DUTY_CEILING` (30% of *lit pixels*, a deliberately conservative
+  proxy), because nothing else would notice a layout change that filled the panel.
+  Bound two is the port folding back at 3 A, so no fault can pull the 8 A the panels are
+  rated for. **Swapping USB-C for mains or an AC socket removes bound two**, and then
   the panels must be fed directly.
 - **A brighter panel-side effect is limited by duty x brightness, not duty.** At
-  `PANEL_BRIGHTNESS = 40` even an all-white flood is 1.25 A and fits; only high duty
-  *and* daylight brightness together exceed the bank. If it is ever needed the answer
+  `PANEL_BRIGHTNESS = 40` even an all-white flood is 1.64 A and fits; only high duty
+  *and* daylight brightness together exceed the port. If it is ever needed the answer
   is a PD bank with a buck converter feeding the panels directly — not mains, and not
   bulk capacitance (a 50 ms flood would want 0.5 F). **But the retained whole-state
   message model blocks it first**: an animation is an event, a retained `fourBagger`

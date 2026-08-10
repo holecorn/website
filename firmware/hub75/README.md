@@ -46,9 +46,10 @@ are all confirmed against real hardware rather than only against
 `src/panelRender.js`. Three faults had to be fixed to get there and two of them mask
 each other; see `Things that will bite`.
 
-**Still untested:** the power figures — every watt in `Power` remains derived — and
-whether brightness 40 is dark enough to play under at dusk, which only dusk can
-answer. The board has been run indoors only.
+**Power was measured on 2026-08-10** against the port readout of the SOLIX C300X the
+board now runs from, which found the derived model missing a ~1.95 W constant term —
+see `Power`. **Still untested:** whether brightness 40 is dark enough to play under at
+dusk, which only dusk can answer. The board has been run indoors only.
 
 ## Why this size
 
@@ -161,8 +162,9 @@ below about ply, screws and the seam is still intended shape.
   polarity in the build, and one spade under each screw is one thing to get right
   rather than two things to get right while they slide against each other.
   - **The shared trunk is not a concern at this duty.** It carries both panels —
-    ~0.98 A worst case at full brightness, against a 4 A VH4. The vendor's 8 A
-    all-white figure is not reachable by a layout of coloured digits on black.
+    **1.33 A** worst case at full brightness (measured, 2026-08-10), against a 4 A VH4.
+    The vendor's 8 A all-white figure is not reachable by a layout of coloured digits on
+    black.
   - **The branch just reaches, with very little slack** — laid out against both
     panels butted side by side, checked 2026-08-03. The stub is sized for panels
     stacked *vertically* (~160 mm between VH4 sockets, not ~320 mm), which is the
@@ -223,7 +225,7 @@ left, swap which panel the controller is in. Then the backer, then the mount.
 | --- | --- |
 | 2x Waveshare RGB-Matrix-P5-64x32 (SKU 25848) | bought |
 | Adafruit MatrixPortal S3 | bought |
-| USB power bank, any that holds 5 V at a few hundred mA | Belkin BoostCharge 10K, to hand |
+| A 5 V/3 A USB-C source, battery not mains | Anker SOLIX C300X (board on USB-C1); a Belkin BoostCharge 10K also runs it |
 | A USB-C cable | the one in the bank's box |
 | Backer, ~660 x 180 mm of 6 mm ply | offcut; seal it or use exterior ply |
 | Spade terminals on the panels' power leads | **supplied, already crimped** |
@@ -978,9 +980,13 @@ the panel shows is published state, and a local override would fight the app.
   neither has been looked at on hardware. A darker step is a one-entry change to
   the table **after** the pip has been eyeballed at dusk — not before.
 - **The ceiling is 255 because the power budget allows it**: the worst-case scene
-  is ~0.98 A against a bank that folds back at 3 A. So the full-brightness rows in
-  the tables below are no longer hypothetical — they are four presses away, and
-  the ~6 h runtime with them.
+  measures **1.33 A** against a port that folds back at 3 A. So the full-brightness rows
+  in the tables below are no longer hypothetical — they are four presses away, and
+  the ~26 h runtime with them.
+  - **Measuring the model made the *steps* look worse, not the ceiling.** Between 40 and
+    255 the board's draw only doubles (~2.3 W to ~4.0 W), because ~1.95 W of it is a
+    constant that brightness cannot touch — so nothing about power argues against a
+    darker step, and the case for one rests entirely on the pip at dusk.
 - **Nothing is remembered across a reboot.** Brightness tracks the light on the
   day, so 40 is as likely to be right as whatever was set last session, and it is
   the step that cannot dazzle. `Preferences` would be the change if that turns out
@@ -1026,80 +1032,102 @@ so it tracks the real layout — re-run `test_render.cpp` after changing it, or
 these go stale (they did once already, when the versus mark and target line
 were added).
 
-Watts are derived, not measured: `40 W peak x duty x 0.55`, where 0.55 is the
-share of a white pixel's three channels that a team colour actually lights
-(`#2f80ed` is 0.54, `#eb5757` 0.53). The 40 W is the vendor's 20 W per panel.
+**Watts are measured now**, off the per-port readout of the power station the board
+runs from (see below), fitted on 2026-08-10 to:
 
-| Scene | Duty | Derived average |
-| --- | --- | --- |
-| Normal play | 12.2% | ~2.7 W |
-| Start of game | 9.3% | ~2.0 W |
-| Winner flash | 10.4-12.8% | ~2.3-2.8 W |
-| Worst case (88-88, full names) | 19.8% | ~4.4 W |
+    board watts = 1.95 + 40 x CIE-duty x brightness/255
 
-At the boot brightness of 40 of 255 those fall further, assuming the library's
-brightness is linear — which is unverified. None of this has been checked
-against hardware, and the buttons mean the board can be sitting anywhere between
-40 and 255 (see Brightness).
+The 40 W is the vendor's 20 W per panel. **The two things this section used to get
+wrong were compensating**, which is why its full-brightness figure looked defensible:
 
-### Running off a power bank
+- **There is a constant term of ~1.95 W and the old model had none.** It is the ESP32
+  with WiFi up plus the panels' own scan — two FM6126A panels draw current for the
+  scan whatever is lit. At the brightness the board *boots* at it is **six times** the
+  lit-pixel term, so modelling only the pixels was wrong by 2.4x there while landing
+  close at 255.
+- **Current follows CIE-duty, not a linear channel share.** `drawPixelRGB888` puts
+  every channel through `lumConvTab` unless `NO_CIE1931` is defined, and it is not, so
+  a byte of 201 lights 55% of full rather than 79%. The old `x 0.55` was a linear-RGB
+  share and over-states the pixel term by ~1.4x; raw `lit%` over-states it by ~2.5x.
+  Don't reintroduce either as a shortcut.
 
-The board is fed from a **USB power bank**, not a mains supply — a Belkin
-BoostCharge 10K, which gives **15 W shared across all three ports** (2x USB-A at
-12 W, 1x USB-C at 15 W). Nothing depends on that model beyond the 15 W; any bank
-that holds 5 V at a few hundred milliamps without shutting down will do, and
-capacity is the least interesting of its specs. That one number settles most of
-the power design:
+| Scene | Lit | CIE-duty | at br 40 | at br 255 |
+| --- | --- | --- | --- | --- |
+| No-state screen | 1.4% | ~0% | 1.95 W | 1.95 W |
+| Normal play, blue v red | 10.1% | 3.6% | 2.2 W | 3.4 W (0.68 A) |
+| Start of game, 8-char names | 12.6% | 5.1% | 2.3 W | 4.0 W (0.80 A) |
+| Worst case, `full`, both yellow | 20.8% | 9.9% | 2.6 W | 5.9 W (1.18 A) |
+| Worst case, `score`, both yellow | 24.5% | 11.7% | 2.7 W | 6.7 W (1.33 A) |
 
-- **No fuse.** The bank is the current limit and it folds back rather than
+**Yellow is the expensive team colour and the old worst case ignored it.** CIE shares
+are green 0.17, red 0.32, blue 0.38, yellow 0.49 — a 2.9x spread, where the linear
+shares span only 1.7x. So a worst case is drawn in *two yellows*, not the default blue
+and red, and a colour choice moves the draw more than the layout does.
+
+What the fit rests on: at full brightness the start-of-game screen read **4 W** against
+3.99 predicted, and **2 W** when the link went stale against 2.05 — and the same
+constant then predicts 2.3 W at brightness 40, where 2 W was read. Three readings, two
+unknowns, so it is over-determined rather than curve-fitted. **The readout has 1 W
+resolution, so treat every figure here as +/-0.5 W.** A large improvement on
+derived-from-duty; still not a meter.
+
+### Running off a battery, not mains
+
+The board is fed from a **battery over USB-C**, not a mains supply. It was a Belkin
+BoostCharge 10K (15 W shared across all three ports); since 2026-08-10 it is an **Anker
+SOLIX C300X** (288 Wh), with the board on **USB-C1** and the offline-broker router on
+USB-C2. Nothing depends on either model beyond one number: **every USB-C port on both
+is 5 V/3 A**, so the electrical case below did not change when the supply did, and any
+source that holds 5 V at a couple of amps will do. That one number settles most of the
+power design:
+
+- **No fuse.** The source is the current limit and it folds back rather than
   burning, so a fuse downstream of it protects nothing the source does not
   already protect. This file used to say to fuse for the 40 W peak; that was
   written when a mains brick was the assumption, and it is wrong here.
-- **Overrunning the budget trips the bank off, it does not start a fire.** The
+- **Overrunning the budget trips the port off, it does not start a fire.** The
   question is whether the board stays up, not whether it is safe — which is why
   the sizing below is about headroom and runtime rather than worst-case peak.
-- **The bank does not constrain brightness.** Even at a full 255 the worst case
-  uses a third of the budget, which is what lets the UP button reach it for
+- **The supply does not constrain brightness.** Measured, the worst case at a full 255
+  is **1.33 A of the port's 3 A**, which is what lets the UP button reach it for
   daylight without revisiting the supply. Booting at 40 is for evening play, not
   for power.
 - **One port, one cable, no bare wires.** Everything runs through the controller
   and out of its 5 V terminals (see Assembling it), so nothing here needs a
-  chopped lead or a PD trigger board. A second port would buy no current anyway —
-  the 15 W is shared across the bank however it is split.
+  chopped lead or a PD trigger board.
+- **Feed the board from USB-C, never from an AC socket through a 5 V brick.** That is
+  the one choice that removes the fold-back bound this section rests on, and the
+  station has AC outlets that make it easy to make by accident.
 
-All of it goes through the one USB-C cable. Runtime, against ~30 Wh usable (10,000 mAh at 3.7 V is 37 Wh, less an assumed
-20% conversion loss) and a ~0.5 W estimate for the ESP32-S3 with WiFi up:
+All of it goes through the one USB-C cable. Runtime measured on the C300X on
+2026-08-10, with the router taking a further ~2 W on USB-C2 (the station reports ~2 W
+of its own overhead on top, which is why a 288 Wh pack does not give 288/load hours):
 
-| | Board total | Current at 5 V | Runtime | Share of 15 W |
+| | Board total | Current at 5 V | Whole kit | Share of the port |
 | --- | --- | --- | --- | --- |
-| Normal play at brightness 40 | ~0.9 W | ~185 mA | ~32 h | 6% |
-| Normal play at full brightness | ~3.2 W | ~640 mA | ~9 h | 21% |
-| Worst case at full brightness | ~4.9 W | ~980 mA | ~6 h | 33% |
+| Normal play at brightness 40 | ~2.3 W | ~460 mA | **48 h** (measured) | 15% |
+| Normal play at full brightness | ~4.0 W | ~800 mA | ~35 h | 27% |
+| Worst case at full brightness | ~6.7 W | ~1.33 A | ~26 h | 44% |
 
-A session is a couple of hours, so runtime is not the constraint either. Two
-things might be, and **both announce themselves without instrumentation** — the
-board either starts or it doesn't, and the bank either stays awake through the
-idle screen or it doesn't:
+A session is a couple of hours, so **runtime is not a constraint at any brightness** —
+the worst case is still ten sessions on a charge. **Two risks this section used to
+carry are now retired, and both were artefacts of the model having no constant term:**
 
-- **The board may not start at all, and there are two mechanisms.** One is
-  inrush: two panels' bulk capacitance charging at switch-on draws far more than
-  any running figure, and a bank that latches its over-current protection will
-  refuse. The other is worse and more likely — **a HUB75 panel does not power up
-  dark.** OE is active low, so until the controller drives it the outputs are
-  enabled over shift registers holding whatever random state they came up in, at
-  full drive current and before `PANEL_BRIGHTNESS` exists. That window runs from
-  power-on to `panel->begin()`, which is an ESP32-S3 boot away. Both look exactly
-  like a wiring fault and neither is one. The documented fix for the second is a
-  **10k pull-up on OE**, holding the outputs off from the instant power appears —
-  earlier than any firmware can. Worth trying before buying a bigger bank.
-- **The idle screen may be too quiet to keep the bank awake.** Banks shut down
-  below roughly 50-100 mA. The no-state screen is **1.4% duty** — four grey
-  dashes — which at brightness 40 is about 12 mA of panel, leaving the whole
-  board near 110 mA and most of that the controller. Above the usual cutoff, but
-  not by much, and it is the state the board sits in *before the first score* —
-  exactly when it gets set up and left alone. If it proves marginal, charge the
-  scoring phone from the same bank: that loads the bank, and the phone is the
-  hotspot so it is on site anyway. Cheaper than a dummy load.
+- **The board starts.** It has run off both supplies since first light on 2026-08-03,
+  so neither switch-on inrush nor the OE window (a HUB75 panel does not power up dark —
+  see `How to destroy it`) stops it here. **A 10k pull-up on OE is therefore not a thing
+  to fit pre-emptively**; it stays written down as the first fix to try *if* a future
+  supply refuses to start the board, which is the only symptom it addresses.
+- **The idle screen cannot shut the port down.** The old worry was that the 1.4%-duty
+  no-state screen drew ~110 mA against a 50-100 mA cutoff. The measured constant term
+  means the board **cannot draw less than ~1.95 W, or 390 mA**, whatever is on screen —
+  4x the C300X's 100 mA threshold on C2/C3 and 6.5x the 60 mA on C1, and the station
+  additionally needs two continuous hours under it. There was never a marginal case.
+  So charging the scoring phone off the same supply is no longer a dummy load anybody
+  needs; it is just convenient.
+
+**Choose C1 over a 140 W port anyway.** Its low-load cutoff is 60 mA where C2/C3 is
+100 mA, and it is the same 5 V/3 A. Free margin for nothing.
 
 ### Is the vendor's 20 W per panel a problem through the controller?
 
@@ -1108,20 +1136,20 @@ It is the obvious objection to running everything through the MatrixPortal —
 here, for two separate reasons, and the second is the one that actually protects
 the board:
 
-| | | | of vendor max | of bank |
+| | | | of vendor max | of the port |
 | --- | --- | --- | --- | --- |
 | Vendor max, both panels | 40 W | 8.00 A | 100% | 267% |
-| What the bank will supply | 15 W | 3.00 A | 38% | 100% |
-| Our worst case, full brightness | 4.9 W | 0.98 A | 12% | 33% |
-| Normal play at brightness 40 | 1.2 W | 0.24 A | 3% | 8% |
+| What one USB-C port will supply | 15 W | 3.00 A | 38% | 100% |
+| Our worst case, full brightness | 6.7 W | 1.33 A | 17% | 44% |
+| Normal play at brightness 40 | 2.2 W | 0.43 A | 5% | 14% |
 
 - **20 W per panel is an all-white figure**, and this layout is never near white —
-  19.8% duty at worst, measured from the renderer's own framebuffer. That is what
-  puts the real draw at ~1 A rather than 8 A. `test_render.cpp` **asserts** a 30%
-  ceiling across every scene rather than just printing the number, because the
-  power design depends on it and nothing else would notice a layout change that
-  filled the panel.
-- **The bank physically cannot deliver 8 A.** It folds back at 3 A, so even a
+  24.5% lit at worst and **11.7% CIE-duty**, measured from the renderer's own
+  framebuffer. That is what puts the real draw at ~1.3 A rather than 8 A.
+  `test_render.cpp` **asserts** a 30% ceiling across every scene rather than just
+  printing the number, because the power design depends on it and nothing else would
+  notice a layout change that filled the panel.
+- **The port physically cannot deliver 8 A.** It folds back at 3 A, so even a
   firmware fault that lit every pixel could not pull more than that through the
   connector — and 3 A is within a USB-C receptacle's rating. The current-limited
   source is the protection, which is the same reason there is no fuse. A bright
@@ -1129,10 +1157,12 @@ the board:
   spare bound either: the power-up window above is exactly a case where the panel
   lights arbitrarily at full drive with no firmware in control of it.
 
-So the duty bound keeps it comfortable and the bank's bound keeps it safe. Note
-what that argument does *not* survive: a mains supply. Swap the bank for a 5 V/8 A
-brick and the second bound disappears, at which point the panels must be fed
-directly and the 20 W rating starts to matter.
+So the duty bound keeps it comfortable and the port's bound keeps it safe. Note what
+that argument does *not* survive: **a mains supply, or this station's own AC outlets.**
+Swap USB-C for a 5 V/8 A brick and the second bound disappears, at which point the
+panels must be fed directly and the 20 W rating starts to matter. Measuring the worst
+case at 44% of the port rather than the 33% this table used to derive does not change
+that — the bound is the source, not the margin.
 
 One thing worth watching on the bench, because it sits outside both bounds:
 `setup()` calls `panel->begin()` before `setBrightness8()` and `clearScreen()`, so
@@ -1150,14 +1180,20 @@ electrical wall.
 
 | | brightness 40 | 128 | 255 |
 | --- | --- | --- | --- |
-| Today's worst case, team colour | 0.14 A | 0.44 A | 0.87 A |
-| Half the panel, team colour | 0.35 A | 1.10 A | 2.20 A |
-| Half the panel, white | 0.63 A | 2.01 A | **4.00 A** |
-| All-white flood | 1.25 A | **4.02 A** | **8.00 A** |
+| Today's worst case, team colour | 0.54 A | 0.86 A | 1.33 A |
+| Half the panel, team colour | 0.70 A | 1.38 A | 2.37 A |
+| Half the panel, white | 1.02 A | 2.40 A | **4.39 A** |
+| All-white flood | 1.64 A | **4.41 A** | **8.39 A** |
 
-Bold exceeds the bank's 3 A. At the current brightness the whole panel could go
-white and still draw 1.25 A, so an evening-brightness effect needs nothing new.
-Only high duty *and* daylight brightness together break it.
+Bold exceeds the port's 3 A. At the boot brightness the whole panel could go white and
+still draw 1.64 A, so an evening-brightness effect needs nothing new. Only high duty
+*and* daylight brightness together break it.
+
+**Every figure here moved up by the 1.95 W constant when the model was measured, and
+not one conclusion changed** — half the panel in team colour was 2.20 A derived and is
+2.37 A measured, still inside the bound. Worth knowing because the constant dominates
+the *low* end: at brightness 40 the whole table is within 1.1 A of itself, so at
+evening brightness the effect you pick barely matters.
 
 Two dead ends worth not rediscovering:
 
@@ -1178,27 +1214,33 @@ the net delta anything. So this needs a protocol decision first.
 
 ### What still wants measuring
 
-All of the above is derived, and **first power-up is deliberately not
-instrumented.** An inline USB meter was considered and skipped, because it does
-not answer the questions that matter here:
+**The steady-state figures are measured now** — the C300X's per-port readout turned out
+to be the meter this section said to borrow, permanently on site and free. What it
+cannot do is resolve better than 1 W, so the constant term is known to about +/-0.25 W
+and everything derived from it inherits that.
+
+**An inline USB meter would still add little, and first power-up stays deliberately
+uninstrumented:**
 
 - **Inrush is beyond it.** A UM24C-class meter updates at a few Hz; the switch-on
   event is milliseconds. It would read a comfortable steady current either side of
-  a spike that trips the bank, so the meter cannot distinguish inrush from the OE
+  a spike that trips the supply, so the meter cannot distinguish inrush from the OE
   window from a wiring fault. The fix ladder — 10k pull-up on OE, then lower
-  brightness, then a different bank — is the same whatever it displayed.
-- **The two real risks are binary.** The board starts or it doesn't; the bank
-  holds through the 1.4%-duty idle screen or it cuts out. Both are visible to the
-  eye, and the idle fix (charge the scoring phone off the same bank) is free and
-  needs no diagnosis first.
-- **The ~0.98 A worst case is bounded anyway.** The bank folds back at 3 A, so a
-  wrong derivation trips it rather than being unsafe. **Borrow a meter the day the
-  bank is swapped for mains** — that removes the fold-back bound and makes these
-  derived figures load-bearing for the first time.
+  brightness, then a different supply — is the same whatever it displayed. **Nothing
+  on that ladder has been needed**: the board has started on both supplies.
+- **A better meter would refine a number nothing depends on.** The worst case is 44%
+  of the port and the port folds back, so a figure wrong by half is still safe. Borrow
+  one **the day the battery is swapped for mains, or the board is moved to an AC
+  outlet** — that removes the fold-back bound and makes these figures load-bearing for
+  the first time.
 
-Two things the meter cannot answer and only dusk can: whether 40 is dark enough
+Two things no meter can answer and only dusk can: whether 40 is dark enough
 to play under, which decides if `BRIGHTNESS_LEVELS` needs a step below it, and
-whether the five steps read as evenly spaced or bunch at one end.
+whether the five steps read as evenly spaced or bunch at one end. **Note the measured
+constant makes the second one worse than it looked** — between brightness 40 and 255
+the board's draw only doubles, so the steps are much closer in *power* than in
+apparent brightness, and nothing about the power design pushes back on adding a
+darker step.
 
 **And a third: whether the red needs correcting at all.** Indoors on 2026-08-03 the
 panel's red read washed out — pink rather than red — at every brightness step. What

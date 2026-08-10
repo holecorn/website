@@ -461,7 +461,7 @@ int main() {
     // Ascending, so every press changes something, and the floor stays at the 40
     // that COVERAGE_FLOOR and the single-pixel loss pip were judged against —
     // nothing on this panel has been looked at darker than that. The top is what
-    // the power budget allows: ~0.98 A worst case against the bank's 3 A.
+    // the power budget allows: 1.33 A worst case against the port's 3 A.
     for (int i = 1; i < BRIGHTNESS_LEVEL_COUNT; i++)
       CHECK(BRIGHTNESS_LEVELS[i] > BRIGHTNESS_LEVELS[i - 1]);
     CHECK(BRIGHTNESS_LEVELS[0] == 40);

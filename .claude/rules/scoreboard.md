@@ -451,8 +451,9 @@ the broker on the LAN.
       `undefined` by ten and drew **NaN**, which no unit test saw.
   - **`form-worst` measures 28.5% duty against `DUTY_CEILING`'s 30%** — the densest
     screen the panel has, against the full layout's 19.8% and the score layout's
-    23.6%. It passes, and the power case still holds (~1.4 A for both panels at full
-    brightness against a bank that folds back at 3 A), but **the ceiling is now
+    23.6%. It passes, and the power case still holds (~1.6 A for both panels at full
+    brightness against a port that folds back at 3 A — measured model, see the firmware
+    `README.md`'s `Power`), but **the ceiling is now
     nearly spent**: a fifth row, larger pips or a denser column set would breach it,
     and that check is the only thing standing between a layout change and browning
     out the board.
@@ -873,9 +874,12 @@ the broker on the LAN.
     promoting to full brightness. The generator emits the floor it applied as
     `LOGO_MIN_LEVEL` and the test asserts against that, not against the fraction — which is
     how a quantisation landing at 39.7% got caught.
-  - **The lit-pixel duty metric and current diverge by ~1.7x**, measured over every scene:
-    `form-worst` is 28.5% lit but 16.6% per-channel, because these colours are never white.
-    So `DUTY_CEILING` is conservative, and an antialiased screen can breach it while drawing
+  - **The lit-pixel duty metric and current diverge by ~2.5x**, because these colours are
+    never white *and* the library maps every channel through CIE1931 before it drives the
+    LEDs. Measured on a start-of-game screen: 12.6% lit, 7.8% per-channel linear, **5.1%
+    after the curve** — so the linear figure this note used to give (~1.7x, `form-worst` at
+    28.5% lit against 16.6%) was itself over-stating current by ~1.5x. `DUTY_CEILING` is
+    conservative on both counts, and an antialiased screen can breach it while drawing
     less current than one that passes. Don't redefine the metric to make a screen fit — the
     splash respects the check as written. If it is ever revisited, that is its own change.
   - **The chalk filter is off and that is not a loss at this size.** A 1-2px stroke has no

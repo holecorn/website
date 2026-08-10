@@ -487,10 +487,13 @@ Two things that reach back into `src/` and so are worth knowing before you get t
   by `npm run test:firmware`. Treat them as one thing in two languages — change one and
   the check fails until the other matches. `src/panelGlyphs.js` and `src/panelLogo.js`
   are **generated**; don't hand-edit them.
-- **The panel's power budget is asserted, not observed.** `DUTY_CEILING` in
-  `test_render.cpp` caps how much of the panel any scene may light, because the decision
-  to run both panels through the controller's 5 V terminals depends on it and no
-  electrical test would catch a layout that broke it.
+- **The panel's power budget is asserted, and the assertion is what a measurement cannot
+  replace.** `DUTY_CEILING` in `test_render.cpp` caps how much of the panel any scene may
+  light, because the decision to run both panels through the controller's 5 V terminals
+  depends on it and no electrical test would catch a layout that broke it. The board's
+  draw *is* measured now (`1.95 W + 40 W x CIE-duty x brightness/255`, 2026-08-10), which
+  changed every watt in the firmware README and no conclusion in it — so don't quote a
+  figure from memory, and note **raw lit-pixel duty over-states current by ~2.5x**.
 
 ## Fixture names
 

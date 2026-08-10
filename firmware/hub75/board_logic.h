@@ -77,7 +77,7 @@ inline bool parseLayout(const char* payload, size_t length, PanelLayout& out) {
 // a pixel below ~40% of full is indistinguishable from off, which is what
 // `COVERAGE_FLOOR` and the single-pixel loss pip are calibrated to, and nothing has
 // ever been looked at darker than this. The ceiling is what the supply allows —
-// 255 puts the worst-case scene at ~0.98 A against a bank that folds back at 3 A.
+// 255 puts the worst-case scene at 1.33 A against a port that folds back at 3 A.
 static const uint8_t BRIGHTNESS_LEVELS[] = {40, 70, 120, 180, 255};
 static const int BRIGHTNESS_LEVEL_COUNT =
     sizeof BRIGHTNESS_LEVELS / sizeof BRIGHTNESS_LEVELS[0];
