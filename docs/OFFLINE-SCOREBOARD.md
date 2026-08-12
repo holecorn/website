@@ -261,16 +261,28 @@ filtered. Relying on the public record through this router instead would need
 `rebind_domain` to whitelist it.
 
 The public `board.holecorn.com` A record pointing at the same address is worth
-adding, but **only for the devices that bypass `dnsmasq` while internet is
-available** — a DoH profile or iCloud Private Relay, at home, during setup. It is
-not needed for issuance, since DNS-01 validates through a TXT record at
-`_acme-challenge.board`, and **it cannot help in the field**: every way of
-resolving around `dnsmasq` needs the internet that is missing there, so those
-devices fall back to the network's own resolver and the local override answers.
-The record is also unreliable by nature — resolvers commonly strip private
-addresses from public answers as rebind protection, including possibly the home
-router you are standing next to — so treat it as a convenience and never as the
-mechanism.
+adding and answers unstripped from at least Cloudflare, but it is a convenience
+and **never the mechanism**. It is not needed for issuance either, since DNS-01
+validates through a TXT record at `_acme-challenge.board`.
+
+**A device that resolves around `dnsmasq` does not fall back in the field**, which
+an earlier version of this note had backwards — it argued that every way of doing
+so needs the internet the router has not got. The router's missing WAN is not the
+*phone's*: an iPhone on this AP keeps cellular, so a DoH profile and iCloud
+Private Relay both go on resolving against public DNS all afternoon. The bypass is
+at full strength exactly where it was assumed to lapse. Nor does the public record
+rescue it — with NextDNS in the path the query was visible in its log and no usable
+address came back, and a rewrite added for it was created as
+`*.board.holecorn.com` and changed nothing. A resolver that strips private
+addresses as rebind protection and one with no record to return fail identically.
+
+**iCloud Private Relay is the one to reach for first, and it is sufficient on its
+own.** With NextDNS already disabled for this SSID the iPhone still would not
+connect; switching off **Limit IP Address Tracking** for the network is what fixed
+it. It resolves through Apple's own resolver and covers **Safari traffic**, which
+is exactly what this app is — installed to the home screen included — so it sits in
+the path more directly here than for anything else on the device. An iPad that had
+failed the same way days earlier had the same cause. Both observed 2026-08-12.
 
 ### 5. Broker
 
@@ -677,6 +689,15 @@ the broker. Do not add port forwards.
   optional; 443 is nginx's, see step 5.
 - Set the display link up by QR rather than typing; `uqr` generates it on-device,
   so that works offline too.
+- **Turn off every private-DNS path, per network, on each iOS device** — join the
+  router's SSID, then Settings → Wi-Fi → ⓘ → **Limit IP Address Tracking** off, and
+  the same SSID excluded in any DoH app such as NextDNS. Per network rather than
+  globally, so nothing is weakened anywhere else and there is nothing to remember
+  at the pitch. Do it on the **tablet as well as the phone**: it loads `/board/`
+  from the same name, and a board that cannot resolve says `NO BROKER` with no
+  settings form in front of you. The ESP32 needs none of this — `MQTT_HOST` is the
+  literal IP, so it resolves nothing, which also makes it the control: a panel that
+  connects while both tablets do not points straight at DNS.
 
 ### 10. Firmware
 
@@ -758,6 +779,6 @@ failure mode.
 | Key is on the router and it still asks for a password | `/etc/dropbear/authorized_keys` versus `~/.ssh/authorized_keys`, then the file's mode — dropbear ignores a group-writable one silently, which looks the same as a key it has never seen |
 | App reports a broker error, no detail | `logread -e mosquitto` — certificate expiry first, then whether the TLS listener started at all (key permissions). No output at all means `log_dest` is missing, not that nothing is wrong |
 | App says the subscription was refused | The ACL file — that message exists for exactly this |
-| Name will not resolve on the phone | A manually configured DNS server on the device — it outranks DHCP and is unreachable with no WAN, and on macOS it is set per *service*, not per network. Then iCloud Private Relay or a DoH profile, then the `dnsmasq` local address entry. Tell them apart with `dig board.holecorn.com @192.168.8.1`: an answer there means the router is fine and the device is asking somewhere else |
+| Name will not resolve on the phone or the tablet | **iCloud Private Relay first** — Limit IP Address Tracking, per network, and it alone is enough to break it. Then a DoH app such as NextDNS, excluded per SSID. Then a manually configured DNS server, which outranks DHCP and is unreachable with no WAN, and on macOS is set per *service* rather than per network. Then the `dnsmasq` local address entry. Tell them apart with `dig board.holecorn.com @192.168.8.1`: an answer there means the router is fine and the device is asking somewhere else. **Do not read a fix that survives re-enabling as durable** — an established WSS connection never re-resolves, so toggling a resolver off and on looks like it fixed nothing and cured everything; test cold |
 | One device trusts the broker and an older one does not | The chain, not the certificate. `ISRG Root YE` is new enough to be missing from an older iOS trust store, so the cross-sign has to be served — `certfile` is `fullchain.cer` for this reason |
 | Everything works at home, nothing in the field | The service worker cache was never populated on that device, or ITP evicted it because it is not installed |
