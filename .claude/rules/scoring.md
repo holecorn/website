@@ -408,11 +408,20 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     `a: [1, 3]`, `b: [2, 4]`, so the app cannot open on a lineup it would refuse to
     start — and singles, the common case, still reads Player 1 against Player 2. Any
     new default name has to keep all four distinct.
-  - **`loadGame` renames the slots that still hold an old default**, per slot, so a
-    save from when both teams defaulted to `Player 1`/`Player 2` doesn't greet
-    somebody with a blocked `Start` over names they never typed. Anything typed is
-    left alone, and the rewrite is keyed off the *old* default for that slot rather
-    than off the clash, so it can't touch a real name.
+  - **`loadGame` used to rename the slots holding an old default and it is gone**, so
+    don't add another migration of that shape. When the defaults moved it rewrote any
+    slot whose name matched the *pre-move default for that slot index* — `Player 1` at
+    0, `Player 2` at 1 — to spare a save from before the move a `Start` blocked over
+    names nobody typed. It was claimed here that keying off the old default rather than
+    off the clash meant it could not touch a real name. **It could, because it ran on
+    every load rather than once**, and those are names the app itself offers: typing the
+    obvious doubles lineup `a: [Player 1, Player 2]`, `b: [Player 3, Player 4]` and
+    reloading gave `a: [Player 1, Player 3]` — a name silently rewritten into a clash,
+    and `Start` then refusing the lineup and naming *you*. A save cannot say which
+    defaults it was written under, so the migration had no signal to gate on; it was
+    deleted rather than narrowed, two weeks after the move, at the cost that a save
+    older than 2026-07-30 opens with the repeat visible and one retype to fix.
+    `verify-recovery.mjs` holds the reload against what was typed.
   - **Only the slots the mode plays**, so the default partner is neither a repeat nor
     a missing name in singles — and a guest game has no faults at all, since every
     slot is the team's colour and `players` still holds the last real lineup. That

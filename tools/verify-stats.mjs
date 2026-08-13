@@ -1682,9 +1682,13 @@ check(
   await dp.getByRole('button', { name: 'Guests' }).click();
   check('but guests start on it, because the colour is the identity', await start.isEnabled());
 
-  // A save from when both teams defaulted to Player 1 and Player 2 is a lineup the
-  // app would now refuse — for names nobody typed. loadGame renames the slots that
-  // still hold a default, which no unit test can see: it isn't exported.
+  // Both teams defaulted to Player 1 and Player 2 before 2026-07-30, so a save from
+  // then is a lineup the app now refuses over names nobody typed. `loadGame` used to
+  // rewrite those slots and that migration is **gone** — it could not tell an old
+  // default from a name typed today and renamed real ones, which `verify-recovery.mjs`
+  // now holds. This is what deleting it costs, asserted rather than assumed: the save
+  // still loads, on setup, with the repeat named and both boxes marked, so it is one
+  // retype away rather than a phone that has to be reinstalled.
   await dp.evaluate(() => {
     localStorage.clear();
     localStorage.setItem(
@@ -1694,12 +1698,20 @@ check(
   });
   await dp.reload();
   await dp.waitForSelector('.setup');
-  check('an old default lineup loads as one that can start', await start.isEnabled());
   check(
-    'and reads as two players rather than one twice',
-    (await fields.evaluateAll((els) => els.map((e) => e.value).join(','))) === 'Player 1,Player 2',
+    'a lineup from before the defaults moved keeps the names it was saved with',
+    (await fields.evaluateAll((els) => els.map((e) => e.value).join(','))) === 'Player 1,Player 1',
     await fields.evaluateAll((els) => els.map((e) => e.value).join(',')),
   );
+  check(
+    'and says which name is doubled rather than silently fixing it',
+    (await hint.innerText()).startsWith('Player 1 is in the lineup twice') &&
+      (await start.isDisabled()) &&
+      (await marked()) === 2,
+    `${await hint.innerText()} · ${await marked()} marked`,
+  );
+  await fields.nth(1).fill('Tau');
+  check('one retype is the whole recovery', await start.isEnabled());
   await dup.close();
 }
 

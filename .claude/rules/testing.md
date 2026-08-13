@@ -565,6 +565,16 @@ line passes all 635 unit tests.
   four of today's fields existed still loads its rounds. Six mutations, each killed by
   the block aimed at it — and the two over-rejecting ones (demand an id; ask before the
   merge instead of after) are killed *only* by that second half.
+- **The third block is the one over-rejection that actually shipped**, and it is about
+  what `loadGame` *rewrites* rather than what it refuses. `migrateDefaults` renamed any
+  slot holding the pre-2026-07-30 default for its index, on every load — so typing
+  `Player 2` into team A's second slot came back as `Player 3` and clashed with team B,
+  with `Start` disabled and the fault blaming the person who typed. Nothing below
+  `App.jsx` could see it: `lineupFaults` was right about the lineup it was given. The
+  migration is deleted and the block asserts a typed lineup survives a reload **and**
+  that what comes back is still startable — the names assertion alone would not say what
+  the rewrite cost. Verified by mutation: putting `migrateDefaults` back fails exactly
+  those two and nothing else, and passes all 820 unit tests.
 - **A blank page has no selector to wait for**, so the `.app` wait is bounded and
   swallowed. Unbounded, the first mutation ends the run in a stack trace instead of
   naming which shape did it — the lesson `verify-tabs.mjs` records above, met again.

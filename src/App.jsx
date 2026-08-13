@@ -84,18 +84,6 @@ function identified(game) {
   return typeof game.id === 'string' && game.id ? game : { ...game, id: newMatchId() };
 }
 
-// Both teams used to default to Player 1 and Player 2, which `duplicateNames`
-// now refuses. Nobody typed those, so a slot still holding one takes the name it
-// would have had today; anything typed is left alone.
-const OLD_DEFAULTS = ['Player 1', 'Player 2'];
-
-function migrateDefaults(players) {
-  const fresh = newGame().players;
-  const swap = (team) =>
-    players[team].map((name, i) => (name === OLD_DEFAULTS[i] ? fresh[team][i] : name));
-  return { a: swap('a'), b: swap('b') };
-}
-
 function loadGame() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -110,7 +98,6 @@ function loadGame() {
           b: [parsed.names.b, merged.players.b[1]],
         };
       }
-      merged.players = migrateDefaults(merged.players);
       delete merged.names;
       // Asked after the merge and the migrations, so absent fields have already
       // been filled and only a value that is present and wrong gets here. A game

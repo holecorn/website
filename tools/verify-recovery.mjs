@@ -155,6 +155,38 @@ console.log('\nand a save from before a field existed still loads');
   await context.close();
 }
 
+// The third way `loadGame` can be over-eager, and the one that actually shipped.
+// `migrateDefaults` rewrote any slot whose name matched the pre-2026-07-30 default for
+// that *slot index* — `Player 1` at 0, `Player 2` at 1 — on every load rather than once,
+// so it could not tell a save from before the defaults moved from a name typed this
+// morning. Measured: typing the obvious doubles lineup below and reloading gave
+// `a: [Player 1, Player 3], b: [Player 3, Player 4]`, and `lineupFaults` then refused the
+// lineup as having Player 3 twice — the app rewriting a name and blaming you for it.
+// The migration is gone; this is what stops one coming back.
+console.log('\nand the lineup you typed is the lineup you get back');
+{
+  const typed = {
+    ...structuredClone(good),
+    id: 'as-typed',
+    mode: 'doubles',
+    rounds: [],
+    players: { a: ['Player 1', 'Player 2'], b: ['Player 3', 'Player 4'] },
+  };
+  const { context, page, drew } = await open(typed);
+  const names = drew
+    ? await page.locator('.team-name-input').evaluateAll((els) => els.map((e) => e.value))
+    : [];
+  const wanted = [...typed.players.a, ...typed.players.b];
+  check('all four names survive the reload', names.join() === wanted.join(), names.join(', '));
+  // The rewrite's whole cost was here: it produced a lineup the app then refused, so a
+  // names assertion alone would not say what it cost you.
+  check(
+    'and the lineup it made is one Start will take',
+    drew && (await page.getByRole('button', { name: 'Start', exact: true }).isEnabled()),
+  );
+  await context.close();
+}
+
 // The other half of the same question, one key over: what the app does with *history*
 // it cannot read. Measured before the fix, seeding the archive with a plausible newer
 // envelope and doing nothing but winning one game took 296,012 characters holding 300
