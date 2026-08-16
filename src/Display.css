@@ -549,3 +549,134 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* ------------------------------------------------------------------ a cup won --
+
+   The final of a tournament. The board gives the whole screen to the champion for a few
+   seconds and then hands back to the score under a gold banner — where the panel keeps
+   its card for good, because a 128x32 strip has no third thing to show and a tablet
+   still has the score underneath. The same divergence the winner flash and the dim grace
+   already make.
+
+   `--champion` is set inline from `CHAMPION_COLOR` in `scoring.js`, the one place that
+   hex lives; `render.h` holds the same value for the panel and the champion scenes are
+   what keep the two equal. It is deliberately **not** a fifth team colour and must not be
+   made to move with `PALETTE`'s yellow, which it sits 21.7 CIEDE2000 from. */
+.champion-card {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.8vmin;
+  text-align: center;
+  background: radial-gradient(120% 90% at 50% 46%, #17130a 0%, #07090b 62%);
+  font-family: 'Bebas Neue', system-ui, sans-serif;
+  /* It holds and then clears itself in CSS rather than on a timer: nothing here is on
+     the wire, so there is no state to keep and no phase to publish — the rule that keeps
+     a board recoverable from one retained message. `forwards` and not an unmount, so the
+     banner underneath is never re-mounted and cannot arrive twice. */
+  --hold: 4600ms;
+  animation:
+    champion-in 700ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both,
+    champion-out 900ms ease-in var(--hold) forwards;
+}
+
+@keyframes champion-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes champion-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.champion-card p {
+  margin: 0;
+}
+
+/* The pieces fall *behind* the words — `App.css`'s lesson one screen over and
+   `.display-side`'s here: a celebration paints behind the result, never over it. The
+   confetti is positioned and comes first in the DOM, so static text loses to it: measured
+   with this rule removed, 142 of 142 samples across CHAMPION had a piece painted over the
+   letters. The card is inside `.display`, so `.display .confetti` already sizes its
+   pieces and nothing here has to. */
+.champion-card > p,
+.champion-rule {
+  position: relative;
+  z-index: 1;
+}
+
+.champion-cup-name {
+  color: var(--champion);
+  font-size: 8vmin;
+  line-height: 1;
+  letter-spacing: 0.34em;
+  /* The tracking is added after the *last* letter too, so without this the line sits
+     half a space left of centre. */
+  text-indent: 0.34em;
+  text-transform: uppercase;
+}
+
+.champion-rule {
+  width: 62vmin;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--champion), transparent);
+}
+
+/* Sized off its own length rather than picked, because a champion can be a pair with two
+   long names and the one thing this screen may not do is wrap or clip one. The vmin term
+   is what an ordinary name takes; the vw term is what a long label falls back to. */
+.champion-name {
+  color: var(--champion);
+  font-size: min(34vmin, 88vw / var(--chars) * 1.9);
+  line-height: 0.94;
+  white-space: nowrap;
+  text-transform: uppercase;
+  text-shadow: 0 0 7vmin #ff8c0055;
+}
+
+.champion-title {
+  color: var(--text);
+  font-size: 11vmin;
+  line-height: 1;
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+  text-transform: uppercase;
+}
+
+.champion-round {
+  margin-top: 1.6vmin;
+  color: var(--muted);
+  font-size: 4.6vmin;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* The cup's name inside the banner, which is the one part of that line that is not the
+   sentence about who won. */
+.champion-cup {
+  font-weight: 600;
+  opacity: 0.82;
+}
+
+/* The card still has to *clear*, so this drops the motion and keeps the timing — the same
+   reasoning the toss's pause follows, where withholding a result is a delay rather than
+   an animation. */
+@media (prefers-reduced-motion: reduce) {
+  .champion-card {
+    animation: champion-out 1ms linear var(--hold) forwards;
+  }
+}

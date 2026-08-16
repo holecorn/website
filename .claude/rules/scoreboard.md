@@ -974,6 +974,77 @@ the broker on the LAN.
     a caption that worked the chain out for itself would name the score screen over a
     celebration — the fault the fixture card already records. `render.h` writes the chain
     out instead, since the firmware draws and never captions.
+- **A won *final* is a sixth screen, and the board is told about it by a topic coming
+  back rather than by anything new.** `tiePayload` clears `holecorn/<code>/tie` at the
+  first bag as it always did, and republishes it the moment the game is won — **only
+  when the tie is the final**. So a board holding a tie *and* a winner is looking at a
+  cup that has been won, and that is the whole test: nothing compares a round against
+  the word "Final", no payload grew a field, and both consumers already parse both
+  topics. `App.jsx` supplies `final` as `playingTie.level === 1` rather than the round's
+  wording, because the level is the fact and `roundName` is free to reword the label.
+  - **It clears itself on both ways out with nothing added.** Undoing the winning round
+    takes `winner` away while `gameStarted` stays true; `New game` drops the tie
+    altogether, since `game.tournament` is deliberately not sticky. `scoreboard.test.js`
+    pins both directions — the mutation that publishes for *every* tie fails two tests
+    and the one that never republishes fails one.
+  - **The precedence is a branch inside the tie card, not a new rung.** `render.h` and
+    `boardScreen` both ask "is there a winner?" inside `tie && tie->set && haveState`,
+    which is the smallest edit that works and leaves every other screen's order
+    untouched. `Display.jsx` makes the same test from the other side — its pre-game
+    branch is `(lineup || tie) && !payload?.winner`, or a tablet would draw a fixture
+    card for a game that is over.
+  - **Two beats out of the clock a won game already has.** Under `WIN_ANIM_MS` the
+    ordinary celebration plays *unchanged* — `test_render.cpp` asserts that frame is
+    byte-identical to `win-landed`, so a cup cannot quietly alter how a game is won —
+    and after it the card. `winMs` still carries both halves and nothing new is on the
+    wire for any of it.
+  - **The card is where the panel stops: the score does not come back.** A final is the
+    last game of the cup, and a 128x32 strip has no third thing to hold beside the three
+    rows. `champion-held`, a full gleam cycle later, is asserted byte-identical to the
+    settled card, and `champion-no-tie` is the same board with the topic gone — which is
+    every other won game, and comes back to the score with its gleam.
+  - **`?display=1` diverges and hands back**, the same call the winner flash and the dim
+    grace make: a tablet has the score underneath and the room for a banner. The card
+    holds and clears in CSS rather than on a timer — nothing here is on the wire, so
+    there is no state to keep — and `forwards` rather than an unmount, or the banner
+    beneath it would arrive twice.
+  - **The champion wears `CHAMPION_COLOR`, and that is the one thing saying this is not
+    just another win.** It lives in `scoring.js` beside `PALETTE` because both boards
+    need it; `render.h` holds the same value and the champion scenes are what keep the
+    two equal, so it needs no mirrored-constant assertion of its own — it is drawn, so a
+    mismatch is a pixel difference. **It must never be made to move with `PALETTE`'s
+    yellow**, which it sits nearest. Measured CIEDE2000 against the four team colours:
+    blue 53.8, red 28.1, green 51.8, yellow **21.7**. The warmer golds that read better
+    in isolation are **6.5** from that yellow — inside the range this project already
+    calls the same colour — so a yellow team's card would not change colour at all, and
+    the change of colour is the whole point of it. `tools/out/gold-check.mjs` is the
+    measurement.
+  - **The gleam is scoped to the name's own extent**, where the score's is scoped to the
+    winning pair, and for the same reason: swept across the full panel width it is off
+    the name for most of its cycle and reads as an occasional flicker.
+    - **It is swept in the check rather than sampled twice, and a 5x7 name is why.** A
+      single sample put the band on the space in `Neil & Psi` and changed nothing — a
+      fixture landing between two glyphs, which reads exactly like a broken gleam.
+      Sixteen phases state the property instead: it crosses the name for most of the
+      cycle, and at no point does it put a pixel out.
+  - **`drawTextClipped` takes the `GleamBand` the digits already took**, which is why
+    the gleam block moved above it in both files. The 90 existing scenes staying
+    byte-identical through that move is what says it was inert.
+  - **`CHAMPION` on its own row, and `CHAMPIONS` for a pair** — the test `winVerb`
+    already makes on the same label, so the payload still carries no `mode`. It costs a
+    character only where it shares a row with the name, which on this card it does not:
+    the name gets the whole 21.
+  - **Duty is 9.8% settled and 17.9% for a 21-character cup under a long pair**, against
+    `DUTY_CEILING`'s 30%. Not a screen the ceiling needed re-checking for, but the cup
+    line is what would spend it — at 21 characters it runs to within 1px of both edges,
+    which the fixture card already does and is why the two agree.
+  - **`hub75.ino` needed no change at all.** `winStart` is already stamped on the winner
+    transition, the tie is already parsed and passed, and `loop()` already takes
+    `ANIM_RENDER_INTERVAL` whenever a game is won — which the card's gleam needs
+    indefinitely.
+  - **A rebooted board replays it**, the same bounded cost the celebration already has:
+    the stamp is the sketch's own `millis()`, so a retained finished final celebrates
+    once and settles into the card. **Don't put a stamp in the payload for it.**
 - **The splash is a fourth screen and the second with no layout id**, so it has its own
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at

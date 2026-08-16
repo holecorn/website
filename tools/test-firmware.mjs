@@ -255,6 +255,11 @@ if (!ran['test_render.cpp']) {
     if (!scenes.some((s) => s.draw)) {
       throw new Error('no scenes carry a draw card — the draw screen is unpinned');
     }
+    // And the champion card, which is a tie *and* a winner and so cannot be covered by
+    // the tie assertion above — every scene it accepts draws the fixture card instead.
+    if (!scenes.some((s) => s.tie && s.winner && s.winMs >= panel.WIN_ANIM_MS)) {
+      throw new Error('no scenes carry a won final — the champion screen is unpinned');
+    }
 
     for (const scene of scenes) {
       const buf = readFileSync(resolve(dir, `${scene.name}.ppm`));

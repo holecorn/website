@@ -134,12 +134,27 @@ export function lineupPayload(game, matches) {
 // board joining part way through a tie shows the score, not a fixture card for a
 // game already under way.
 //
+// **And published again the moment a final is won, which is how a board learns a cup has
+// been.** Presence is the whole trigger, the rule the lineup topic already carries: a
+// board that has a tie *and* a winner is looking at a champion, so nothing compares a
+// round against the word "Final" and no field was added to any payload. The two things
+// the champion screen needs — the cup's name and who won — are already on these two
+// topics, and the board has been parsing both since the fixture card.
+//
+// `tie.final` rather than `tie.round === 'Final'`: the level is the fact and the round
+// name is a rendering of it, and `roundName` is free to change its wording.
+//
+// It clears itself on the two ways out with nothing added — undoing the winning round
+// takes `winner` away while `gameStarted` stays true, and `New game` drops the tie
+// altogether, since `game.tournament` is deliberately not sticky.
+//
 // Deliberately carries no names: the two sides are already in the score payload
 // as joined labels, and two copies of who is playing could disagree. Nothing here
 // is truncated either, because this topic has a packet to itself — the panel cuts
 // to what its line holds and the display shows the lot.
 export function tiePayload(game, tie) {
-  if (gameStarted(game) || !tie) return null;
+  if (!tie) return null;
+  if (gameStarted(game) && !(game.winner && tie.final)) return null;
   return { t: tie.name, r: tie.round };
 }
 

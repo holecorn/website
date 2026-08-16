@@ -524,6 +524,48 @@ describe('the tournament tie', () => {
     expect(tiePayload(started, tie)).toBeNull();
   });
 
+  // The one exception, and it is the board's whole route to a champion screen: a final
+  // republishes the card the moment the game is won, so a board holding a tie *and* a
+  // winner is looking at a cup that has been won. Presence is the trigger — nothing
+  // compares a round against the word "Final" and no payload grew a field for it.
+  describe('a won final', () => {
+    const final = { name: 'Hole Corn V', round: 'Final', final: true };
+    // A game with a bag thrown and a winner, which is the state a final ends in.
+    const won = (t) => ({
+      ...throwAll(setup(), 'a', ['hole', 'hole', 'hole', 'hole']),
+      winner: 'a',
+      tournament: 'hc5',
+      ...t,
+    });
+
+    it('comes back when the final is won', () => {
+      expect(tiePayload(won(), final)).toEqual({ t: 'Hole Corn V', r: 'Final' });
+    });
+
+    // Every other round of the cup ends like any other game: the card stays cleared and
+    // the board goes to the score with its gleam.
+    it('stays cleared for any other tie', () => {
+      expect(tiePayload(won(), tie)).toBeNull();
+    });
+
+    // The two ways out, and neither needed anything of its own. Undoing the winning
+    // round takes `winner` away while the game is still started; `New game` drops the
+    // tie altogether, since `game.tournament` is deliberately not sticky.
+    it('clears again when the winning round is undone', () => {
+      expect(tiePayload({ ...won(), winner: null }, final)).toBeNull();
+    });
+
+    it('and when the next game is not a tie at all', () => {
+      expect(tiePayload(newGame(21), null)).toBeNull();
+    });
+
+    // `final` is the level rather than the round's wording, so `roundName` is free to
+    // reword the label without silently turning the champion screen off.
+    it('reads the flag and not the round it is called', () => {
+      expect(tiePayload(won(), { name: 'Hole Corn V', round: 'Final' })).toBeNull();
+    });
+  });
+
   // Nothing is cut on the wire: this topic has a packet to itself, so the panel
   // truncates to what its row holds and the display shows the whole thing.
   it('sends a long cup name whole', () => {

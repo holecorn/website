@@ -22,7 +22,7 @@
 // fails this and nothing else.
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { PALETTE } from './scoring.js';
+import { CHAMPION_COLOR, PALETTE } from './scoring.js';
 
 const dir = new URL('./', import.meta.url);
 
@@ -409,6 +409,17 @@ describe('contrast', () => {
   it.each(cases)('$scheme: $name is legible under --on-accent', ({ value, scheme }) => {
     const fill = teamAccent(value, scheme);
     expect(contrast(VARS[scheme]['--on-accent'], fill)).toBeGreaterThanOrEqual(AA);
+  });
+
+  // The same banner wears `CHAMPION_COLOR` when a cup has been won, so the one ink has to
+  // clear a fifth fill — and this one is not a team colour, so it is not in `cases`. Only
+  // the dark scheme, because `main.jsx` pins the board to it and this fill exists nowhere
+  // else: on the light scheme the ink whitens and the fill does *not* darken with it, so
+  // the pairing there is 2.33 and would be a false failure about a page that cannot
+  // render. **If the champion card ever appears in the app proper, that stops being
+  // true** and the colour needs the same derivation the team colours get.
+  it('the champion banner is legible under the same ink', () => {
+    expect(contrast(VARS.dark['--on-accent'], CHAMPION_COLOR)).toBeGreaterThanOrEqual(AA);
   });
 
   // A team colour is text as well as fill: the lane header, the name input, the history

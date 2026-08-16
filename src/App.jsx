@@ -404,10 +404,19 @@ export default function App() {
   const formMatches = series ? series.matches : matches;
   // What the board is told: the cup and the round, and no names — the two sides are
   // already in the score payload as joined labels.
+  //
+  // `final` is the level rather than the round's name, because it decides whether this
+  // topic comes *back* when the game is won — the board's whole route to a champion
+  // screen, see `tiePayload`. A tie's level counts down to 1 at the final by definition,
+  // so that is the fact; `levelName` is a rendering of it and is free to reword.
   const publishedTie = useMemo(
     () =>
       liveTournament && playingTie
-        ? { name: liveTournament.name, round: levelName(playingTie.level, liveView.shape) }
+        ? {
+            name: liveTournament.name,
+            round: levelName(playingTie.level, liveView.shape),
+            final: playingTie.level === 1,
+          }
         : null,
     [liveTournament, playingTie, liveView],
   );

@@ -23,6 +23,7 @@ import {
   GLYPH_MASK,
   GLYPH_SMALL,
 } from './panelGlyphs.js';
+import { CHAMPION_COLOR } from './scoring.js';
 import {
   LOGO_CORN,
   LOGO_CORN_LETTERS,
@@ -226,28 +227,6 @@ const scaled = (c, level) => ({
   b: idiv(c.b * level, 255),
 });
 
-function drawTextClipped(fb, bytes, x, y, color, maxChars, clipX) {
-  for (let i = 0; i < bytes.length && i < maxChars; i += 1) {
-    const rows = FONT_ROWS[fontIndex(bytes[i])];
-    for (let ry = 0; ry < FONT_H; ry += 1) {
-      for (let rx = 0; rx < FONT_W; rx += 1) {
-        const cx = x + i * FONT_ADVANCE + rx;
-        if (cx >= clipX) continue;
-        if (rows[ry] & (1 << rx)) px(fb, cx, y + ry, color);
-      }
-    }
-  }
-}
-
-function drawText(fb, bytes, x, y, color, maxChars) {
-  drawTextClipped(fb, bytes, x, y, color, maxChars, PANEL_W);
-}
-
-function textWidth(bytes, maxChars) {
-  const n = Math.min(bytes.length, maxChars);
-  return n ? n * FONT_ADVANCE - 1 : 0;
-}
-
 // What a won game settles into: a band of white sweeping the winner's digits — see
 // render.h, which holds why it replaced a blink. Passed through the digit drawing rather
 // than washed over the finished frame, because the panel library gives the firmware no way
@@ -274,6 +253,29 @@ function gleamed(base, band, x) {
     g: base.g + idiv((band.top.g - base.g) * mix, 255),
     b: base.b + idiv((band.top.b - base.b) * mix, 255),
   };
+}
+
+function drawTextClipped(fb, bytes, x, y, color, maxChars, clipX, band = NO_BAND) {
+  for (let i = 0; i < bytes.length && i < maxChars; i += 1) {
+    const rows = FONT_ROWS[fontIndex(bytes[i])];
+    for (let ry = 0; ry < FONT_H; ry += 1) {
+      for (let rx = 0; rx < FONT_W; rx += 1) {
+        const cx = x + i * FONT_ADVANCE + rx;
+        if (cx >= clipX) continue;
+        if (!(rows[ry] & (1 << rx))) continue;
+        px(fb, cx, y + ry, band.head === NO_GLEAM ? color : gleamed(color, band, cx));
+      }
+    }
+  }
+}
+
+function drawText(fb, bytes, x, y, color, maxChars) {
+  drawTextClipped(fb, bytes, x, y, color, maxChars, PANEL_W);
+}
+
+function textWidth(bytes, maxChars) {
+  const n = Math.min(bytes.length, maxChars);
+  return n ? n * FONT_ADVANCE - 1 : 0;
 }
 
 function drawDigit(fb, code, x, y, color, font, band = NO_BAND) {
@@ -923,6 +925,21 @@ const WIN_LINE_CHARS = idiv(PANEL_W, FONT_ADVANCE);
 const WIN_VERB_ONE = codes(' WINS');
 const WIN_VERB_PAIR = codes(' WIN');
 
+const CHAMPION_ROWS = 3;
+const CHAMPION_ROW_GAP = 2;
+const CHAMPION_ROW_H = FONT_H + CHAMPION_ROW_GAP;
+const CHAMPION_TOP = idiv(
+  PANEL_H - (CHAMPION_ROWS * FONT_H + (CHAMPION_ROWS - 1) * CHAMPION_ROW_GAP),
+  2,
+);
+const CHAMPION_WIPE_MS = 380;
+const CHAMPION_STAGGER_MS = 300;
+const CHAMPION_IN_MS = (CHAMPION_ROWS - 1) * CHAMPION_STAGGER_MS + CHAMPION_WIPE_MS;
+const CHAMPION_LINE_CHARS = idiv(PANEL_W, FONT_ADVANCE);
+const CHAMPION_ONE = codes('CHAMPION');
+const CHAMPION_PAIR = codes('CHAMPIONS');
+const CHAMPION_RGB = parseColor(CHAMPION_COLOR);
+
 export function winBagAt(i, x0, w) {
   const x = x0 + i * idiv(w - BAG, WIN_BAGS - 1);
   const dir = i % 2 === 0 ? -1 : 1;
@@ -964,6 +981,34 @@ function drawWin(fb, s, level, elapsed) {
     const o = bagFlight(b.from, b.dir, elapsed - i * SPLASH_STAGGER_MS);
     drawFlyingBag(fb, b.x + o.dx, bagY + o.dy, color);
   }
+}
+
+function drawChampionRow(fb, bytes, y, color, at, band = NO_BAND) {
+  if (at < 0) return;
+  const w = textWidth(bytes, CHAMPION_LINE_CHARS);
+  const x0 = idiv(PANEL_W - w, 2);
+  const clipX = at >= CHAMPION_WIPE_MS ? PANEL_W : x0 + idiv(w * at, CHAMPION_WIPE_MS) + 1;
+  drawTextClipped(fb, bytes, x0, y, color, CHAMPION_LINE_CHARS, clipX, band);
+}
+
+function drawChampion(fb, s, t, level, elapsed) {
+  const label = s.winner === 'a' ? s.teamA : s.teamB;
+  const grey = scaled(MARKER_COLOR, level);
+  const white = scaled(WHITE, level);
+  const gold = scaled(CHAMPION_RGB, level);
+  const title = splitPair(label) !== null ? CHAMPION_PAIR : CHAMPION_ONE;
+
+  const name = fitSideTo(label, CHAMPION_LINE_CHARS + 1, CHAMPION_LINE_CHARS);
+  const nameW = textWidth(name, CHAMPION_LINE_CHARS);
+  const nameX = idiv(PANEL_W - nameW, 2);
+  const band =
+    elapsed > CHAMPION_IN_MS
+      ? gleamBand(nameX, nameX + nameW - 1, level, elapsed - CHAMPION_IN_MS)
+      : NO_BAND;
+
+  drawChampionRow(fb, t.cup, CHAMPION_TOP, grey, elapsed);
+  drawChampionRow(fb, name, CHAMPION_TOP + CHAMPION_ROW_H, gold, elapsed - CHAMPION_STAGGER_MS, band);
+  drawChampionRow(fb, title, CHAMPION_TOP + CHAMPION_ROW_H * 2, white, elapsed - CHAMPION_STAGGER_MS * 2);
 }
 
 export function splashThump(board, elapsed) {
@@ -1058,10 +1103,16 @@ export function boardScreen({
   winMs = 0,
 }) {
   if (draw && draw.set) return 'draw';
-  if (tie && tie.set && haveState) return 'tie';
+  if (tie && tie.set && haveState) {
+    // A tie card that is still up when a game is won is a *final* — the topic is cleared
+    // at the first bag and only a final republishes it. So the board needs no round to
+    // compare against and nothing new on the wire; see tiePayload in scoreboard.js.
+    if (winner) return winMs < WIN_ANIM_MS ? 'win' : 'champion';
+    return 'tie';
+  }
   if (lineup && lineup.count > 0) return 'form';
   if (!haveState) return 'no-state';
-  // Below the three retained topics, which are all cleared at the first bag and so cannot
+  // Below the other two retained topics, which are cleared at the first bag and so cannot
   // be up when a game is won — see renderBoard, where the same chain is written out in
   // C++ because the firmware draws and never captions.
   if (winner && winMs < WIN_ANIM_MS) return 'win';
@@ -1121,6 +1172,11 @@ export function renderBoard(
 
   if (screen === 'win') {
     drawWin(fb, s, level, winMs);
+    return fb;
+  }
+
+  if (screen === 'champion') {
+    drawChampion(fb, s, tie, level, winMs - WIN_ANIM_MS);
     return fb;
   }
 

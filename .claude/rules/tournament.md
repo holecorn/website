@@ -524,6 +524,13 @@ the alternatives that were rejected; this section holds what breaks when you cha
   tournament fixture card** under External scoreboard: in a knockout every side arrives
   at a tie unbeaten, so a form line inside a tournament is all wins for everyone. What
   changes tie to tie is the round, so that is what `holecorn/<code>/tie` carries.
+  - **And the *final* keeps that topic published once it is won**, which is how the board
+    knows a cup has been. `publishedTie` carries `final: playingTie.level === 1` and
+    `tiePayload` republishes on the winner — so a tie card standing over a winner is a
+    champion, and nothing on the wire had to grow. Level 1 is the final by definition
+    here (`roundName` counts down to it), which is why the *level* is passed and not the
+    name. Both ways out are free: `undoRound` takes the winner away and `New game` drops
+    `game.tournament`. See **A won final** in `.claude/rules/scoreboard.md`.
   - **That is about the card, not about the lineup topic beside it.** The roster the
     tablet keeps under the card is scoped to the *series* now (see `seriesHistory`
     below), where it is a real record rather than a column of Ws — but the panel still

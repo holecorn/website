@@ -246,6 +246,10 @@ export default function Panel() {
     winMs,
   });
 
+  // Named once, because the win and the champion arms both want it.
+  const winnerLabel =
+    payload?.winner === 'b' ? (payload.teamB ?? 'team B') : (payload?.teamA ?? 'team A');
+
   const splash = useSplash();
   const online = useOnline();
   const connect = linkState(status, online);
@@ -328,13 +332,11 @@ export default function Panel() {
                     : screen === 'no-state'
                       ? `Panel showing no score yet: ${LINK_LABELS[connect]}`
                       : screen === 'win'
-                        ? `Panel celebrating ${
-                            payload.winner === 'a'
-                              ? (payload.teamA ?? 'team A')
-                              : (payload.teamB ?? 'team B')
-                          } winning`
-                        : `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
-                          `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
+                        ? `Panel celebrating ${winnerLabel} winning`
+                        : screen === 'champion'
+                          ? `Panel showing ${winnerLabel} as ${tie.t} champion`
+                          : `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                            `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
           }
         />
       </div>
@@ -355,7 +357,9 @@ export default function Panel() {
                   ? 'No score yet'
                   : screen === 'win'
                     ? 'Game won'
-                    : (LAYOUT_LABELS[layout] ?? layout)}{' '}
+                    : screen === 'champion'
+                      ? 'Tournament won'
+                      : (LAYOUT_LABELS[layout] ?? layout)}{' '}
         ·{' '}
         {status === 'connected'
           ? live

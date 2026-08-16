@@ -722,6 +722,56 @@ int main() {
   const Framebuffer tieNoState =
       shot("tie-no-state", tieDoubles, false, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
 
+  // The final of a cup. The tie topic is cleared at the first bag and republished only
+  // when a *final* is won, so a tie card standing over a winner is the whole signal —
+  // nothing compares a round against a word and nothing was added to any payload.
+  //
+  // Two beats out of the one clock a won game already has: under WIN_ANIM_MS the ordinary
+  // celebration, and after it a card that never hands back to the score.
+  const TieState fin = tieOf("Hole Corn V", "Final");
+  const BoardState wonTie = makeState(21, 8, 9, "Neil & Psi", "Iota & Zeta", 'a');
+  const BoardState wonTieSingle = makeState(21, 8, 9, "Theta", "Nu", 'a');
+  // A 21-character cup under a pair past what the row holds, which is the pair of rows
+  // most likely to crowd the frame.
+  const TieState finLong = tieOf("The Midwinter Plate X", "Final");
+  const BoardState wonTieLong =
+      makeState(21, 8, 9, "OMICRONZETA & UPSILONXI", "EPSILONBETA & MU", 'a');
+
+  // Beat one, which must be the shipped celebration and nothing else — asserted against
+  // `winLanded` below, so a cup cannot quietly change how a game is won.
+  const Framebuffer champThrows =
+      shot("champion-throws", wonTie, true, true, WIN_THROWS_MS, PANEL_FULL, nullptr, &fin);
+  const Framebuffer champStart =
+      shot("champion-start", wonTie, true, true, WIN_ANIM_MS, PANEL_FULL, nullptr, &fin);
+  const Framebuffer champMid = shot("champion-mid", wonTie, true, true,
+                                    WIN_ANIM_MS + CHAMPION_STAGGER_MS, PANEL_FULL, nullptr, &fin);
+  const Framebuffer champUp = shot("champion-settled", wonTie, true, true,
+                                   WIN_ANIM_MS + CHAMPION_IN_MS, PANEL_FULL, nullptr, &fin);
+  const Framebuffer champGleam =
+      shot("champion-gleam", wonTie, true, true,
+           WIN_ANIM_MS + CHAMPION_IN_MS + WIN_GLEAM_MS / 2, PANEL_FULL, nullptr, &fin);
+  const Framebuffer champSingle =
+      shot("champion-singles", wonTieSingle, true, true, WIN_ANIM_MS + CHAMPION_IN_MS,
+           PANEL_FULL, nullptr, &fin);
+  shot("champion-long", wonTieLong, true, true, WIN_ANIM_MS + CHAMPION_IN_MS, PANEL_FULL,
+       nullptr, &finLong);
+  const Framebuffer champStale = shot("champion-stale", wonTie, true, false,
+                                      WIN_ANIM_MS + CHAMPION_IN_MS, PANEL_FULL, nullptr, &fin);
+  // Under PANEL_SCORE, which must draw exactly the same card: the layout is read after
+  // the tie branch, so nothing about a cup depends on the scorer's choice.
+  const Framebuffer champScore =
+      shot("score-champion", wonTie, true, true, WIN_ANIM_MS + CHAMPION_IN_MS, PANEL_SCORE,
+           nullptr, &fin);
+  // Hours later. The card is where the panel stops, so this must still be the card and
+  // not the score — an exact gleam cycle on, so it is byte-identical to `champUp`.
+  const Framebuffer champHeld =
+      shot("champion-held", wonTie, true, true,
+           WIN_ANIM_MS + CHAMPION_IN_MS + WIN_GLEAM_MS * 900, PANEL_FULL, nullptr, &fin);
+  // The same board with the tie topic gone, which is every other won game: the score
+  // comes back with the gleam. It is what says the card is the *tie's* doing.
+  const Framebuffer champNoTie =
+      shot("champion-no-tie", wonTie, true, true, WIN_ANIM_MS + CHAMPION_IN_MS);
+
   // The draw card. A third screen with no layout id, so tools/test-firmware.mjs carries a
   // third standalone assertion that some scene has one.
   const auto drawOf = [](const char* round, const char* name, const char* oppA = "",
@@ -1012,6 +1062,61 @@ int main() {
     // the digits are — scaling it separately is a one-character change nothing else sees.
     check(winStale.lit() == winGleam0.lit(), "a stale winner lights the same pixels");
     check(memcmp(winStale.px_, winGleam0.px_, sizeof winStale.px_) != 0,
+          "and dims them, gleam and all");
+  }
+
+  // The final of a cup. What has to hold is that the *game* being won is unchanged and
+  // only what follows it differs, so the first assertion is an equality with the
+  // ordinary celebration rather than anything about the card.
+  {
+    check(memcmp(champThrows.px_, winLanded.px_, sizeof winLanded.px_) == 0,
+          "a cup does not change how a game is won — beat one is the shipped celebration");
+    check(memcmp(champStart.px_, champUp.px_, sizeof champUp.px_) != 0,
+          "and the card is not up the instant the celebration ends");
+    check(memcmp(champMid.px_, champUp.px_, sizeof champUp.px_) != 0,
+          "nor part way through its rows arriving");
+
+    // The champion wears CHAMPION_COLOR and not their own colour, which is the one thing
+    // saying this is not just another win. Both directions, or a card drawn in the team
+    // colour would pass on the absence alone.
+    check(champUp.hasColor(CHAMPION_COLOR), "the champion's name is drawn in the cup's colour");
+    check(!champUp.hasColor(wonTie.colorA), "and not in the colour they won the game in");
+    check(champThrows.hasColor(wonTie.colorA) && !champThrows.hasColor(CHAMPION_COLOR),
+          "which is the other way round one beat earlier");
+
+    // "NEIL/PSI CHAMPIONS" against "THETA CHAMPION", the same test the verb makes.
+    check(memcmp(champSingle.px_, champUp.px_, sizeof champUp.px_) != 0,
+          "a pair is told from one player here too, and by the same join");
+
+    check(memcmp(champScore.px_, champUp.px_, sizeof champUp.px_) == 0,
+          "the card is the whole panel whichever layout is chosen");
+    check(memcmp(champHeld.px_, champUp.px_, sizeof champUp.px_) == 0,
+          "and it is where the panel stops — a full gleam cycle on, the same frame");
+    check(memcmp(champNoTie.px_, champUp.px_, sizeof champUp.px_) != 0,
+          "an ordinary win is untouched: no tie card, so the score comes back");
+
+    // The gleam, on text rather than digits — so it is swept rather than sampled twice,
+    // and for a reason the digits do not have. A 5x7 name is mostly *gaps*: a single
+    // sample put the band on the space in "Neil & Psi" and changed nothing at all, which
+    // reads as a broken gleam and is a fixture landing between two glyphs. What the sweep
+    // states is the property either way — it crosses the name at some point in its cycle,
+    // and at no point does it put a pixel out.
+    {
+      int touched = 0;
+      bool sameLit = true;
+      for (uint32_t phase = 0; phase < WIN_GLEAM_MS; phase += WIN_GLEAM_MS / 16) {
+        Framebuffer fb;
+        renderBoard(fb, wonTie, true, true, WIN_ANIM_MS + CHAMPION_IN_MS + phase, PANEL_FULL,
+                    nullptr, &fin);
+        if (memcmp(fb.px_, champUp.px_, sizeof champUp.px_) != 0) touched++;
+        if (fb.lit() != champUp.lit()) sameLit = false;
+      }
+      check(touched > 8, "the gleam crosses the champion's name for most of its cycle");
+      check(sameLit, "and lights exactly the same pixels at every point in it");
+    }
+    check(champUp.lit() == champGleam.lit(), "the sampled frame agrees with the sweep");
+    check(champStale.lit() == champUp.lit(), "a stale champion lights the same pixels");
+    check(memcmp(champStale.px_, champUp.px_, sizeof champUp.px_) != 0,
           "and dims them, gleam and all");
   }
   check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");

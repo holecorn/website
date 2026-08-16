@@ -436,7 +436,13 @@ What constrains code outside those files:
 - **`sideKeyOf` in `scoring.js` is the competitor identity** — an unordered, deduped set
   of name keys, which is what makes singles and fixed doubles pairs one concept.
 - **`game.tournament` is deliberately not sticky across `New game`**, unlike `mode` and
-  `casual`, or the next friendly is filed silently into somebody's bracket.
+  `casual`, or the next friendly is filed silently into somebody's bracket. It is also
+  what clears the board's champion card with nothing added — see below.
+- **Winning the final republishes the tie topic, and that is the board's whole route to a
+  champion screen.** `publishedTie` in `App.jsx` carries `final: playingTie.level === 1`
+  — the level rather than the round's wording, since `roundName` is free to reword — and
+  `tiePayload` keeps publishing while a winner stands. Presence is the trigger, the rule
+  the lineup topic already follows. See `.claude/rules/scoreboard.md`.
 - **A cup played every year is grouped by *reading its name*, and nothing about that is
   stored.** `seriesKey` strips a trailing uppercase Roman numeral or year; there is no
   series record and no field on a tournament, so `newTournament`, `validTournament`,
@@ -476,6 +482,15 @@ What constrains code outside those files:
   which pair of digits blinked) and the gleam replaced the blink, so the score never goes
   dark. The display keeps its hollow flash and gains the phone's confetti. **Nothing new is
   on the wire for any of it.** See `.claude/rules/scoreboard.md`.
+  - **A won *final* adds a champion card, and the board learns about it from a topic
+    coming back rather than from anything new.** `tiePayload` republishes
+    `holecorn/<code>/tie` when the game is won and **only when the tie is the final**, so
+    a tie beside a winner *is* a cup that has been won — no round is compared against a
+    word and no payload grew a field. The panel keeps the card for good and `?display=1`
+    hands back to the score under a banner, the divergence the winner flash already makes.
+    **`CHAMPION_COLOR` in `scoring.js` is a third kind of colour** — not a team colour and
+    not a UI accent — and must never be made to move with `PALETTE`'s yellow, which it
+    sits 21.7 CIEDE2000 from and the warmer golds sit 6.5 from.
 - **`PALETTE`, `gameStarted`, `winVerb` and `sideLabel` live in `scoring.js`**, because
   the app and the board both need them and two definitions would let them disagree.
   `sideLabel` collapsing the spaces around an ampersand *inside* a name is what makes

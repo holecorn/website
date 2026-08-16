@@ -12,7 +12,7 @@ import {
   saveScoreboardConfig,
   segmentDigits,
 } from './scoreboard.js';
-import { DEFAULT_COLORS, TEAM_JOIN, splitLabel, winVerb } from './scoring.js';
+import { CHAMPION_COLOR, DEFAULT_COLORS, TEAM_JOIN, splitLabel, winVerb } from './scoring.js';
 import { DIGIT_VIEWBOX, SEGMENTS, litSegments } from './segments.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import { useWakeLock } from './useWakeLock.js';
@@ -226,6 +226,10 @@ export default function Display() {
   const winnerLabel = payload?.winner
     ? (payload.winner === 'a' ? payload.teamA : payload.teamB)
     : '';
+  // The cup, if this was the final of one. Everything below reads this rather than the
+  // round's wording: `tiePayload` only republishes the topic for a final, so its presence
+  // beside a winner is the whole of the test — the panel makes the same one.
+  const cup = payload?.winner && tie ? tie : null;
   const statusText =
     status === 'connected'
       ? senderOnline
@@ -264,7 +268,11 @@ export default function Display() {
     );
   }
 
-  if (lineup || tie) {
+  // A tie topic standing over a *winner* is a won final, not a fixture — the topic is
+  // cleared at the first bag and only a final republishes it (see `tiePayload`). That is
+  // the same rule the panel's tie branch follows, and it has to be made here too or the
+  // board would draw a fixture card for a game that is over.
+  if ((lineup || tie) && !payload?.winner) {
     return (
       <div
         className={`display display-form${stale ? ' is-stale' : ''}`}
@@ -294,8 +302,10 @@ export default function Display() {
       {/* Mounted when the winner appears and keyed on which side won, so it falls once
           rather than on every republished payload — a rename after the win would
           otherwise set it off again. The phone's own celebration, sized for a board:
-          `--piece` and `--fall` are set in `Display.css`. */}
-      {payload?.winner && (
+          `--piece` and `--fall` are set in `Display.css`.
+          A won *final* drops its own, gold, on the card in front of this — so this one is
+          skipped rather than animating 72 pieces nobody can see. */}
+      {payload?.winner && !cup && (
         <Confetti key={payload.winner} count={BOARD_CONFETTI} color={winnerColor} />
       )}
 
@@ -346,12 +356,69 @@ export default function Display() {
       </div>
 
       {payload?.winner && (
-        <div className="display-banner" style={{ background: winnerColor }}>
-          {winnerLabel} {winVerb(winnerLabel)}!
+        <div className="display-banner" style={{ background: cup ? CHAMPION_COLOR : winnerColor }}>
+          {cup ? (
+            <>
+              {winnerLabel} — <span className="champion-cup">{cup.t}</span>{' '}
+              {championTitle(winnerLabel)}!
+            </>
+          ) : (
+            `${winnerLabel} ${winVerb(winnerLabel)}!`
+          )}
         </div>
       )}
 
+      {/* Keyed like the confetti, so it plays once and a republished payload does not set
+          it off again. It holds and then clears itself in CSS rather than on a timer:
+          nothing here is on the wire, so there is no state to keep and no phase to
+          publish. The panel diverges and keeps its card for good — a 128x32 strip has no
+          third thing to show, where a tablet still has the score underneath. */}
+      {cup && (
+        <ChampionCard
+          key={payload.winner}
+          cup={cup}
+          label={winnerLabel}
+          beat={payload.winner === 'a' ? (payload.teamB ?? 'Team B') : (payload.teamA ?? 'Team A')}
+          score={payload.winner === 'a' ? [payload.a, payload.b] : [payload.b, payload.a]}
+        />
+      )}
+
       <p className="display-status">{statusText}</p>
+    </div>
+  );
+}
+
+// "Rho & Tau champions" but "Neil champion", the test `winVerb` already makes on the same
+// label — the payload carries no `mode`, so a join in the string is the only thing saying
+// there are two of them.
+function championTitle(label) {
+  return splitLabel(label) ? 'champions' : 'champion';
+}
+
+// What the board gives the whole screen to for a few seconds when a cup is won, before
+// handing back to the score under the banner. The champion wears `CHAMPION_COLOR` rather
+// than the colour they won the game in, which is the one thing saying this is not just
+// another win — the panel's card makes the same swap at the same moment.
+function ChampionCard({ cup, label, beat, score }) {
+  return (
+    <div className="champion-card" style={{ '--champion': CHAMPION_COLOR }}>
+      <Confetti count={BOARD_CONFETTI} color={CHAMPION_COLOR} />
+      <p className="champion-cup-name">{cup.t}</p>
+      <div className="champion-rule" aria-hidden="true" />
+      {/* Sized off its own length rather than picked: a champion can be a pair with two
+          long names, and a name that wraps or clips is the one thing this screen may not
+          do. `--chars` is what lets the width term be written in CSS. */}
+      <p className="champion-name" style={{ '--chars': label.length }}>
+        {label}
+      </p>
+      <p className="champion-title">{championTitle(label)}</p>
+      {/* Oriented to the champion, never to the payload's team letters — which side was
+          entered as A is an accident of setting the game up, and written that way round
+          the line reads `24–26` under a champion and says they lost. `bracket()` orients
+          a tie's score to its own two sides for exactly this reason. */}
+      <p className="champion-round">
+        {cup.r} · {score[0]}–{score[1]} v {beat}
+      </p>
     </div>
   );
 }

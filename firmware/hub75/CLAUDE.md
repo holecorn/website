@@ -277,6 +277,11 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
     replay-on-reboot cost is still paid and simply accepted, bounded by the celebration
     settling into a gleam that needs no anchor. A four bagger has neither property:
     nothing on the wire says one happened, and nothing would bound it.
+    - **A won *final* extends it and adds nothing**, which is the same test passed a
+      second time: the tie topic is republished when the game is won, so "this was a cup
+      final" is state on a retained topic too, and the card comes out of the same
+      `winMs`. `hub75.ino` needed no change for it — `winStart` already stamps the
+      transition and `loop()` already animates while a winner stands.
 - **A generic HUB75 panel does not power up dark. This one does** — observed 2026-08-10,
   and it retires a risk this file used to carry. The reasoning was that OE is active low,
   so from power-on until `panel->begin()` the outputs are enabled over random

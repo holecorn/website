@@ -61,6 +61,18 @@ export const PALETTE = [
   { name: 'yellow', value: '#f2c94c' },
 ];
 
+// What a cup is won in — the champion card on the panel and on `?display=1`. Here beside
+// the palette rather than in either of them because both boards need it, the reason
+// `PALETTE` is here and not in `App.jsx`; `CHAMPION_COLOR` in `render.h` is the same value
+// and the champion scenes are what hold the two together.
+//
+// **Not a fifth team colour, and it must never be made to move with the yellow** it sits
+// nearest. Measured CIEDE2000 against the four: blue 53.8, red 28.1, green 51.8, yellow
+// 21.7. The warmer golds that look better in isolation are 6.5 from that yellow, which is
+// inside the range this project already calls the same colour — so a yellow team winning a
+// cup would see no change of colour at all, and the change is the whole point of it.
+export const CHAMPION_COLOR = '#ff8c00';
+
 // Blue against red, which is what a game opens on and what every surface that can be
 // asked to draw a team before there is a game falls back to — `Logo.jsx` with no props,
 // `Display.jsx` with no payload yet. Those two held the hexes literally, so a team colour

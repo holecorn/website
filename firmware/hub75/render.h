@@ -34,6 +34,16 @@ inline bool liveWithGrace(bool connected, uint32_t now, uint32_t lastLive) {
 
 static const Rgb MARKER_COLOR = {0x9a, 0xa7, 0xb4};
 static const Rgb WHITE_COLOR = {0xff, 0xff, 0xff};
+// What a cup is won in. `CHAMPION_COLOR` in scoring.js is the same value and the champion
+// scenes are what hold the two together — it is drawn, so a mismatch is a pixel
+// difference rather than something needing an assertion of its own.
+//
+// **It must not be made to move with PALETTE's yellow**, which it is nearest. Measured
+// CIEDE2000 against the four team colours: blue 53.8, red 28.1, green 51.8, yellow 21.7.
+// The warmer golds that read better in isolation sit at 6.5 from the yellow, which is
+// inside the range this project already treats as the same colour — so a yellow team's
+// card would not change colour at all, and the change of colour is the whole point of it.
+static const Rgb CHAMPION_COLOR = {0xff, 0x8c, 0x00};
 
 inline Rgb scaled(Rgb c, uint8_t level) {
   return Rgb{uint8_t(c.r * level / 255), uint8_t(c.g * level / 255),
@@ -392,6 +402,24 @@ static const int WIN_LINE_CHARS = PANEL_W / FONT_ADVANCE;
 static const char WIN_VERB_ONE[] = " WINS";
 static const char WIN_VERB_PAIR[] = " WIN";
 
+// The final of a cup, which is the celebration above and then a card that never hands
+// back to the score — see drawChampion. Three rows: the cup, the champion, and the word.
+static const int CHAMPION_ROWS = 3;
+static const int CHAMPION_ROW_GAP = 2;
+static const int CHAMPION_ROW_H = FONT_H + CHAMPION_ROW_GAP;
+static const int CHAMPION_TOP =
+    (PANEL_H - (CHAMPION_ROWS * FONT_H + (CHAMPION_ROWS - 1) * CHAMPION_ROW_GAP)) / 2;
+static const uint32_t CHAMPION_WIPE_MS = 380;
+// Each row starts before the one above it has finished, so the card assembles rather than
+// arriving a line at a time.
+static const uint32_t CHAMPION_STAGGER_MS = 300;
+static const uint32_t CHAMPION_IN_MS =
+    (CHAMPION_ROWS - 1) * CHAMPION_STAGGER_MS + CHAMPION_WIPE_MS;
+static const int CHAMPION_LINE_CHARS = PANEL_W / FONT_ADVANCE;
+// The same test as the verb above, so a pair is told from a person once and not twice.
+static const char CHAMPION_ONE[] = "CHAMPION";
+static const char CHAMPION_PAIR[] = "CHAMPIONS";
+
 // Where the i'th bag rests under a row `w` wide starting at `x0`, and which end it is
 // thrown from. Shared with the curve dump in test_render.cpp rather than written down
 // there, so the check reads the same arithmetic drawWin does — a bag that starts from the
@@ -443,35 +471,6 @@ struct FormLayout {
   int nameChars;
 };
 
-// `clipX` is the exclusive right edge: a column at or past it is not written. That is
-// what lets the win screen write its row a column at a time — a character at a time is
-// five pixels a step and reads as a stutter at this size.
-template <typename Canvas>
-void drawTextClipped(Canvas& c, const char* s, int x, int y, Rgb color, int maxChars,
-                     int clipX) {
-  for (int i = 0; s[i] && i < maxChars; i++) {
-    const uint8_t* rows = FONT_ROWS[fontIndex(s[i])];
-    for (int ry = 0; ry < FONT_H; ry++) {
-      for (int rx = 0; rx < FONT_W; rx++) {
-        const int cx = x + i * FONT_ADVANCE + rx;
-        if (cx >= clipX) continue;
-        if (rows[ry] & (1 << rx)) c.px(cx, y + ry, color.r, color.g, color.b);
-      }
-    }
-  }
-}
-
-template <typename Canvas>
-void drawText(Canvas& c, const char* s, int x, int y, Rgb color, int maxChars) {
-  drawTextClipped(c, s, x, y, color, maxChars, PANEL_W);
-}
-
-inline int textWidth(const char* s, int maxChars) {
-  int n = 0;
-  while (s[n] && n < maxChars) n++;
-  return n ? n * FONT_ADVANCE - 1 : 0;
-}
-
 // What the board holds once a game is won, for as long as the score stands: a band of
 // white sweeping the winner's digits. It replaced a blink, and the two reasons are
 // independent. The score never goes dark, so it stays readable for the whole cycle where
@@ -514,6 +513,41 @@ inline Rgb gleamed(Rgb base, const GleamBand& band, int x) {
   return Rgb{uint8_t(base.r + (band.top.r - base.r) * mix / 255),
              uint8_t(base.g + (band.top.g - base.g) * mix / 255),
              uint8_t(base.b + (band.top.b - base.b) * mix / 255)};
+}
+
+// `clipX` is the exclusive right edge: a column at or past it is not written. That is
+// what lets the win screen write its row a column at a time — a character at a time is
+// five pixels a step and reads as a stutter at this size.
+//
+// `band` is the same GleamBand the digits take, and the champion card is what wants it on
+// text: a name written in the 5x7 font is the only thing that screen has to sweep. It is
+// why the gleam block sits above this function rather than beside drawDigit.
+template <typename Canvas>
+void drawTextClipped(Canvas& c, const char* s, int x, int y, Rgb color, int maxChars,
+                     int clipX, const GleamBand& band = NO_BAND) {
+  for (int i = 0; s[i] && i < maxChars; i++) {
+    const uint8_t* rows = FONT_ROWS[fontIndex(s[i])];
+    for (int ry = 0; ry < FONT_H; ry++) {
+      for (int rx = 0; rx < FONT_W; rx++) {
+        const int cx = x + i * FONT_ADVANCE + rx;
+        if (cx >= clipX) continue;
+        if (!(rows[ry] & (1 << rx))) continue;
+        const Rgb p = band.head == NO_GLEAM ? color : gleamed(color, band, cx);
+        c.px(cx, y + ry, p.r, p.g, p.b);
+      }
+    }
+  }
+}
+
+template <typename Canvas>
+void drawText(Canvas& c, const char* s, int x, int y, Rgb color, int maxChars) {
+  drawTextClipped(c, s, x, y, color, maxChars, PANEL_W);
+}
+
+inline int textWidth(const char* s, int maxChars) {
+  int n = 0;
+  while (s[n] && n < maxChars) n++;
+  return n ? n * FONT_ADVANCE - 1 : 0;
 }
 
 template <typename Canvas>
@@ -1176,6 +1210,67 @@ void drawWin(Canvas& c, const BoardState& s, uint8_t level, uint32_t elapsed) {
   }
 }
 
+// One row of the champion card, centred and wiping in from its own left edge. `at` is
+// milliseconds since this row was due, so a negative one has not started.
+template <typename Canvas>
+void drawChampionRow(Canvas& c, const char* s, int y, Rgb color, int at,
+                     const GleamBand& band = NO_BAND) {
+  if (at < 0) return;
+  const int w = textWidth(s, CHAMPION_LINE_CHARS);
+  const int x0 = (PANEL_W - w) / 2;
+  const int clipX = uint32_t(at) >= CHAMPION_WIPE_MS
+                        ? PANEL_W
+                        : x0 + int(uint32_t(w) * uint32_t(at) / CHAMPION_WIPE_MS) + 1;
+  drawTextClipped(c, s, x0, y, color, CHAMPION_LINE_CHARS, clipX, band);
+}
+
+// What a won *final* settles into, and it is where the panel stops: the cup, the
+// champion, and the word. `elapsed` is milliseconds since the celebration ended, so this
+// is the second half of a won game's clock and every frame is still a pure function of it.
+//
+// **The score does not come back.** A final is the last game of the cup, so what the board
+// has to say for the rest of the evening is who won it — and there is no third thing a
+// 128x32 strip can hold beside these three rows. `?display=1` diverges here and hands back
+// to the score under a banner, the same call the winner flash and the dim grace make.
+//
+// The champion takes CHAMPION_COLOR rather than their own team colour, which is the one
+// thing that says this is not just another win: a cup is not a team's. The celebration
+// before it is in the team colour and is the shipped one unchanged, so the change of
+// colour is the handover.
+template <typename Canvas>
+void drawChampion(Canvas& c, const BoardState& s, const TieState& t, uint8_t level,
+                  uint32_t elapsed) {
+  const char* label = s.winner == 'a' ? s.teamA : s.teamB;
+  const Rgb grey = scaled(MARKER_COLOR, level);
+  const Rgb white = scaled(WHITE_COLOR, level);
+  const Rgb gold = scaled(CHAMPION_COLOR, level);
+
+  int firstLen;
+  const char* second;
+  const char* title = splitPair(label, firstLen, second) ? CHAMPION_PAIR : CHAMPION_ONE;
+
+  // The whole line, unlike the celebration's row — nothing shares it, so a pair keeps as
+  // much of itself as the panel physically holds.
+  char name[CHAMPION_LINE_CHARS + 1];
+  fitSideTo(label, name, sizeof name, CHAMPION_LINE_CHARS);
+
+  // Across the name's own extent rather than the panel's, the way the score's gleam is
+  // scoped to the winning pair. Swept over the full width it is off the name for most of
+  // the cycle, which reads as an occasional flicker rather than a sweep. It waits for the
+  // card to be whole, or it crosses a row that is still arriving.
+  const int nameW = textWidth(name, CHAMPION_LINE_CHARS);
+  const int nameX = (PANEL_W - nameW) / 2;
+  const GleamBand band = elapsed > CHAMPION_IN_MS
+                             ? gleamBand(nameX, nameX + nameW - 1, level, elapsed - CHAMPION_IN_MS)
+                             : NO_BAND;
+
+  drawChampionRow(c, t.cup, CHAMPION_TOP, grey, int(elapsed));
+  drawChampionRow(c, name, CHAMPION_TOP + CHAMPION_ROW_H, gold,
+                  int(elapsed) - int(CHAMPION_STAGGER_MS), band);
+  drawChampionRow(c, title, CHAMPION_TOP + CHAMPION_ROW_H * 2, white,
+                  int(elapsed) - int(CHAMPION_STAGGER_MS) * 2);
+}
+
 // Clipped on the way out rather than on the way in: a letter is drawn where it has got
 // to, so part of one off the edge of the panel is simply not written.
 template <typename Canvas>
@@ -1288,6 +1383,18 @@ void renderBoard(Canvas& c, const BoardState& s, bool haveState, bool live, uint
   }
 
   if (tie && tie->set && haveState) {
+    // The tie topic is cleared at the first bag and comes back only when a *final* is
+    // won — see tiePayload in scoreboard.js, where presence is the whole trigger. So a
+    // winner under a tie card is a champion, and the board needs no round to compare
+    // against and no field on the wire saying which tie this was.
+    if (s.winner != 0) {
+      if (winMs < WIN_ANIM_MS) {
+        drawWin(c, s, level, winMs);
+      } else {
+        drawChampion(c, s, *tie, level, winMs - WIN_ANIM_MS);
+      }
+      return;
+    }
     drawTie(c, s, *tie, level);
     return;
   }
