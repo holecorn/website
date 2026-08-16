@@ -10,6 +10,8 @@ paths:
   - "src/Positions.css"
   - "src/Chip.css"
   - "src/FormPips.css"
+  - "src/Confetti.css"
+  - "src/Confetti.jsx"
   - "src/index.css"
   - "src/Logo.jsx"
   - "src/Logo.test.js"
@@ -440,7 +442,16 @@ emitted light against reflected glare. It is 228.8 on the light scheme now.
     it behind anything, so the lift only works with the component moved out to a sibling.
     That is also why `.confetti` is `position: fixed` rather than `absolute`: outside
     `.callout` there is no positioned ancestor, so `absolute` would measure the document
-    where the pieces' `vh` fall assumes the viewport.
+    where the pieces' `vh` fall assumes the viewport. **That `fixed` is what keeps the
+    board's copy out of `.display`'s flex flow as well**, now that the display drops
+    confetti too.
+  - **It lives in `src/Confetti.jsx` and `src/Confetti.css` now**, moved out of `App.jsx`
+    and `App.css` when the board became the second caller — the `Chip` and `FormPips`
+    precedent. `.confetti-piece.is-pale` moved with it, out of the `.spark`/`.big-spark`
+    group it shared, so the component owns every rule it needs. **Its sizes are multiples
+    of `--piece` rather than pixels**, and `--fall` scales the drop the same way; the
+    defaults reproduce the phone's own 6-12px pieces and 90px drift exactly, so nothing
+    here moved. `.claude/rules/scoreboard.md` holds what the board sets them to and why.
   - **The two siblings must not share a key.** Both are keyed off `callout.key` and React
     reads them as one children set, so the obvious split gives a duplicate-key warning —
     which is a `console.error` in `npm run dev` and **nothing at all** in the production

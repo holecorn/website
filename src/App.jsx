@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import Board from './Board.jsx';
+import Confetti from './Confetti.jsx';
 import GameStats from './GameStats.jsx';
 import Lineup from './Lineup.jsx';
 import Logo from './Logo.jsx';
@@ -1249,31 +1250,6 @@ function Footer({ saveFailed = false }) {
       </span>
       Made with <span className="footer-heart">♥</span>
     </footer>
-  );
-}
-
-// Alternating the winner's colour with `--text` rather than with white, which was the
-// half that stopped working on the light scheme: white confetti over a white page is the
-// celebration not happening. Both come from the stylesheet now, off the `--team` set here.
-function Confetti({ count, color }) {
-  return (
-    <div className="confetti" aria-hidden="true" style={{ '--team': color }}>
-      {Array.from({ length: count }, (_, i) => (
-        <span
-          key={i}
-          className={`confetti-piece${i % 2 ? ' is-pale' : ''}`}
-          style={{
-            left: `${Math.random() * 100}%`,
-            width: `${6 + Math.round(Math.random() * 6)}px`,
-            height: `${9 + Math.round(Math.random() * 9)}px`,
-            '--drift': `${Math.round((Math.random() * 2 - 1) * 90)}px`,
-            '--rot': `${Math.round(Math.random() * 720 - 360)}deg`,
-            animationDuration: `${1000 + Math.round(Math.random() * 700)}ms`,
-            animationDelay: `${Math.round(Math.random() * 150)}ms`,
-          }}
-        />
-      ))}
-    </div>
   );
 }
 

@@ -1,0 +1,58 @@
+/* The winner's confetti, shared by the phone's callout and the board. Its own file for
+   the reason `Positions.css` and `Chip.css` are: appending base rules to `App.css` is a
+   trap when a component has two callers, since only one of them owns that stylesheet. */
+
+/* `fixed` because this is not inside `.callout`: with no positioned ancestor left,
+   `absolute` would measure the document where the pieces' `vh` fall assumes the viewport.
+   It is what keeps the board's copy out of `.display`'s flex flow as well. */
+.confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+
+  /* What a piece is measured in, and how long it takes to come down. The phone's own
+     numbers, so `--piece: 10px` reproduces exactly the 6-12px pieces and the 90px drift
+     this was written with; a surface read from further away raises them. */
+  --piece: 10px;
+  --fall: 1;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -8%;
+  border-radius: 1px;
+  background: var(--team-accent);
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+/* Every other piece, so the fall reads as a celebration rather than as one team's colour
+   spilt. `--text` rather than white, which is what stops working on the light scheme —
+   the same reason `.spark.is-pale` takes it. */
+.confetti-piece.is-pale {
+  background: var(--text);
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-12vh) translateX(0) rotate(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(112vh) translateX(var(--drift)) rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    display: none;
+  }
+}

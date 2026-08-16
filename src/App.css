@@ -994,10 +994,10 @@
 
 /* Every other spark, so the burst reads as a flash rather than as more bags. `--text`
    rather than white, because on the light scheme white sparks over a white lane are
-   the burst not happening. */
+   the burst not happening. `.confetti-piece.is-pale` says the same thing in
+   `Confetti.css`, which owns it now that the board draws confetti too. */
 .spark.is-pale,
-.big-spark.is-pale,
-.confetti-piece.is-pale {
+.big-spark.is-pale {
   background: var(--text);
 }
 
@@ -1144,41 +1144,6 @@
   z-index: 2;
 }
 
-/* `fixed` because this is no longer inside `.callout`: with no positioned ancestor left,
-   `absolute` would measure the document where the pieces' `vh` fall assumes the viewport. */
-.confetti {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.confetti-piece {
-  position: absolute;
-  top: -8%;
-  border-radius: 1px;
-  background: var(--team-accent);
-  opacity: 0;
-  animation-name: confetti-fall;
-  animation-timing-function: ease-in;
-  animation-fill-mode: forwards;
-}
-
-@keyframes confetti-fall {
-  0% {
-    transform: translateY(-12vh) translateX(0) rotate(0);
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(112vh) translateX(var(--drift)) rotate(var(--rot));
-    opacity: 0;
-  }
-}
-
 /* Tournament and Stats share the foot of the setup screen. Two buttons on one row
    rather than stacked: the row below them is the footer, and a second full-width
    button reads as another section rather than a way out of the screen. */
@@ -1213,8 +1178,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spark,
-  .big-spark,
-  .confetti-piece {
+  .big-spark {
     display: none;
   }
   .bag-token.vibrating {
