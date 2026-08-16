@@ -152,6 +152,31 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
      flash. It is enumerating as `ESP32 Family Device` at that point; once the sketch is
      running it presents its own TinyUSB identity, `Adafruit MatrixPortal ESP32-S3`, so
      **that name is how you tell the sketch is up** without opening the port.
+  - **Nothing on the board says which firmware it is running, and the splash is not that
+    signal** — it has looked the same across every build that has one, so seeing it says
+    only that a sketch is up. The enumeration name says the same and no more. The two
+    things that *are* evidence: esptool prints `Hash of data verified` after each image,
+    which is a read-back and comparison rather than a claim about what was sent; and the
+    sketch build is **reproducible** — measured 2026-08-16, two `arduino-cli compile` runs
+    of one tree byte-identical, because the app descriptor's `Compile time` belongs to the
+    prebuilt `arduino-lib-builder` bundle and not to the sketch. So `image-info` cannot
+    date a build, and `verify-flash 0x10000` against a *fresh* compile can settle whether
+    the board is current:
+
+    ```bash
+    arduino-cli compile -b esp32:esp32:adafruit_matrixportal_esp32s3 --output-dir out/fw .
+    <esptool> --chip esp32s3 --port <port> --no-stub --before no-reset --after hard-reset \
+      verify-flash 0x10000 out/fw/hub75.ino.bin
+    ```
+
+    It needs the same BOOT-latched download mode the write does, and the same RESET after.
+  - **Never pipe a flash through `tail` or `head`.** esptool's progress is
+    carriage-return-delimited, so a line filter keeps a handful of `\n` chunks and silently
+    discards the *start* — including the connect banner and the first images. Done once on
+    2026-08-16: the log opened at `0xe000`, and whether `0x0` and `0x8000` had been written
+    was unanswerable from it. Redirect the whole thing to a file and grep the file, which
+    is the standing rule for slow commands and bites hardest here, because re-running costs
+    a physical BOOT+RESET.
   - **Bypass `flasher.py` whenever the flash state is unknown.** All it adds is
     `--diff-with`, which skips sectors matching the copies it saved of the last flash —
     so after an interrupted write it can skip sectors that are actually *erased*. It is

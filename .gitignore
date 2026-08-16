@@ -41,3 +41,4 @@ tools/out/
 
 # Renders from the HUB75 host renderer (see firmware/hub75/README.md)
 firmware/hub75/out/
+firmware/hub75/build/
