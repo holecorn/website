@@ -143,9 +143,31 @@ the broker on the LAN.
   flashing to white and 1.64x for reverse video, against 0.77x for blanking.
   Hollowing was the only option that stays readable *and* under 1x. It also
   respects `prefers-reduced-motion` by not flashing at all.
-- **The panel blanks the winning pair instead**, because at 20px a 1px rim around
-  a 2px stroke leaves nothing to read. That divergence is deliberate, not an
-  oversight.
+  - **The board's own celebration sits on top of that and it is the phone's, not the
+    panel's.** `Confetti` was private to `App.jsx` until this; the banner arrives from
+    the foot of the board rather than appearing, and the winning digits take one pulse
+    before settling into the flash. All of it is CSS on a mount, so nothing is published
+    and no payload field exists for any of it.
+    - **`--piece` and `--fall` are what make the component shareable, and they are the
+      whole of the sizing.** Rendered at the phone's own numbers the pieces are 6-12px,
+      which on a 1194px board is dust — measured, they read as specks against the digits.
+      `Display.css` sets `2vmin` and slows the drop by 1.6, because the keyframes travel
+      in `vh` and the same duration on a taller screen is a *faster* fall rather than the
+      same one. `--piece: 10px` reproduces the phone exactly, so nothing moved there.
+    - **72 pieces rather than the phone's 44**, and deliberately not the 70 a skunk gets:
+      the board is several times the area at the same piece size, and it has no skunk to
+      know about — the payload carries nothing of the kind and must not grow one.
+    - **The pieces fall behind the digits and the banner**, which is `App.css`'s own
+      lesson one screen over — see **The celebration paints behind the result** in
+      `.claude/rules/layout.md`. `.display-side` and `.display-middle` take the z-index
+      with `position: relative`; the banner takes it *without*, since it is absolutely
+      positioned at the foot and `relative` would unpin it.
+    - **It is keyed on which side won, so it falls once.** The payload is republished on
+      a rename, and an unkeyed mount would set the whole thing off again mid-celebration.
+- **The panel does not blank the winning pair, and has not since the celebration.** Two
+  screens, out of one input — `winMs`, how long ago the winner appeared. Under
+  `WIN_ANIM_MS` the celebration owns the panel; after it the score comes back with a
+  gleam sweeping the winner's digits. See **A won game** below.
 - **Panel layouts travel on their own retained topic**, `holecorn/<code>/layout`,
   carrying an id (`full`, `score`). Not a field in the score payload, and this is
   the same reasoning that keeps `mode` out of it: the worst case already spends
@@ -887,6 +909,71 @@ the broker on the LAN.
     of 12 samples wrong. Note the fix also moved that file's blank-row sample from row 0
     to row 31 — row 0 is where the line goes, so it had been taking the status line as
     the brightness floor.
+- **A won game is two screens out of one input, and that input is `winMs`** — how long
+  ago the winner appeared. Under `WIN_ANIM_MS` the celebration owns the whole panel;
+  after it the score comes back with a gleam sweeping the winner's digits. One argument
+  rather than two because the second is the first still counting, and because only the
+  celebration cares *when* — the gleam only cares that a clock is running.
+  - **The celebration is the winner's name with four bags landing under it**, and the
+    name is what the `score` layout could not say at all: there are no names on it, so
+    who won was carried entirely by which pair of digits blinked. The label is already on
+    the wire and `winVerb`'s test is already made here (`splitPair`), so **nothing was
+    added to the payload** — "NEIL WINS" against "RHO & TAU WIN" is read off the join in
+    the string, the rule the first-thrower marks already follow.
+    - **The bags spread to the row's own width** rather than sitting in a clump, so they
+      read as the rule the panel already draws under a name. Four alone on a 128x32 strip
+      was rendered first and is almost nothing — the whole celebration lit **2.4%** of the
+      panel, four small squares in a lot of dark. With the name it is 6.6%.
+    - **`bagFlight` is shared with the splash**, which is the point of extracting it: one
+      flight, one apex, one skid, so the board has a single idea of what a bag does in the
+      air and a change to the throw carries both. The win throws differ only in where each
+      bag starts.
+    - **The name is wiped in a column at a time, not a character at a time.** At
+      `FONT_ADVANCE` a character is five pixels a step and reads as a stutter.
+    - **The verb never gives when a label is too long.** `fitSideTo` shortens the *name*
+      to `WIN_LINE_CHARS` minus the verb, so a long pair reads `OMICRONZE/UPSILON WIN`
+      rather than `OMICRONZETA & UPSILONXI W`.
+  - **The gleam replaced a blink, and the two reasons are independent.** The score never
+    goes dark, where half of every beat used to be blank — measured, the winning pair is
+    lit at every one of 16 samples across the cycle, and `test_render.cpp` sweeps exactly
+    that. And it is a pure function of a free clock, so no board has to agree with any
+    other about when the win happened, which a blink got for free.
+    - **White because there is no brighter.** The digits are already at `LEVEL_LIVE` in
+      the team's own colour, so the only headroom a lit LED has is the channels it is not
+      using. Duty is unmoved — the same 520 pixels are lit at every phase — and the
+      per-channel figure rises 7.3% to 7.5%.
+    - **It is passed *through* the digit drawing rather than washed over the finished
+      frame, and that is forced.** The panel library gives the firmware no way to read a
+      pixel back, so `GleamBand` travels into `drawDigit` and each pixel picks its own
+      colour. A wash over the framebuffer is a browser's move and would not port.
+    - **It is drawn from the level the digits are**, so a stale board's gleam dims with
+      them. Asserted through a byte comparison rather than a lit count, because scaling it
+      separately is a one-character change no count would catch.
+  - **A rebooted board replays the celebration, and that is the one thing it costs.** The
+    stamp is the sketch's own `millis()`, so a board handed a *retained* message from a
+    finished game celebrates it again — the message model has no wall clock to anchor
+    against. Bounded, because it settles into the gleam within `WIN_ANIM_MS`, and the
+    gleam is what the board actually holds. **Don't put a stamp in the payload for this**:
+    it would be a field nothing renders, on a budget the worst case already spends 74% of.
+    - **The stamp is taken on the *transition*, not on every message**, or a rename during
+      the winner's lap of honour would restart the celebration.
+  - **The layout is read after the win branch**, so both layouts draw the same
+    celebration — asserted as a byte comparison, since nothing else would notice `score`
+    quietly drawing something of its own.
+  - **The curve is dumped like the splash's, and it is worth more here.** Four bags land
+    in a row, so one thrown from the *wrong edge* still ends on the right square and every
+    scene agrees. Verified by mutation: pointing every JS bag at the left edge passes all
+    90 scenes pixel for pixel and fails only the curve, naming the bag and the millisecond.
+    `winBagAt` is exported from `render.h` for that, rather than the dump writing the
+    arithmetic out a second time.
+  - **`loop()` takes `ANIM_RENDER_INTERVAL` whenever a game is won**, not only while the
+    splash is up — the throws and the sweep both need frames, and at `RENDER_INTERVAL`'s
+    100 ms a flight is four of them. That is why the constant is no longer called
+    `SPLASH_RENDER_INTERVAL`.
+  - **`boardScreen` learned `win`**, because `Panel.jsx` captions the emulator off it and
+    a caption that worked the chain out for itself would name the score screen over a
+    celebration — the fault the fixture card already records. `render.h` writes the chain
+    out instead, since the firmware draws and never captions.
 - **The splash is a fourth screen and the second with no layout id**, so it has its own
   standalone assertion in `test-firmware.mjs` for the same reason. The wordmark comes
   from `public/logo.svg` and is painted in **two of the four team colours, picked at
@@ -920,7 +1007,7 @@ the broker on the LAN.
     than as a letter flying off with a slice of frame.
   - **The flight is integer functions and a clock argument, and all of it lives in
     `render.h`** — it is drawing, so the pixel check has to own it, unlike `SPLASH_MS`,
-    which is the sketch's the way `WINNER_BLINK` is. `elapsed`, the colours *and the
+    which is the sketch's the way `ANIM_RENDER_INTERVAL` is. `elapsed`, the colours *and the
     throwing order* are passed in, so the same inputs still give the same frame.
     - **Bags are written where they have got to, not sampled at an offset** — the reverse
       of the slide, and forced: nine pieces each carry their own offset, so there is no one
@@ -975,7 +1062,7 @@ the broker on the LAN.
       together. They now state the property — the board's bottom edge is *lower* than
       settled, a bag touches down *short* of its square. **Anything new here that compares a
       frame against the constant that drew it deserves the same suspicion.**
-  - **The emulator steps the clock in `SPLASH_RENDER_INTERVAL`s, not per animation
+  - **The emulator steps the clock in `ANIM_RENDER_INTERVAL`s, not per animation
     frame**, so it draws the frames the board draws: a browser gets through half again as
     many (60Hz against the board's 25ms tick), and how smooth the throws look at the
     board's own rate is the question the emulator exists to answer. Repeating a value is a

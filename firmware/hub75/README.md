@@ -687,12 +687,14 @@ different arrangement every boot, which is a truer picture of a round and a wors
   They now state the property instead — the board's bottom edge must be *lower* than
   settled, and a bag must touch down *short* of its square. **Anything added here that
   compares a frame against the constant that drew it is worth the same suspicion.**
-- **`SPLASH_RENDER_INTERVAL` is 25 ms against `RENDER_INTERVAL`'s 100 ms.** A score
+- **`ANIM_RENDER_INTERVAL` is 25 ms against `RENDER_INTERVAL`'s 100 ms.** A score
   changes once a round; eight throws need frames, and can have them because rendering does
   not block and there is no traffic to keep up with yet. At 100 ms each flight would be
   four frames. **`?panel=1` steps its clock in the same increments**, so the emulator
   shows the board's cadence rather than the browser's 60 Hz — see `Panel.jsx`, and
-  CLAUDE.md for why no check covers that.
+  CLAUDE.md for why no check covers that. It covers the **win celebration and the gleam**
+  too, which is why it is no longer called `SPLASH_RENDER_INTERVAL`: `loop()` takes the
+  fast rate whenever a game has been won as well as while the splash is up.
 - **A reconnect cannot stall the throws, and the gate rather than the timing is why.**
   `ensureWifi()` cannot block, so the only blocking call in `loop()` is
   `client.connect()` — and `lastReconnectAttempt` starts at 0 against a 5 s

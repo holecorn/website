@@ -92,6 +92,10 @@ project dependency. It starts and stops its own preview server.
   `plural` exists for, so two screens quoted the same percentage through different code.
 - `src/Modal.jsx` — a dialog that opens by being mounted, shared by the stats and
   tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
+- `src/Confetti.jsx` / `src/Confetti.css` — the winner's confetti, dropped by the phone's
+  callout and by `?display=1`. Private to `App.jsx` until the board wanted it, the `Chip`
+  precedent. **Every size is a multiple of `--piece`**, and `--fall` scales the drop, so
+  each surface sets its own: the phone's 6-12px pieces are dust on a board.
 - `src/nameField.js` — `NAME_FIELD`, the props every person-name field needs to stop
   the browser's own contact autofill fighting the archive's suggestions.
 - `src/inactive.js` — who has stopped playing, and so is no longer offered by the
@@ -457,12 +461,21 @@ What constrains code outside those files:
 
 - **Messages are whole-state and retained, never deltas.** That plus a monotonic `v`
   stamp is what lets a display reboot, reconnect or join late and recover with no
-  resync protocol. It is also what rules out anything with *phase* — a timer, an
-  animation, a screen cycle.
+  resync protocol. It is also what rules out anything with *phase* on the **wire** — a
+  timer, an animation, a screen cycle. A board may animate off its own clock, and two do:
+  the splash, and a won game. **Neither publishes a stamp** — a won game's celebration is
+  anchored locally, so a board rebooted onto a retained finished game replays it once and
+  settles into the gleam, which needs no anchor at all.
 - **The payload's shape is a contract with the firmware and the byte budget is tight** —
   the worst case spends 74% of the board's buffer. `scoreboard.test.js` asserts it with
   `toEqual` so a field nothing renders fails rather than quietly shipping. Don't add
   `mode`, court positions, or a `null` winner for symmetry.
+- **A won game gets a celebration and then a gleam, both out of one `winMs`** — how long
+  ago the winner appeared, which is the whole of what `renderBoard` is told. The panel
+  names the winner (the `score` layout had no names at all, so who won was carried only by
+  which pair of digits blinked) and the gleam replaced the blink, so the score never goes
+  dark. The display keeps its hollow flash and gains the phone's confetti. **Nothing new is
+  on the wire for any of it.** See `.claude/rules/scoreboard.md`.
 - **`PALETTE`, `gameStarted`, `winVerb` and `sideLabel` live in `scoring.js`**, because
   the app and the board both need them and two definitions would let them disagree.
   `sideLabel` collapsing the spaces around an ampersand *inside* a name is what makes

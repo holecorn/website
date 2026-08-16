@@ -37,7 +37,6 @@ const uint16_t MQTT_BUFFER = 512;
 const uint32_t RECONNECT_INTERVAL = 5000;
 const uint32_t WIFI_RETRY_INTERVAL = 10000;
 const uint32_t RENDER_INTERVAL = 100;
-const uint32_t WINNER_BLINK = 500;
 
 // The wordmark at power-on. Nothing waits for it — WiFi and MQTT connect underneath —
 // so it costs only the seconds the board would otherwise spend on the no-state dashes.
@@ -46,10 +45,10 @@ const uint32_t WINNER_BLINK = 500;
 // src/panelRender.js for the emulator.
 const uint32_t SPLASH_MS = 5000;
 
-// Redraw rate while the splash is up. RENDER_INTERVAL is sized for a score that
-// changes once a round; the throws need frames, and they can have them because
-// rendering does not block and there is no traffic to keep up with yet.
-const uint32_t SPLASH_RENDER_INTERVAL = 25;
+// Redraw rate while anything is moving — the splash's throws and the win celebration
+// and gleam alike. RENDER_INTERVAL is sized for a score that changes once a round; an
+// animation needs frames, and can have them because rendering does not block.
+const uint32_t ANIM_RENDER_INTERVAL = 25;
 
 // The board's own UP and DOWN buttons, which step panel brightness through
 // BRIGHTNESS_LEVELS. Neither has a pull-up fitted, so they read low when pressed,
@@ -87,6 +86,11 @@ uint32_t lastRender = 0;
 uint32_t lastLive = 0;
 bool wifiWasUp = false;
 uint32_t splashStart = 0;
+// When the winner first appeared, which is the whole of what render.h is told about a won
+// game — see renderBoard. Local to this board and never published: a display that reboots
+// onto a retained won game celebrates it again, which is bounded by the celebration
+// settling into the gleam and is why the gleam is what the board actually holds.
+uint32_t winStart = 0;
 Rgb splashA, splashB;
 uint8_t splashOrder[SPLASH_BOARDS][LOGO_LETTERS];
 int brightnessStep = BRIGHTNESS_DEFAULT_STEP;
@@ -196,7 +200,7 @@ void render() {
   const bool linked = client.connected();
   if (linked && scorerOnline) lastLive = millis();
   const bool live = scorerOnline && liveWithGrace(linked, millis(), lastLive);
-  const bool blinkOn = (millis() / WINNER_BLINK) % 2 == 1;
+  const uint32_t winMs = state.winner != 0 ? millis() - winStart : 0;
 
   panel->fillScreen(0);
   PanelCanvas canvas;
@@ -209,7 +213,7 @@ void render() {
     return;
   }
 
-  renderBoard(canvas, state, haveState, live, blinkOn, layout, &lineup, &tie, &draw,
+  renderBoard(canvas, state, haveState, live, winMs, layout, &lineup, &tie, &draw,
               connectState());
 }
 
@@ -273,6 +277,10 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
 
   BoardState next;
   if (!parseBoardState((const char*)payload, length, lastV, next)) return;
+
+  // Stamped on the transition and not on every message, or a rename during the winner's
+  // lap of honour would restart the celebration.
+  if (next.winner != 0 && next.winner != state.winner) winStart = millis();
 
   state = next;
   if (next.v != 0) lastV = next.v;
@@ -417,7 +425,10 @@ void loop() {
     }
   }
 
-  if (millis() - lastRender > (splashing() ? SPLASH_RENDER_INTERVAL : RENDER_INTERVAL)) {
+  // A won game is animating too — the celebration and then the gleam — so it takes the
+  // same rate. Everything else changes once a round.
+  const bool animating = splashing() || (haveState && state.winner != 0);
+  if (millis() - lastRender > (animating ? ANIM_RENDER_INTERVAL : RENDER_INTERVAL)) {
     lastRender = millis();
     render();
   }

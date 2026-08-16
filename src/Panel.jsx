@@ -24,8 +24,7 @@ import {
   SPLASH_ANIM_MS,
   SPLASH_BOARDS,
   SPLASH_MS,
-  SPLASH_RENDER_INTERVAL,
-  WINNER_BLINK,
+  ANIM_RENDER_INTERVAL,
   boardLiveness,
   boardState,
   createFramebuffer,
@@ -48,19 +47,30 @@ import './Panel.css';
 // Physical size of the two chained P5 modules, for the caption.
 const PANEL_MM = '640 x 160 mm';
 
-// Only alternates while someone has won — renderBoard ignores the beat
-// otherwise, and a permanent interval would re-render for nothing.
-function useBlink(winner) {
-  const [on, setOn] = useState(true);
+// How long ago the winner appeared, which is the whole of what renderBoard is told about
+// a won game — the celebration and then the gleam both come out of it. Only runs while
+// somebody has won, since renderBoard ignores it otherwise and a permanent animation frame
+// would re-render for nothing.
+//
+// Stepped in ANIM_RENDER_INTERVALs for the reason the splash's clock is: a browser gets
+// through half again as many frames as the board, and how the throws look at the board's
+// own rate is the question the emulator exists to answer.
+function useWinClock(winner) {
+  const [winMs, setWinMs] = useState(0);
   useEffect(() => {
     if (!winner) {
-      setOn(true);
+      setWinMs(0);
       return undefined;
     }
-    const id = setInterval(() => setOn((v) => !v), WINNER_BLINK);
-    return () => clearInterval(id);
+    const start = Date.now();
+    let frame = requestAnimationFrame(function step() {
+      const t = Date.now() - start;
+      setWinMs(Math.floor(t / ANIM_RENDER_INTERVAL) * ANIM_RENDER_INTERVAL);
+      frame = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [winner]);
-  return on;
+  return winMs;
 }
 
 // The board holds a dropped link live for a grace period so a patchy hotspot
@@ -162,7 +172,7 @@ const LINK_LABELS = ['no network', 'no broker', 'waiting for the scorer'];
 // everything has landed and then left alone: after that nothing moves until the splash
 // goes.
 //
-// The clock is stepped in SPLASH_RENDER_INTERVALs rather than per animation frame, so
+// The clock is stepped in ANIM_RENDER_INTERVALs rather than per animation frame, so
 // the emulator draws the frames the board draws. A browser gets through half again as
 // many, which would make this smoother here than on the panel — and how smooth the
 // throws look at the board's own rate is the question the emulator exists to answer.
@@ -175,7 +185,7 @@ function useSplash() {
     const start = Date.now();
     let frame = requestAnimationFrame(function step() {
       const t = Date.now() - start;
-      setElapsed(Math.floor(t / SPLASH_RENDER_INTERVAL) * SPLASH_RENDER_INTERVAL);
+      setElapsed(Math.floor(t / ANIM_RENDER_INTERVAL) * ANIM_RENDER_INTERVAL);
       if (t < SPLASH_ANIM_MS) frame = requestAnimationFrame(step);
     });
     const id = setTimeout(() => setShowing(false), SPLASH_MS);
@@ -215,7 +225,7 @@ export default function Panel() {
 
   const { payload, status, error, senderOnline, layout, lineup, tie, draw } =
     useScoreboardDisplay(config);
-  const blinkOn = useBlink(payload?.winner ?? null);
+  const winMs = useWinClock(payload?.winner ?? null);
   const live = useBoardLive(status === 'connected', senderOnline);
   // Coerced through the same function the pixel check drives, so what is drawn
   // here is what parseLineup would have made of the message.
@@ -232,6 +242,8 @@ export default function Panel() {
     lineup: drawn,
     tie: drawnTie,
     draw: drawnCard,
+    winner: payload?.winner ?? null,
+    winMs,
   });
 
   const splash = useSplash();
@@ -255,7 +267,7 @@ export default function Panel() {
         boardState(payload),
         payload !== null,
         live,
-        blinkOn,
+        winMs,
         layout,
         drawn,
         drawnTie,
@@ -267,7 +279,7 @@ export default function Panel() {
   }, [
     payload,
     live,
-    blinkOn,
+    winMs,
     cell,
     layout,
     drawn,
@@ -315,8 +327,14 @@ export default function Panel() {
                     ? `Panel showing pre-game form for ${drawn.count} players`
                     : screen === 'no-state'
                       ? `Panel showing no score yet: ${LINK_LABELS[connect]}`
-                      : `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
-                        `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
+                      : screen === 'win'
+                        ? `Panel celebrating ${
+                            payload.winner === 'a'
+                              ? (payload.teamA ?? 'team A')
+                              : (payload.teamB ?? 'team B')
+                          } winning`
+                        : `Panel showing ${payload.teamA ?? 'team A'} ${payload.a ?? 0}, ` +
+                          `${payload.teamB ?? 'team B'} ${payload.b ?? 0}`
           }
         />
       </div>
@@ -335,7 +353,9 @@ export default function Panel() {
                 ? 'Pre-game form'
                 : screen === 'no-state'
                   ? 'No score yet'
-                  : (LAYOUT_LABELS[layout] ?? layout)}{' '}
+                  : screen === 'win'
+                    ? 'Game won'
+                    : (LAYOUT_LABELS[layout] ?? layout)}{' '}
         ·{' '}
         {status === 'connected'
           ? live

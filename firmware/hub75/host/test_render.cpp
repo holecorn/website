@@ -187,6 +187,17 @@ static void setRow(LineupRow& r, const char* name, int wins, int losses, int ppr
   r.ppr = ppr;
 }
 
+// What every scene that is not about the win animation passes for `winMs`: the
+// celebration long over, so the gleam is at the start of its cycle and the frame is the
+// one the board holds for the rest of the game. Ignored outright where nobody has won,
+// which is all but a handful of these.
+static const uint32_t WIN_SETTLED = WIN_ANIM_MS;
+
+// The row the win curve is dumped for. A middling width — "NEIL/PSI WIN" is 71px — chosen
+// so both the outermost bags and the innermost ones travel a realistic distance.
+static const int WIN_CURVE_W = 71;
+static const int WIN_CURVE_X0 = (PANEL_W - WIN_CURVE_W) / 2;
+
 // Both panels are fed through the MatrixPortal's 5 V terminals, which only holds
 // while the layout stays far from white — see Power in README.md.
 static const double DUTY_CEILING = 30.0;
@@ -302,7 +313,7 @@ static std::string drawJson(const DrawState* d) {
 }
 
 static void record(const std::string& name, const BoardState& s, bool haveState, bool live,
-                   bool blinkOn, PanelLayout layout, const LineupState* lineup,
+                   uint32_t winMs, PanelLayout layout, const LineupState* lineup,
                    const TieState* tie = nullptr, const SplashScene* splash = nullptr,
                    const DrawState* draw = nullptr, int connect = LINK_NONE) {
   const auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
@@ -317,7 +328,7 @@ static void record(const std::string& name, const BoardState& s, bool haveState,
       ",\"first\":" + teamJson(s.first) + ",\"teamA\":" + quoted(s.teamA) +
       ",\"teamB\":" + quoted(s.teamB) + ",\"colorA\":" + colorJson(s.colorA) +
       ",\"colorB\":" + colorJson(s.colorB) + ",\"haveState\":" + flag(haveState) +
-      ",\"live\":" + flag(live) + ",\"blinkOn\":" + flag(blinkOn) +
+      ",\"live\":" + flag(live) + ",\"winMs\":" + std::to_string(winMs) +
       ",\"connect\":" + std::to_string(connect) +
       ",\"splash\":" + splashJson(splash) + "}");
 }
@@ -358,6 +369,31 @@ static void writeSplashCurve() {
     }
     fprintf(f, "]");
   }
+  // The win celebration's throws go in the same file, because they are the same maths:
+  // `bagFlight` is shared, and what differs is only where each bag starts. A scene cannot
+  // pin that any better than it can pin the splash's — and these are worse served by
+  // frames, since four bags land in a row and a wrong `from` still ends at the right
+  // square. Both directions and both parities are covered by dumping all four.
+  fprintf(f, "]");
+
+  // The win celebration's throws go in the same file, because they are the same maths:
+  // `bagFlight` is shared and what differs is only where each bag starts. Frames serve
+  // these worse than they serve the splash's — four bags land in a row, so a bag thrown
+  // from the wrong edge still ends on the right square and every scene agrees. The row
+  // width is written down here because the curve is about the flight, not the label;
+  // which row a real label produces is a scene's job.
+  fprintf(f, ",\"winSpan\":%u,\"winStagger\":%u,\"winRow\":[%d,%d],\"win\":[",
+          WIN_THROWS_MS + 1, SPLASH_STAGGER_MS, WIN_CURVE_X0, WIN_CURVE_W);
+  for (int i = 0; i < WIN_BAGS; i++) {
+    fprintf(f, "%s[", i ? "," : "");
+    for (uint32_t t = 0; t <= WIN_THROWS_MS + 1; t++) {
+      const WinBag b = winBagAt(i, WIN_CURVE_X0, WIN_CURVE_W);
+      const SplashOffset o =
+          bagFlight(b.from, b.dir, int(t) - int(uint32_t(i) * SPLASH_STAGGER_MS));
+      fprintf(f, "%s[%d,%d]", t ? "," : "", o.dx, o.dy);
+    }
+    fprintf(f, "]");
+  }
   fprintf(f, "]}\n");
   fclose(f);
 }
@@ -377,13 +413,13 @@ static void writeScenes() {
 }
 
 static Framebuffer shot(const std::string& name, const BoardState& s, bool haveState,
-                        bool live, bool blinkOn, PanelLayout layout = PANEL_FULL,
+                        bool live, uint32_t winMs, PanelLayout layout = PANEL_FULL,
                         const LineupState* lineup = nullptr, const TieState* tie = nullptr,
                         const DrawState* draw = nullptr, int connect = LINK_NONE) {
   Framebuffer fb;
-  renderBoard(fb, s, haveState, live, blinkOn, layout, lineup, tie, draw, connect);
+  renderBoard(fb, s, haveState, live, winMs, layout, lineup, tie, draw, connect);
   fb.write(name);
-  record(name, s, haveState, live, blinkOn, layout, lineup, tie, nullptr, draw, connect);
+  record(name, s, haveState, live, winMs, layout, lineup, tie, nullptr, draw, connect);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -410,7 +446,7 @@ static Framebuffer splashShot(const std::string& name, const char* hexA, const c
   drawSplash(fb, s.colorA, s.colorB, connect, elapsed, order);
   fb.write(name);
   const SplashScene scene = {connect, elapsed, order};
-  record(name, s, false, true, true, PANEL_FULL, nullptr, nullptr, &scene);
+  record(name, s, false, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr, &scene);
   check(fb.outOfBounds == 0, (name + ": drew outside the panel").c_str());
   const double duty = 100.0 * fb.lit() / (PANEL_W * PANEL_H);
   if (duty > worstDuty) worstDuty = duty;
@@ -456,63 +492,86 @@ int main() {
   // Half and half: the Latin part still has to draw normally beside it.
   const BoardState partlyShowable = makeState(12, 7, 5, "Jos\xc3\xa9", "Renee", 0, 'a');
 
-  shot("play", play, true, true, true);
-  shot("early", early, true, true, true);
-  shot("long-names", longNames, true, true, true);
-  const Framebuffer unshown = shot("unshowable-names", unshowable, true, true, true);
-  shot("partly-showable-names", partlyShowable, true, true, true);
-  shot("stale", play, true, false, true);
-  const Framebuffer noState = shot("no-state", play, false, true, true);
-  const Framebuffer winOn = shot("winner-on", won, true, true, true);
-  const Framebuffer winOff = shot("winner-off", won, true, true, false);
-  const Framebuffer worst = shot("worst", big, true, true, true);
-  shot("ruled-single", ruledSingle, true, true, true);
-  shot("ruled-pair-odd", ruledPairOdd, true, true, true);
-  shot("ruled-pair-even", ruledPairEven, true, true, true);
+  shot("play", play, true, true, WIN_SETTLED);
+  shot("early", early, true, true, WIN_SETTLED);
+  shot("long-names", longNames, true, true, WIN_SETTLED);
+  const Framebuffer unshown = shot("unshowable-names", unshowable, true, true, WIN_SETTLED);
+  shot("partly-showable-names", partlyShowable, true, true, WIN_SETTLED);
+  shot("stale", play, true, false, WIN_SETTLED);
+  const Framebuffer noState = shot("no-state", play, false, true, WIN_SETTLED);
+  // The gleam, which is what a won game settles into and holds. It changes no pixel's
+  // presence, only its colour, so these are compared as bytes rather than as counts.
+  const Framebuffer winGleam0 = shot("winner-gleam-start", won, true, true, WIN_SETTLED);
+  const Framebuffer winGleamMid =
+      shot("winner-gleam-mid", won, true, true, WIN_SETTLED + WIN_GLEAM_MS / 2);
+  const Framebuffer winStale = shot("winner-stale", won, true, false, WIN_SETTLED);
+  const Framebuffer worst = shot("worst", big, true, true, WIN_SETTLED);
+  shot("ruled-single", ruledSingle, true, true, WIN_SETTLED);
+  shot("ruled-pair-odd", ruledPairOdd, true, true, WIN_SETTLED);
+  shot("ruled-pair-even", ruledPairEven, true, true, WIN_SETTLED);
   // shot() asserts nothing is drawn off-panel, which is what this scene is for.
-  shot("overflow", overflow, true, true, true);
+  shot("overflow", overflow, true, true, WIN_SETTLED);
 
   // The same states through PANEL_SCORE. `worst` is here for DUTY_CEILING:
   // bigger digits light more of the panel, and the decision to feed both panels
   // through the controller's 5 V terminals rests on no layout approaching white.
-  const Framebuffer scorePlay = shot("score-play", ruledSingle, true, true, true, PANEL_SCORE);
-  shot("score-early", early, true, true, true, PANEL_SCORE);
-  shot("score-stale", play, true, false, true, PANEL_SCORE);
-  const Framebuffer scoreNoState = shot("score-no-state", play, false, true, true, PANEL_SCORE);
-  const Framebuffer scoreWinOn = shot("score-winner-on", won, true, true, true, PANEL_SCORE);
-  const Framebuffer scoreWinOff = shot("score-winner-off", won, true, true, false, PANEL_SCORE);
-  const Framebuffer scoreWorst = shot("score-worst", big, true, true, true, PANEL_SCORE);
+  const Framebuffer scorePlay = shot("score-play", ruledSingle, true, true, WIN_SETTLED, PANEL_SCORE);
+  shot("score-early", early, true, true, WIN_SETTLED, PANEL_SCORE);
+  shot("score-stale", play, true, false, WIN_SETTLED, PANEL_SCORE);
+  const Framebuffer scoreNoState = shot("score-no-state", play, false, true, WIN_SETTLED, PANEL_SCORE);
+  const Framebuffer scoreWinGleam0 =
+      shot("score-winner-gleam-start", won, true, true, WIN_SETTLED, PANEL_SCORE);
+  const Framebuffer scoreWinGleamMid =
+      shot("score-winner-gleam-mid", won, true, true, WIN_SETTLED + WIN_GLEAM_MS / 2, PANEL_SCORE);
+  const Framebuffer scoreWorst = shot("score-worst", big, true, true, WIN_SETTLED, PANEL_SCORE);
+
+  // The celebration. It owns the whole panel for WIN_ANIM_MS and is the same on either
+  // layout, so `score-win-throws` exists to prove exactly that rather than to show
+  // anything new — the layout is read after the win branch, not before it.
+  const BoardState wonSingle = makeState(21, 8, 9, "Theta", "Nu", 'a');
+  const BoardState wonLong =
+      makeState(21, 8, 9, "OMICRONZETA & UPSILONXI", "EPSILONBETA & MU", 'a');
+  const Framebuffer winStart = shot("win-start", won, true, true, 0);
+  const Framebuffer winThrow = shot("win-throw", won, true, true, SPLASH_STAGGER_MS);
+  const Framebuffer winWiped = shot("win-wiped", won, true, true, WIN_WIPE_MS);
+  const Framebuffer winLanded = shot("win-landed", won, true, true, WIN_THROWS_MS);
+  const Framebuffer winSingle = shot("win-singles", wonSingle, true, true, WIN_THROWS_MS);
+  shot("win-long", wonLong, true, true, WIN_THROWS_MS);
+  shot("win-stale", won, true, false, WIN_THROWS_MS);
+  shot("win-b-side", makeState(8, 21, 9, "Theta", "Nu", 'b'), true, true, WIN_THROWS_MS);
+  const Framebuffer scoreWinThrows =
+      shot("score-win-throws", won, true, true, WIN_THROWS_MS, PANEL_SCORE);
   // The no-state screen with the board's own link state written on it, which is what it
   // shows from switch-on until the phone appears. Stale, because that is the honest
   // pairing: nothing is on the state topic, so nobody is feeding it. `score-link` is
   // through the other layout, which this screen deliberately ignores.
-  const Framebuffer linkNoWifi = shot("link-no-wifi", play, false, false, true, PANEL_FULL,
+  const Framebuffer linkNoWifi = shot("link-no-wifi", play, false, false, WIN_SETTLED, PANEL_FULL,
                                       nullptr, nullptr, nullptr, LINK_NO_WIFI);
-  const Framebuffer linkNoBroker = shot("link-no-broker", play, false, false, true,
+  const Framebuffer linkNoBroker = shot("link-no-broker", play, false, false, WIN_SETTLED,
                                         PANEL_FULL, nullptr, nullptr, nullptr,
                                         LINK_NO_BROKER);
-  const Framebuffer linkNoScorer = shot("link-no-scorer", play, false, false, true,
+  const Framebuffer linkNoScorer = shot("link-no-scorer", play, false, false, WIN_SETTLED,
                                         PANEL_FULL, nullptr, nullptr, nullptr,
                                         LINK_NO_SCORER);
-  const Framebuffer linkScore = shot("score-link-no-scorer", play, false, false, true,
+  const Framebuffer linkScore = shot("score-link-no-scorer", play, false, false, WIN_SETTLED,
                                      PANEL_SCORE, nullptr, nullptr, nullptr,
                                      LINK_NO_SCORER);
   // The same screen with nothing to say, which is the state every scene above this
   // block is still asking for and the baseline the assertions measure against.
-  const Framebuffer linkNone = shot("link-none", play, false, false, true, PANEL_FULL,
+  const Framebuffer linkNone = shot("link-none", play, false, false, WIN_SETTLED, PANEL_FULL,
                                     nullptr, nullptr, nullptr, LINK_NONE);
-  shot("score-overflow", overflow, true, true, true, PANEL_SCORE);
+  shot("score-overflow", overflow, true, true, WIN_SETTLED, PANEL_SCORE);
   // Doubles through the score layout, where the second mark appears. `ruledSingle`
   // above is the singles counterpart and must stay unmarked on the other side, so
   // the two scenes together are what pin the rule being doubles-only.
   const Framebuffer scorePair =
-      shot("score-ruled-pair", ruledPairEven, true, true, true, PANEL_SCORE);
+      shot("score-ruled-pair", ruledPairEven, true, true, WIN_SETTLED, PANEL_SCORE);
   // Blank names put nothing but digits in the pair columns, which is what lets
   // the two layouts' digit heights be measured off the panel below. A blank
   // player name is a real case anyway — drawSide has a branch for it.
   const BoardState blank = makeState(88, 88, 9, "", "");
-  const Framebuffer fullBlank = shot("blank-names", blank, true, true, true);
-  const Framebuffer scoreBlank = shot("score-blank-names", blank, true, true, true, PANEL_SCORE);
+  const Framebuffer fullBlank = shot("blank-names", blank, true, true, WIN_SETTLED);
+  const Framebuffer scoreBlank = shot("score-blank-names", blank, true, true, WIN_SETTLED, PANEL_SCORE);
 
   // The pre-game form screen. It has no layout id — a retained lineup is what
   // selects it — so the layout-coverage check in tools/test-firmware.mjs cannot
@@ -569,26 +628,26 @@ int main() {
   setRow(formNoRates.rows[0], "Neil", 6, 4, -1, "LWLWW");
   setRow(formNoRates.rows[1], "Sigma", 4, 6, -1, "WLWLL");
 
-  const Framebuffer formS = shot("form-singles", play, true, true, true, PANEL_FULL, &singles);
-  const Framebuffer formD = shot("form-doubles", play, true, true, true, PANEL_FULL, &doubles);
+  const Framebuffer formS = shot("form-singles", play, true, true, WIN_SETTLED, PANEL_FULL, &singles);
+  const Framebuffer formD = shot("form-doubles", play, true, true, WIN_SETTLED, PANEL_FULL, &doubles);
   // `play` sets no first thrower, so the two above are the unmarked shape. These carry
   // one — the screen a board actually shows while everyone walks to the boards, which
   // is the whole reason the bags are here rather than only on the score.
   const BoardState formFirst = makeState(0, 0, 0, "Neil & Rho", "Sigma & Tau", 0, 'a');
   const BoardState formFirstSingle = makeState(0, 0, 0, "Neil", "Sigma", 0, 'a');
   const Framebuffer formBagD =
-      shot("form-doubles-bags", formFirst, true, true, true, PANEL_FULL, &doubles);
+      shot("form-doubles-bags", formFirst, true, true, WIN_SETTLED, PANEL_FULL, &doubles);
   const Framebuffer formBagS =
-      shot("form-singles-bags", formFirstSingle, true, true, true, PANEL_FULL, &singles);
-  shot("form-stale", play, true, false, true, PANEL_FULL, &doubles);
+      shot("form-singles-bags", formFirstSingle, true, true, WIN_SETTLED, PANEL_FULL, &singles);
+  shot("form-stale", play, true, false, WIN_SETTLED, PANEL_FULL, &doubles);
   // Under PANEL_SCORE, to show the lineup overrides the layout rather than
   // combining with it.
-  shot("form-over-score", play, true, true, true, PANEL_SCORE, &doubles);
+  shot("form-over-score", play, true, true, WIN_SETTLED, PANEL_SCORE, &doubles);
   // No state at all: the lineup still wins over the no-state dashes, because it
   // is only ever published before the first bag.
-  shot("form-no-state", play, false, true, true, PANEL_FULL, &singles);
-  const Framebuffer formW = shot("form-worst", big, true, true, true, PANEL_FULL, &formWorst);
-  const Framebuffer formN = shot("form-newcomer", play, true, true, true, PANEL_FULL, &formNew);
+  shot("form-no-state", play, false, true, WIN_SETTLED, PANEL_FULL, &singles);
+  const Framebuffer formW = shot("form-worst", big, true, true, WIN_SETTLED, PANEL_FULL, &formWorst);
+  const Framebuffer formN = shot("form-newcomer", play, true, true, WIN_SETTLED, PANEL_FULL, &formNew);
   // Past 99 in either column, which arrives at about 100 matches. The record column
   // widens and the name gives up the characters — the trade the adaptive layout makes.
   LineupState formBig;
@@ -598,12 +657,12 @@ int main() {
   setRow(formBig.rows[2], "GammaDel", 4, 316, 60, "WLWLL");
   setRow(formBig.rows[3], "DeltaEps", 2, 2, 73, "LWWL");
 
-  const Framebuffer formZ = shot("form-zero-rate", play, true, true, true, PANEL_FULL, &formZero);
-  const Framebuffer formB = shot("form-big-record", play, true, true, true, PANEL_FULL, &formBig);
+  const Framebuffer formZ = shot("form-zero-rate", play, true, true, WIN_SETTLED, PANEL_FULL, &formZero);
+  const Framebuffer formB = shot("form-big-record", play, true, true, WIN_SETTLED, PANEL_FULL, &formBig);
   const Framebuffer formI =
-      shot("form-no-rate", play, true, true, true, PANEL_FULL, &formImported);
+      shot("form-no-rate", play, true, true, WIN_SETTLED, PANEL_FULL, &formImported);
   const Framebuffer formNR =
-      shot("form-no-rates", play, true, true, true, PANEL_FULL, &formNoRates);
+      shot("form-no-rates", play, true, true, WIN_SETTLED, PANEL_FULL, &formNoRates);
 
   // The fixture card. Like the form screen it has no layout id — a tie is a phase of
   // a tournament, not a preference the scorer sets — so tools/test-firmware.mjs has a
@@ -637,31 +696,31 @@ int main() {
                                               "EtaThetaIotaKapp & LambdaMuNuXiOmic");
 
   const Framebuffer tieSpread =
-      shot("tie-spread", tieSingles, true, true, true, PANEL_FULL, nullptr, &semi);
+      shot("tie-spread", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
   const Framebuffer tieStack =
-      shot("tie-stacked", tieDoubles, true, true, true, PANEL_FULL, nullptr, &semi);
+      shot("tie-stacked", tieDoubles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
   const Framebuffer tieAt20 =
-      shot("tie-fits-inline", tieFits, true, true, true, PANEL_FULL, nullptr, &semi);
+      shot("tie-fits-inline", tieFits, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
   const Framebuffer tieAt21 =
-      shot("tie-over-inline", tieOver, true, true, true, PANEL_FULL, nullptr, &semi);
-  shot("tie-long-singles", tieLongSingles, true, true, true, PANEL_FULL, nullptr, &semi);
+      shot("tie-over-inline", tieOver, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
+  shot("tie-long-singles", tieLongSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
   const Framebuffer tieLong =
-      shot("tie-long-doubles", tieLongDoubles, true, true, true, PANEL_FULL, nullptr, &semi);
+      shot("tie-long-doubles", tieLongDoubles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
   // No cup name — a hand-edited draw, or a tie published by an app that has one and a
   // tournament that does not. The heading loses a row rather than the card failing.
-  shot("tie-no-cup", tieSingles, true, true, true, PANEL_FULL, nullptr, &noCup);
-  shot("tie-stale", tieDoubles, true, false, true, PANEL_FULL, nullptr, &semi);
+  shot("tie-no-cup", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, &noCup);
+  shot("tie-stale", tieDoubles, true, false, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
   // Under PANEL_SCORE, to show the tie overrides the layout rather than combining.
-  shot("tie-over-score", tieDoubles, true, true, true, PANEL_SCORE, nullptr, &semi);
+  shot("tie-over-score", tieDoubles, true, true, WIN_SETTLED, PANEL_SCORE, nullptr, &semi);
   // A tie and a lineup retained at once, which is the ordinary case: both are cleared
   // at the first bag, and the tie is what a tournament shows before it.
   const Framebuffer tieBeatsForm =
-      shot("tie-over-form", tieDoubles, true, true, true, PANEL_FULL, &doubles, &semi);
+      shot("tie-over-form", tieDoubles, true, true, WIN_SETTLED, PANEL_FULL, &doubles, &semi);
   // No state, so there are no sides to name. Unlike the lineup, the card cannot stand
   // on its own — it falls through to the dashes rather than drawing a heading over
   // nobody.
   const Framebuffer tieNoState =
-      shot("tie-no-state", tieDoubles, false, true, true, PANEL_FULL, nullptr, &semi);
+      shot("tie-no-state", tieDoubles, false, true, WIN_SETTLED, PANEL_FULL, nullptr, &semi);
 
   // The draw card. A third screen with no layout id, so tools/test-firmware.mjs carries a
   // third standalone assertion that some scene has one.
@@ -710,35 +769,35 @@ int main() {
   // come out captioned with the cup — the byte budget the whole split rests on.
   const DrawState drawBoth = titleOf("Hole Corn VI", "Preliminary");
 
-  const Framebuffer cardPulling = shot("draw-pulling", tieSingles, true, true, true, PANEL_FULL,
+  const Framebuffer cardPulling = shot("draw-pulling", tieSingles, true, true, WIN_SETTLED, PANEL_FULL,
                                        nullptr, nullptr, &drawPulling);
-  shot("draw-waiting", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr, &drawWaiting);
-  shot("draw-plays", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr, &drawPlays);
-  const Framebuffer cardWinner = shot("draw-winner-of", tieSingles, true, true, true, PANEL_FULL,
+  shot("draw-waiting", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr, &drawWaiting);
+  shot("draw-plays", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr, &drawPlays);
+  const Framebuffer cardWinner = shot("draw-winner-of", tieSingles, true, true, WIN_SETTLED, PANEL_FULL,
                                       nullptr, nullptr, &drawWinnerOf);
-  shot("draw-long-doubles", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr, &drawLong);
-  shot("draw-winner-of-long", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr,
+  shot("draw-long-doubles", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr, &drawLong);
+  shot("draw-winner-of-long", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr,
        &drawLongPair);
-  shot("draw-stale", tieSingles, true, false, true, PANEL_FULL, nullptr, nullptr, &drawWinnerOf);
+  shot("draw-stale", tieSingles, true, false, WIN_SETTLED, PANEL_FULL, nullptr, nullptr, &drawWinnerOf);
   // Over a tie, over a lineup and over the score layout, so the precedence is drawn rather
   // than only written down in renderBoard.
-  const Framebuffer cardOverTie = shot("draw-over-tie", tieDoubles, true, true, true, PANEL_FULL,
+  const Framebuffer cardOverTie = shot("draw-over-tie", tieDoubles, true, true, WIN_SETTLED, PANEL_FULL,
                                        &doubles, &semi, &drawWinnerOf);
-  shot("draw-over-score", tieDoubles, true, true, true, PANEL_SCORE, nullptr, nullptr,
+  shot("draw-over-score", tieDoubles, true, true, WIN_SETTLED, PANEL_SCORE, nullptr, nullptr,
        &drawWinnerOf);
   // The one the fixture card structurally cannot do: no score message at all. A draw is
   // taken before any game exists, so the card has to stand on its own.
   const Framebuffer cardNoState = shot("draw-no-state", makeState(0, 0, 0, "", ""), false, true,
-                                       true, PANEL_FULL, nullptr, nullptr, &drawWinnerOf);
+                                       WIN_SETTLED, PANEL_FULL, nullptr, nullptr, &drawWinnerOf);
 
-  const Framebuffer cardTitle = shot("draw-title", tieSingles, true, true, true, PANEL_FULL,
+  const Framebuffer cardTitle = shot("draw-title", tieSingles, true, true, WIN_SETTLED, PANEL_FULL,
                                      nullptr, nullptr, &drawTitle);
-  shot("draw-title-long", tieSingles, true, true, true, PANEL_FULL, nullptr, nullptr,
+  shot("draw-title-long", tieSingles, true, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr,
        &drawTitleLong);
   const Framebuffer cardTitleNoState = shot("draw-title-no-state", makeState(0, 0, 0, "", ""),
-                                            false, true, true, PANEL_FULL, nullptr, nullptr,
+                                            false, true, WIN_SETTLED, PANEL_FULL, nullptr, nullptr,
                                             &drawTitle);
-  const Framebuffer cardBoth = shot("draw-round-beats-cup", tieSingles, true, true, true,
+  const Framebuffer cardBoth = shot("draw-round-beats-cup", tieSingles, true, true, WIN_SETTLED,
                                     PANEL_FULL, nullptr, nullptr, &drawBoth);
 
   // **The card reads nothing but its own payload.** These two differ in every other input
@@ -875,10 +934,86 @@ int main() {
     check(memcmp(linkScore.px_, linkNoScorer.px_, sizeof noState.px_) == 0,
           "the status line is drawn whichever layout is chosen");
   }
-  check(winOff.lit() < winOn.lit(), "winner blink should blank the winning pair");
-  // The loser's score and both names must survive the flash, or the board
-  // stops being readable for half of every beat.
-  check(winOff.lit() > 100, "winner blink blanked too much");
+  // The celebration. Every assertion here is about what moves, because a frame that
+  // differs anywhere between two samples still draws identically at each of them — the
+  // splash's lesson, and the reason the flight is dumped as a curve as well.
+  {
+    const int nameY = (PANEL_H - (FONT_H + WIN_ROW_GAP + BAG)) / 2;
+    const int bagY = nameY + FONT_H + WIN_ROW_GAP;
+    const auto bagPixels = [&](const Framebuffer& fb) {
+      int n = 0;
+      for (int y = bagY; y < bagY + BAG; y++) n += fb.litCount(y, 0, PANEL_W);
+      return n;
+    };
+    // Only the rows a bag can never reach. A bag at the top of its arc is
+    // SPLASH_APEX above its resting row, which overlaps the bottom of the glyphs — so a
+    // count over the whole name band measures the throws as well as the wipe.
+    const int nameSafe = bagY - SPLASH_APEX;
+    const auto namePixels = [&](const Framebuffer& fb) {
+      int n = 0;
+      for (int y = nameY; y < nameSafe; y++) n += fb.litCount(y, 0, PANEL_W);
+      return n;
+    };
+
+    // Filled bags, so four of them is exactly four squares' worth. Counted rather than
+    // eyeballed for the reason the first-thrower bag is: "something is drawn there"
+    // passes with two of them, or with an outline.
+    check(bagPixels(winLanded) == WIN_BAGS * BAG * BAG, "all four bags are down by the hold");
+    check(bagPixels(winStart) == 0, "nothing has been thrown at the moment the game is won");
+    // One flight in: the first bag is down and skidding, the second has just been let go
+    // and is still wholly off the edge. Exact, because a filled bag is BAG*BAG and
+    // "something is drawn there" would pass with two of them or with an outline.
+    check(bagPixels(winThrow) == BAG * BAG, "one flight in, exactly one bag is down");
+
+    // The row is written a column at a time, so it is whole before the last bag lands.
+    check(namePixels(winStart) < namePixels(winWiped), "the name is wiped in, not switched on");
+    check(namePixels(winWiped) == namePixels(winLanded), "and is whole once the wipe is over");
+
+    // "NEIL/PSI WIN" against "THETA WINS", read off the label — the payload carries no
+    // mode, so the join in the string is the only thing that says there are two of them.
+    check(namePixels(winSingle) != namePixels(winLanded),
+          "a pair is told from one player by the verb, not by a field");
+
+    // The layout is read after the win branch, so both draw the same celebration.
+    check(memcmp(scoreWinThrows.px_, winLanded.px_, sizeof winLanded.px_) == 0,
+          "the celebration is the whole panel whichever layout is chosen");
+  }
+
+  // The gleam moves colour and not presence, so a count says nothing about it and every
+  // assertion here is a byte comparison.
+  {
+    check(memcmp(winGleam0.px_, winGleamMid.px_, sizeof winGleam0.px_) != 0,
+          "the gleam is somewhere else half a cycle later");
+    check(winGleam0.lit() == winGleamMid.lit(),
+          "and lights exactly the same pixels — the score never goes dark");
+    check(memcmp(scoreWinGleam0.px_, scoreWinGleamMid.px_, sizeof winGleam0.px_) != 0,
+          "the same on the score layout, where the digits are all there is");
+    check(scoreWinGleam0.lit() == scoreWinGleamMid.lit(),
+          "and there too it blanks nothing");
+
+    // The loser's pair is not the winner's, and nothing may sweep across it.
+    const auto sameColumns = [](const Framebuffer& a, const Framebuffer& b, int x0, int x1) {
+      for (int y = 0; y < PANEL_H; y++) {
+        for (int x = x0; x <= x1; x++) {
+          const int o = (y * PANEL_W + x) * 3;
+          if (memcmp(a.px_ + o, b.px_ + o, 3) != 0) return false;
+        }
+      }
+      return true;
+    };
+    check(sameColumns(scoreWinGleam0, scoreWinGleamMid, SCORE_RIGHT_X,
+                      SCORE_RIGHT_X + SCORE_PAIR_W - 1),
+          "the loser's digits are untouched by it");
+    check(!sameColumns(scoreWinGleam0, scoreWinGleamMid, SCORE_LEFT_X,
+                       SCORE_LEFT_X + SCORE_PAIR_W - 1),
+          "and the winner's are the ones that change");
+
+    // Dim means nobody is feeding this any more, and the gleam is drawn from the level
+    // the digits are — scaling it separately is a one-character change nothing else sees.
+    check(winStale.lit() == winGleam0.lit(), "a stale winner lights the same pixels");
+    check(memcmp(winStale.px_, winGleam0.px_, sizeof winStale.px_) != 0,
+          "and dims them, gleam and all");
+  }
   check(worstDuty < DUTY_CEILING, "no scene may approach a white screen — the power design rests on it");
 
   // The fixture card. The spread and the stack are the same four pieces of text at
@@ -1111,8 +1246,23 @@ int main() {
   // position and a count of lit pixels would not notice either.
   check(memcmp(scoreNoState.px_, noState.px_, sizeof noState.px_) == 0,
         "the no-state screen draws the same whichever layout is chosen");
-  check(scoreWinOff.lit() < scoreWinOn.lit(), "score winner blink should blank the winning pair");
-  check(scoreWinOff.lit() > 100, "score winner blink blanked too much");
+  // The score layout is where the steady state matters most: there are no names on it, so
+  // the digits are the whole board. Swept across the full cycle rather than sampled twice,
+  // because what this is about is that there is no moment in it where the winner's score
+  // is not there to read — which is exactly what the blink it replaced could not say.
+  {
+    int worstPair = SCORE_PAIR_W * GLYPH_BIG_H;
+    for (uint32_t phase = 0; phase < WIN_GLEAM_MS; phase += WIN_GLEAM_MS / 16) {
+      Framebuffer fb;
+      renderBoard(fb, won, true, true, WIN_ANIM_MS + phase, PANEL_SCORE);
+      int lit = 0;
+      for (int y = SCORE_DIGIT_Y; y < SCORE_DIGIT_Y + GLYPH_BIG_H; y++) {
+        lit += fb.litCount(y, SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W);
+      }
+      if (lit < worstPair) worstPair = lit;
+    }
+    check(worstPair > 100, "the winning score is lit at every point in the gleam's cycle");
+  }
   // The middle column has to clear both pairs at this digit width, or the round
   // marker lands on top of a score.
   check(textWidth("TO 99", 8) < SCORE_RIGHT_X - (SCORE_LEFT_X + SCORE_PAIR_W),
@@ -1312,10 +1462,12 @@ int main() {
     const BoardState first_b = makeState(12, 7, 5, "Theta", "Nu", 0, 'b');
     const BoardState wonWhileUp = makeState(21, 7, 9, "Theta", "Nu", 'a', 'a');
     const BoardState unset = makeState(12, 7, 5, "Theta", "Nu");
-    renderBoard(fa, first_a, true, true, true);
-    renderBoard(fb2, first_b, true, true, true);
-    renderBoard(fw, wonWhileUp, true, true, true);
-    renderBoard(fnone, unset, true, true, true);
+    renderBoard(fa, first_a, true, true, WIN_SETTLED);
+    renderBoard(fb2, first_b, true, true, WIN_SETTLED);
+    // Past the celebration, or this would be reading the win screen's own name row —
+    // which starts at UNDERLINE_Y, since both are the row under a line of text.
+    renderBoard(fw, wonWhileUp, true, true, WIN_SETTLED);
+    renderBoard(fnone, unset, true, true, WIN_SETTLED);
 
     check(fa.litRow(UNDERLINE_Y, 0, PANEL_W / 2), "team A underlined when A throws");
     check(!fa.litRow(UNDERLINE_Y, PANEL_W / 2, PANEL_W), "only the throwing side is ruled");

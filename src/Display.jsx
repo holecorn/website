@@ -3,6 +3,7 @@
 // this is standing in for the hardware board and should look like it.
 
 import { useEffect, useId, useState } from 'react';
+import Confetti from './Confetti.jsx';
 import {
   configComplete,
   configFromSearch,
@@ -16,6 +17,11 @@ import { DIGIT_VIEWBOX, SEGMENTS, litSegments } from './segments.js';
 import { useScoreboardDisplay } from './useScoreboard.js';
 import { useWakeLock } from './useWakeLock.js';
 import './Display.css';
+
+// How many pieces the board drops. Its own number rather than the phone's 44: the board
+// is several times the area at the same piece size, and it has no skunk to know about —
+// the payload deliberately carries nothing of the kind.
+const BOARD_CONFETTI = 72;
 
 // `hollow` is the winner flash: lit segments keep a full-brightness rim and drop
 // their interior, so the score stays readable throughout — unlike blanking it.
@@ -216,6 +222,7 @@ export default function Display() {
     if (payload.first === side) return 'first';
     return doubles ? 'next' : null;
   };
+  const winnerColor = payload?.winner === 'b' ? colorB : colorA;
   const winnerLabel = payload?.winner
     ? (payload.winner === 'a' ? payload.teamA : payload.teamB)
     : '';
@@ -284,7 +291,15 @@ export default function Display() {
       onClick={toggleFullscreen}
       title="Tap for fullscreen"
     >
-      <div className="display-side">
+      {/* Mounted when the winner appears and keyed on which side won, so it falls once
+          rather than on every republished payload — a rename after the win would
+          otherwise set it off again. The phone's own celebration, sized for a board:
+          `--piece` and `--fall` are set in `Display.css`. */}
+      {payload?.winner && (
+        <Confetti key={payload.winner} count={BOARD_CONFETTI} color={winnerColor} />
+      )}
+
+      <div className={`display-side${payload?.winner === 'a' ? ' is-winner' : ''}`}>
         <p className="display-team" style={{ color: colorA }}>
           <SideName
             label={payload?.teamA ?? 'Team A'}
@@ -313,7 +328,7 @@ export default function Display() {
         </span>
       </div>
 
-      <div className="display-side">
+      <div className={`display-side${payload?.winner === 'b' ? ' is-winner' : ''}`}>
         <p className="display-team" style={{ color: colorB }}>
           <SideName
             label={payload?.teamB ?? 'Team B'}
@@ -331,10 +346,7 @@ export default function Display() {
       </div>
 
       {payload?.winner && (
-        <div
-          className="display-banner"
-          style={{ background: payload.winner === 'a' ? colorA : colorB }}
-        >
+        <div className="display-banner" style={{ background: winnerColor }}>
           {winnerLabel} {winVerb(winnerLabel)}!
         </div>
       )}

@@ -270,6 +270,13 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
   message model blocks it first**: an animation is an event, a retained `fourBagger`
   replays on every display reboot, and a four bagger is not derivable from the
   published score under cancellation.
+  - **A won game is the exception, and it shows where the line is.** It animates — a
+    celebration, then a gleam across the winner's digits — and is allowed to because
+    `winner` is already in the payload as *state* rather than as an event, so the board
+    derives the whole thing from its own clock with nothing added to the wire. The
+    replay-on-reboot cost is still paid and simply accepted, bounded by the celebration
+    settling into a gleam that needs no anchor. A four bagger has neither property:
+    nothing on the wire says one happened, and nothing would bound it.
 - **A generic HUB75 panel does not power up dark. This one does** — observed 2026-08-10,
   and it retires a risk this file used to carry. The reasoning was that OE is active low,
   so from power-on until `panel->begin()` the outputs are enabled over random

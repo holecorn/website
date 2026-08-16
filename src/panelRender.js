@@ -106,7 +106,7 @@ const DRAW_SIDE_MAX = 100;
 const DRAW_OPPONENTS_MAX = 2;
 
 // How long the board shows the wordmark at power-on. Mirrored in hub75.ino, the
-// same way WINNER_BLINK is: the firmware owns the value, this is the emulator's copy.
+// same way ANIM_RENDER_INTERVAL is: the firmware owns the value, this is the copy.
 // The throws are the other way round — they are drawing, so render.h owns them and this
 // is the copy the pixel check holds.
 export const SPLASH_MS = 5000;
@@ -123,10 +123,11 @@ const SPLASH_THUMP_MS = 70;
 export const SPLASH_ANIM_MS =
   (SPLASH_THROWS - 1) * SPLASH_STAGGER_MS + SPLASH_FLIGHT_MS + SPLASH_SKID_MS;
 
-// The board's redraw rate while the splash is up, mirrored from hub75.ino for the same
-// reason SPLASH_MS is. The emulator steps the animation's clock in these increments, so
-// it draws the frames the panel draws rather than the ones a 60Hz browser could.
-export const SPLASH_RENDER_INTERVAL = 25;
+// The board's redraw rate while anything is moving — the splash's throws, the win
+// celebration and the gleam alike — mirrored from hub75.ino for the same reason SPLASH_MS
+// is. The emulator steps its clocks in these increments, so it draws the frames the panel
+// draws rather than the ones a 60Hz browser could.
+export const ANIM_RENDER_INTERVAL = 25;
 
 export const SPLASH_DOT = 2;
 const SPLASH_DOT_X = PANEL_W - SPLASH_DOT;
@@ -163,10 +164,6 @@ export const PANEL_LAYOUTS = ['full', 'score'];
 const LEVEL_LIVE = 255;
 const LEVEL_STALE = 60;
 export const LIVE_GRACE_MS = 30000;
-// Mirrors WINNER_BLINK in hub75.ino. Not in render.h — `blinkOn` is an input
-// there — so nothing checks this one; it is the beat, not the drawing.
-export const WINNER_BLINK = 500;
-
 const MARKER_COLOR = { r: 0x9a, g: 0xa7, b: 0xb4 };
 const WHITE = { r: 255, g: 255, b: 255 };
 export const TEAM_LABEL_MAX = 40;
@@ -229,15 +226,21 @@ const scaled = (c, level) => ({
   b: idiv(c.b * level, 255),
 });
 
-function drawText(fb, bytes, x, y, color, maxChars) {
+function drawTextClipped(fb, bytes, x, y, color, maxChars, clipX) {
   for (let i = 0; i < bytes.length && i < maxChars; i += 1) {
     const rows = FONT_ROWS[fontIndex(bytes[i])];
     for (let ry = 0; ry < FONT_H; ry += 1) {
       for (let rx = 0; rx < FONT_W; rx += 1) {
-        if (rows[ry] & (1 << rx)) px(fb, x + i * FONT_ADVANCE + rx, y + ry, color);
+        const cx = x + i * FONT_ADVANCE + rx;
+        if (cx >= clipX) continue;
+        if (rows[ry] & (1 << rx)) px(fb, cx, y + ry, color);
       }
     }
   }
+}
+
+function drawText(fb, bytes, x, y, color, maxChars) {
+  drawTextClipped(fb, bytes, x, y, color, maxChars, PANEL_W);
 }
 
 function textWidth(bytes, maxChars) {
@@ -245,7 +248,35 @@ function textWidth(bytes, maxChars) {
   return n ? n * FONT_ADVANCE - 1 : 0;
 }
 
-function drawDigit(fb, code, x, y, color, font) {
+// What a won game settles into: a band of white sweeping the winner's digits — see
+// render.h, which holds why it replaced a blink. Passed through the digit drawing rather
+// than washed over the finished frame, because the panel library gives the firmware no way
+// to read a pixel back.
+const WIN_GLEAM_MS = 1400;
+const WIN_GLEAM_W = 5;
+const NO_GLEAM = -WIN_GLEAM_W - 1;
+const NO_BAND = { head: NO_GLEAM, top: { r: 0, g: 0, b: 0 } };
+
+function gleamBand(x0, x1, level, phase) {
+  const span = x1 - x0 + 1 + WIN_GLEAM_W * 2;
+  return {
+    head: x0 - WIN_GLEAM_W + idiv(span * (phase % WIN_GLEAM_MS), WIN_GLEAM_MS),
+    top: scaled(WHITE, level),
+  };
+}
+
+function gleamed(base, band, x) {
+  const k = WIN_GLEAM_W - (band.head - x);
+  if (k <= 0 || k > WIN_GLEAM_W) return base;
+  const mix = idiv(255 * k, WIN_GLEAM_W);
+  return {
+    r: base.r + idiv((band.top.r - base.r) * mix, 255),
+    g: base.g + idiv((band.top.g - base.g) * mix, 255),
+    b: base.b + idiv((band.top.b - base.b) * mix, 255),
+  };
+}
+
+function drawDigit(fb, code, x, y, color, font, band = NO_BAND) {
   const mask = GLYPH_MASK[glyphIndex(code)];
   for (let s = 0; s < 7; s += 1) {
     if (!(mask & (1 << s))) continue;
@@ -255,15 +286,16 @@ function drawDigit(fb, code, x, y, color, font) {
       for (let rx = 0; rx < font.w; rx += 1) {
         // >>> 0 because a 17-bit mask shifted left is still safe, but the C++
         // reads these as uint32_t and a bare & would sign-extend past bit 30.
-        if ((bits & (1 << rx)) >>> 0) px(fb, x + rx, y + ry, color);
+        if (!((bits & (1 << rx)) >>> 0)) continue;
+        px(fb, x + rx, y + ry, band.head === NO_GLEAM ? color : gleamed(color, band, x + rx));
       }
     }
   }
 }
 
-function drawPair(fb, pair, x, y, color, font) {
-  drawDigit(fb, pair[0], x, y, color, font);
-  drawDigit(fb, pair[1], x + font.w + DIGIT_GAP, y, color, font);
+function drawPair(fb, pair, x, y, color, font, band = NO_BAND) {
+  drawDigit(fb, pair[0], x, y, color, font, band);
+  drawDigit(fb, pair[1], x + font.w + DIGIT_GAP, y, color, font, band);
 }
 
 function drawRule(fb, x0, x1, y, color) {
@@ -563,7 +595,7 @@ function labelPart(fitted, joinAt, which) {
   return len > 0 ? { start, len } : null;
 }
 
-function drawSide(fb, name, joinAt, pair, pairX, regionX, color, showScore, rule, upPartner) {
+function drawSide(fb, name, joinAt, pair, pairX, regionX, color, band, rule, upPartner) {
   const w = textWidth(name, NAME_CHARS);
   let nx = regionX + idiv(NAME_REGION_W - w, 2);
   if (nx < 0) nx = 0;
@@ -582,8 +614,7 @@ function drawSide(fb, name, joinAt, pair, pairX, regionX, color, showScore, rule
     if (rule === RULE_FIRST) drawRule(fb, x0, x1, UNDERLINE_Y, color);
     else drawDashedRule(fb, x0, x1, UNDERLINE_Y, color);
   }
-  if (!showScore) return;
-  drawPair(fb, pair, pairX, DIGIT_Y, color, GLYPH_SMALL);
+  drawPair(fb, pair, pairX, DIGIT_Y, color, GLYPH_SMALL, band);
 }
 
 // A pair of names is a doubles game, which is the same test `winVerb` makes and is
@@ -626,35 +657,44 @@ function drawMarkers(fb, s, grey, roundY, targetY) {
   }
 }
 
-function drawFull(fb, s, level, blinkOn) {
+function drawFull(fb, s, level, gleamMs) {
   const digits = formatDigits(s.a, s.b);
   const a = fitLabel(s.teamA, NAME_CHARS + 1);
   const b = fitLabel(s.teamB, NAME_CHARS + 1);
   const upPartner = s.round % 2;
 
   // Once the game is won nobody is throwing, so the rules come off.
+  const bandA =
+    s.winner === 'a' ? gleamBand(LEFT_X, LEFT_X + PAIR_W - 1, level, gleamMs) : NO_BAND;
+  const bandB =
+    s.winner === 'b' ? gleamBand(RIGHT_X, RIGHT_X + PAIR_W - 1, level, gleamMs) : NO_BAND;
+
   drawSide(fb, a.bytes, a.joinAt, digits, LEFT_X, 0, scaled(s.colorA, level),
-    !(s.winner === 'a' && !blinkOn), ruleFor(s, 'a'), upPartner);
+    bandA, ruleFor(s, 'a'), upPartner);
   drawSide(fb, b.bytes, b.joinAt, digits.subarray(2), RIGHT_X, PANEL_W - NAME_REGION_W,
-    scaled(s.colorB, level), !(s.winner === 'b' && !blinkOn),
-    ruleFor(s, 'b'), upPartner);
+    scaled(s.colorB, level), bandB, ruleFor(s, 'b'), upPartner);
 
   const grey = scaled(MARKER_COLOR, level);
   drawText(fb, VERSUS, idiv(PANEL_W - FONT_W, 2), NAME_Y, grey, 1);
   drawMarkers(fb, s, grey, ROUND_Y, TARGET_Y);
 }
 
-function drawScore(fb, s, level, blinkOn) {
+function drawScore(fb, s, level, gleamMs) {
   const digits = formatDigits(s.a, s.b);
   const colorA = scaled(s.colorA, level);
   const colorB = scaled(s.colorB, level);
 
-  if (!(s.winner === 'a' && !blinkOn)) {
-    drawPair(fb, digits, SCORE_LEFT_X, SCORE_DIGIT_Y, colorA, GLYPH_BIG);
-  }
-  if (!(s.winner === 'b' && !blinkOn)) {
-    drawPair(fb, digits.subarray(2), SCORE_RIGHT_X, SCORE_DIGIT_Y, colorB, GLYPH_BIG);
-  }
+  const bandA =
+    s.winner === 'a'
+      ? gleamBand(SCORE_LEFT_X, SCORE_LEFT_X + SCORE_PAIR_W - 1, level, gleamMs)
+      : NO_BAND;
+  const bandB =
+    s.winner === 'b'
+      ? gleamBand(SCORE_RIGHT_X, SCORE_RIGHT_X + SCORE_PAIR_W - 1, level, gleamMs)
+      : NO_BAND;
+
+  drawPair(fb, digits, SCORE_LEFT_X, SCORE_DIGIT_Y, colorA, GLYPH_BIG, bandA);
+  drawPair(fb, digits.subarray(2), SCORE_RIGHT_X, SCORE_DIGIT_Y, colorB, GLYPH_BIG, bandB);
 
   // No names here to underline, so the rules go under the digit pairs — and no room
   // for a bag either: DIGITS_BIG is 30 rows of a 32-row panel.
@@ -869,6 +909,63 @@ function drawDrawCard(fb, d, level) {
   );
 }
 
+// ------------------------------------------------------------------- won --
+//
+// The celebration and what it settles into, both out of one input — see render.h, which
+// owns all of this because it is drawing.
+const WIN_BAGS = 4;
+const WIN_HOLD_MS = 700;
+const WIN_THROWS_MS = (WIN_BAGS - 1) * SPLASH_STAGGER_MS + SPLASH_FLIGHT_MS + SPLASH_SKID_MS;
+export const WIN_ANIM_MS = WIN_THROWS_MS + WIN_HOLD_MS;
+const WIN_WIPE_MS = 700;
+const WIN_ROW_GAP = 4;
+const WIN_LINE_CHARS = idiv(PANEL_W, FONT_ADVANCE);
+const WIN_VERB_ONE = codes(' WINS');
+const WIN_VERB_PAIR = codes(' WIN');
+
+export function winBagAt(i, x0, w) {
+  const x = x0 + i * idiv(w - BAG, WIN_BAGS - 1);
+  const dir = i % 2 === 0 ? -1 : 1;
+  return { x, dir, from: dir < 0 ? -(x + BAG) : PANEL_W - x };
+}
+
+function drawFlyingBag(fb, x, y, color) {
+  for (let dy = 0; dy < BAG; dy += 1) {
+    for (let dx = 0; dx < BAG; dx += 1) {
+      const cx = x + dx;
+      const cy = y + dy;
+      if (cx < 0 || cy < 0 || cx >= PANEL_W || cy >= PANEL_H) continue;
+      px(fb, cx, cy, color);
+    }
+  }
+}
+
+function drawWin(fb, s, level, elapsed) {
+  const label = s.winner === 'a' ? s.teamA : s.teamB;
+  const color = scaled(s.winner === 'a' ? s.colorA : s.colorB, level);
+  const verb = splitPair(label) !== null ? WIN_VERB_PAIR : WIN_VERB_ONE;
+
+  const name = fitSideTo(label, WIN_LINE_CHARS + 1, WIN_LINE_CHARS - verb.length);
+  const line = new Uint8Array(WIN_LINE_CHARS);
+  let n = 0;
+  for (let i = 0; i < name.length && n < WIN_LINE_CHARS; i += 1) line[n++] = name[i];
+  for (let i = 0; i < verb.length && n < WIN_LINE_CHARS; i += 1) line[n++] = verb[i];
+  const row = line.subarray(0, n);
+
+  const w = textWidth(row, WIN_LINE_CHARS);
+  const x0 = idiv(PANEL_W - w, 2);
+  const nameY = idiv(PANEL_H - (FONT_H + WIN_ROW_GAP + BAG), 2);
+  const clipX = elapsed >= WIN_WIPE_MS ? PANEL_W : x0 + idiv(w * elapsed, WIN_WIPE_MS) + 1;
+  drawTextClipped(fb, row, x0, nameY, color, WIN_LINE_CHARS, clipX);
+
+  const bagY = nameY + FONT_H + WIN_ROW_GAP;
+  for (let i = 0; i < WIN_BAGS; i += 1) {
+    const b = winBagAt(i, x0, w);
+    const o = bagFlight(b.from, b.dir, elapsed - i * SPLASH_STAGGER_MS);
+    drawFlyingBag(fb, b.x + o.dx, bagY + o.dy, color);
+  }
+}
+
 export function splashThump(board, elapsed) {
   for (let slot = 0; slot < LOGO_LETTERS; slot += 1) {
     const at = splashLandedAt(board, slot);
@@ -877,13 +974,10 @@ export function splashThump(board, elapsed) {
   return 0;
 }
 
-export function splashThrow(rect, dir, board, slot, elapsed) {
-  const from = dir < 0 ? -(rect.x1 + 1) : PANEL_W - rect.x0;
-  const start = splashThrownAt(board, slot);
-  const t = elapsed > 0 ? elapsed : 0;
-  if (t <= start) return { dx: from, dy: 0 };
-
-  const e = t - start;
+// Shared with the win celebration, the way render.h shares it: one flight, one apex, one
+// skid, so the board has a single idea of what a bag does in the air.
+export function bagFlight(from, dir, e) {
+  if (e <= 0) return { dx: from, dy: 0 };
   if (e < SPLASH_FLIGHT_MS) {
     const travel = dir * SPLASH_SKID - from;
     const rise = 4 * SPLASH_APEX * e * (SPLASH_FLIGHT_MS - e);
@@ -897,6 +991,12 @@ export function splashThrow(rect, dir, board, slot, elapsed) {
   if (sliding >= SPLASH_SKID_MS) return { dx: 0, dy: 0 };
   const left = SPLASH_SKID_MS - sliding;
   return { dx: idiv(dir * SPLASH_SKID * left * left, SPLASH_SKID_MS * SPLASH_SKID_MS), dy: 0 };
+}
+
+export function splashThrow(rect, dir, board, slot, elapsed) {
+  const from = dir < 0 ? -(rect.x1 + 1) : PANEL_W - rect.x0;
+  const t = elapsed > 0 ? elapsed : 0;
+  return bagFlight(from, dir, t - splashThrownAt(board, slot));
 }
 
 const splashLetterAt = (letters, x, y) =>
@@ -954,11 +1054,17 @@ export function boardScreen({
   lineup = null,
   tie = null,
   draw = null,
+  winner = null,
+  winMs = 0,
 }) {
   if (draw && draw.set) return 'draw';
   if (tie && tie.set && haveState) return 'tie';
   if (lineup && lineup.count > 0) return 'form';
   if (!haveState) return 'no-state';
+  // Below the three retained topics, which are all cleared at the first bag and so cannot
+  // be up when a game is won — see renderBoard, where the same chain is written out in
+  // C++ because the firmware draws and never captions.
+  if (winner && winMs < WIN_ANIM_MS) return 'win';
   return layout === 'score' ? 'score' : 'full';
 }
 
@@ -967,7 +1073,7 @@ export function renderBoard(
   s,
   haveState,
   live,
-  blinkOn,
+  winMs,
   layout = 'full',
   lineup = null,
   tie = null,
@@ -976,7 +1082,15 @@ export function renderBoard(
 ) {
   const level = live ? LEVEL_LIVE : LEVEL_STALE;
   const score = layout === 'score';
-  const screen = boardScreen({ haveState, layout, lineup, tie, draw });
+  const screen = boardScreen({
+    haveState,
+    layout,
+    lineup,
+    tie,
+    draw,
+    winner: s.winner,
+    winMs,
+  });
 
   if (screen === 'draw') {
     drawDrawCard(fb, draw, level);
@@ -1005,7 +1119,13 @@ export function renderBoard(
     return fb;
   }
 
-  if (score) drawScore(fb, s, level, blinkOn);
-  else drawFull(fb, s, level, blinkOn);
+  if (screen === 'win') {
+    drawWin(fb, s, level, winMs);
+    return fb;
+  }
+
+  const gleamMs = s.winner !== null ? winMs - WIN_ANIM_MS : 0;
+  if (score) drawScore(fb, s, level, gleamMs);
+  else drawFull(fb, s, level, gleamMs);
   return fb;
 }

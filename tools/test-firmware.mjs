@@ -281,7 +281,7 @@ if (!ran['test_render.cpp']) {
           state,
           scene.haveState,
           scene.live,
-          scene.blinkOn,
+          scene.winMs,
           scene.layout,
           // Through lineupState() rather than handed over raw, so the JS coercions
           // are compared against parseLineup's and not bypassed.
@@ -351,13 +351,31 @@ if (!ran['test_render.cpp']) {
       });
     });
 
+    // The win celebration's throws, in the same file because they are the same maths —
+    // `bagFlight` is shared and only where each bag starts differs. Worse served by scenes
+    // than the splash's are: four bags land in a row, so one thrown from the wrong edge
+    // still ends on the right square and every frame agrees.
+    const [rowX0, rowW] = curve.winRow;
+    curve.win.forEach((flight, i) => {
+      const b = panel.winBagAt(i, rowX0, rowW);
+      flight.forEach(([dx, dy], t) => {
+        offsets += 1;
+        const o = panel.bagFlight(b.from, b.dir, t - i * curve.winStagger);
+        if (o.dx !== dx || o.dy !== dy) {
+          problems.push(
+            `win bag ${i} at ${t}ms is ${o.dx},${o.dy} in JS, ${dx},${dy} in render.h`,
+          );
+        }
+      });
+    });
+
     if (problems.length > 0) {
       throw new Error(
         `src/panelRender.js has drifted from firmware/hub75/render.h:\n     ${problems.slice(0, 8).join('\n     ')}`,
       );
     }
     process.stdout.write(
-      `   ${scenes.length} scenes identical, pixel for pixel; ${offsets} splash offsets agree\n`,
+      `   ${scenes.length} scenes identical, pixel for pixel; ${offsets} throw offsets agree\n`,
     );
   });
 }
