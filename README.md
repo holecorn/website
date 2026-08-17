@@ -39,17 +39,21 @@ opposite boards. Since each end is scored as its own round, the throwing partner
 alternates every round; the scoreboard highlights whoever's up and dims the
 benched partner. Scoring is otherwise identical to singles.
 
-Turn on **Guests** for a pickup game with people passing by: no names are taken and
-nothing is recorded. The name fields go away and each team is simply its bag colour
-— "Blue" against "Red" — on the phone, on the external scoreboard and in the winner
-announcement. Everything else works exactly as usual, including the court diagram
-and the in-game stats, but the match is never filed, so it can't drag your averages
-around or leave a stranger in your player list. Pick the colours to match the bags
-you hand out and press **Start**.
+Turn on **Guests** for a pickup game with people passing by: no names are taken.
+The name fields go away and each team is simply its bag colour — "Blue" against
+"Red" — on the phone, on the external scoreboard and in the winner announcement.
+Everything else works exactly as usual, including the court diagram and the in-game
+stats. Pick the colours to match the bags you hand out and press **Start**.
+
+The match is still filed, so a good one is there to read back afterwards in **Recent
+matches** — round by round, under the two colours it was played as. What it doesn't
+do is count: no career, no head to head, no totals, and nobody new in your player
+list. Nothing about it can drag your averages around, because nobody's name was
+taken to attach it to.
 
 It stays on until you turn it off, since guests tend to arrive in runs, and the
 toggle sits beside **Start** so it's in front of you every time you begin a game.
-While one is in play the scoreboard reads **not recorded** under the target. In
+While one is in play the scoreboard reads **not counted** under the target. In
 doubles the two partners share the one label, so which of them is up is shown by
 the court diagram rather than by name.
 
@@ -203,7 +207,9 @@ Finishing a game files it away, and the **Stats** button on the setup screen
 reports what has built up. Only completed matches count — walking away from a
 game part-way leaves nothing behind, so a three-round fragment can't drag the
 averages around. Undoing a winning round takes the match back out again. A
-A **Guests** game is never filed at all, however it ends.
+**Guests** game is filed like any other and appears in **Recent matches**, but it
+counts towards none of the numbers below — it is listed under its two colours, with
+a note saying so when you open it.
 
 Per player you get matches played, won and lost, **rounds thrown**, **PPR** (raw
 bag points per round, before cancellation — the number cornhole players quote),

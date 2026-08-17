@@ -774,6 +774,65 @@ describe('summary', () => {
   });
 });
 
+// A guest game is archived and read back round by round — the group invites passers-by
+// in and those games are worth looking at afterwards — but nobody's name was taken in
+// it, so there is no career, no rivalry and no total for it to count towards.
+//
+// **These fixtures keep their names on purpose.** `matchRecord` files a guest game with
+// blank slots, so a realistic one has nobody to credit and would pass every assertion
+// below however `counted` behaved. The rule has to hold on the flag alone, because the
+// flag is what a record imported from another phone will be trusted for.
+describe('guest games count for nobody', () => {
+  const swept = [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]];
+  const real = singles('Neil', 'Sigma', swept, { id: 'real', endedAt: 1000 });
+  const guest = {
+    ...singles('Neil', 'Sigma', swept, { id: 'guest', endedAt: 2000 }),
+    casual: true,
+  };
+  const lineup = {
+    ...newGame(21),
+    players: { a: ['Neil', 'Player 3'], b: ['Sigma', 'Player 4'] },
+  };
+
+  it('leaves every career exactly where it was', () => {
+    expect(playerStats([real, guest])).toEqual(playerStats([real]));
+  });
+
+  it('is not in the totals, rounds and washes included', () => {
+    const s = summary([real, guest]);
+    expect(s.matches).toBe(1);
+    expect(s.rounds).toBe(2);
+    expect(s.fourBaggers).toBe(2);
+  });
+
+  it('settles no rivalry', () => {
+    expect(headToHead([real, guest])).toEqual(headToHead([real]));
+    expect(opponentRecords([real, guest], 'Neil')).toEqual(opponentRecords([real], 'Neil'));
+  });
+
+  it('is not a previous meeting of the two sides about to play', () => {
+    expect(sideRecord([real, guest], lineup)).toEqual({ a: 1, b: 0 });
+    expect(sideStats([real, guest])).toEqual(sideStats([real]));
+  });
+
+  it('does not move the form panel the next lineup is read against', () => {
+    expect(lineupStats([real, guest], lineup)).toEqual(lineupStats([real], lineup));
+  });
+
+  it('is nobody’s match, so it stays out of a player’s own recent list', () => {
+    expect(playedIn(real, 'Neil')).toBe(true);
+    expect(playedIn(guest, 'Neil')).toBe(false);
+  });
+
+  it('still reads back round by round, which is why it is kept', () => {
+    // The whole feature: excluded from every number above, and none of its own detail
+    // lost. Read off the record the app would actually file, blank slots and all.
+    const filed = matchRecord({ ...newGame(21), casual: true, mode: 'singles', id: 'g' }, 2000);
+    expect(matchRounds({ ...filed, rounds: guest.rounds })).toHaveLength(2);
+    expect(finalScore(guest)).toEqual({ a: 24, b: 0 });
+  });
+});
+
 // Matches imported from a written-down result: a date, the people, the score,
 // and nothing else. Everything that needs only the outcome has to fold them in;
 // everything that needs thrown bags has to leave them out rather than read their

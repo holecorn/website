@@ -944,6 +944,10 @@ function MatchRounds({ id, match, tie, onEdit, onDelete }) {
     // First, because it is the thing that makes this match different from the rest of the
     // list — and the only place the tournament and the round are named.
     ...(tie ? [`${tie.name}${DOT}${tie.round}`] : []),
+    // Same reasoning one line down: it is why this row names two colours rather than two
+    // people, and it is the only thing on the screen saying why the match is here and not
+    // in any of the numbers above it. A match is never both this and a tie.
+    ...(match.casual ? ['guest game, not counted'] : []),
     detailed
       ? `${rounds.length} round${rounds.length === 1 ? '' : 's'}${span ? ` in ${minutes(span)}` : ''}`
       : 'result only, no rounds recorded',
@@ -970,7 +974,10 @@ function MatchRounds({ id, match, tie, onEdit, onDelete }) {
           </span>
           {['a', 'b'].map((team) => (
             <span className="mr-side" key={team}>
-              {doubles && <em className="mr-thrower">{r[team].thrower}</em>}
+              {/* No thrower on a guest game: both partners are the team's colour, so the
+                  cell would repeat the column head above it every round — the same fold
+                  `gameStats` makes when the slot stops being an identity. */}
+              {doubles && !match.casual && <em className="mr-thrower">{r[team].thrower}</em>}
               <span className={r[team].fourBagger ? 'mr-counts is-four' : 'mr-counts'}>
                 {r[team].hole}◎ {r[team].board}▬
                 <b className="team-ink" style={{ '--team': match.colors?.[team] }}>
@@ -988,9 +995,14 @@ function MatchRounds({ id, match, tie, onEdit, onDelete }) {
       ))}
       <p className="match-rounds-foot">
         <span>{facts.join(' · ')}</span>
-        <button className="match-edit" onClick={onEdit}>
-          Edit names
-        </button>
+        {/* Nothing to correct on a guest game — no names were taken, so the editor would
+            offer four empty boxes and typing into them would file a career for people the
+            match cannot say played in it. */}
+        {!match.casual && (
+          <button className="match-edit" onClick={onEdit}>
+            Edit names
+          </button>
+        )}
         <button className="match-drop" onClick={onDelete}>
           Delete
         </button>

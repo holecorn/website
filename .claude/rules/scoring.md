@@ -24,8 +24,36 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
   plays on the seafront and invites passers-by in, so the problem it solves is not
   typing — names were already optional, every slot comes pre-named and `Start` works
   untouched — it is that a won game with those defaults *is* archived, folding every
-  stranger into one bogus career whose PPR and form drag the chips around. So the feature is **don't record it**, and everything else falls out
+  stranger into one bogus career whose PPR and form drag the chips around. So the feature is **don't count it**, and everything else falls out
   of `playerLabel`.
+  - **It was "don't *record* it" until 2026-08-17, and that overshot.** Nothing was
+    wrong with the diagnosis — a stranger under `Player 1` is the fault — but the fix
+    threw the match away to protect the career, and the two are separable. A good guest
+    game was gone at `New game`, with nothing to read back and no way to get it: the
+    only recovery on offer was to notice before pressing it, which is exactly the moment
+    nobody is looking at the phone. **The match is filed now and counts towards
+    nothing.**
+    - **Two changes to one record, and no filter anywhere else.** `matchRecord` stamps
+      `casual: true` — absent on an ordinary game, the `tournament` precedent — and
+      records **blank name slots**, because no names were taken. That second half is
+      what does the structural work: blanks are the shape `participants` already drops
+      and `sideKeyOf` already reads as `NO_SIDE`, so a guest record cannot offer a name
+      from `offerableNames`, cannot bring somebody out of retirement through `lastSeen`,
+      cannot seat a bracket tie and has nothing for a rename sweep to touch — none of
+      which needed a line. `players` is still left alone *in play*, so the toggle stays
+      reversible; it is the record that takes none of it.
+    - **`counted` in `stats.js` is the stated rule beside that**, and it is not
+      redundant with the blanking: `summary` counts matches, rounds, washes and skunks
+      without asking who played, so a guest game would sit in the archive-wide chips
+      whatever the slots held. It is also the half that holds for a record arriving from
+      another phone, where the flag is all there is to trust. Filter and sort in one
+      call, the `offerableNames` shape, so there is no unfiltered half to copy.
+    - **The unit fixtures keep their names deliberately**, for that reason: a realistic
+      guest record has nobody to credit and would pass every exclusion assertion however
+      `counted` behaved.
+    - **Per-slot anonymity is still refused**, and this does not reopen it — see the
+      bullet at the foot of this section. What changed is what happens to the *match*,
+      not what is known about who played it.
   - **`playerLabel` is the whole implementation.** In casual it returns the team's
     `PALETTE` colour name, so the phone header, the lanes, the court diagram, the
     in-game stats, the winner banner, `?display=1` and the LED panel all say "Blue"
@@ -73,8 +101,10 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     is gated on `gameStarted` for the same reason the arrangement controls are:
     flipping it after a win would strand a record the archive effect can no longer
     see to remove.
-  - **The play screen says `not recorded`**, and it has to: a game you meant to
-    record and didn't has no other symptom. Measured at 390x844, it costs no height —
+  - **The play screen says `not counted`**, and it has to: a game you meant to have
+    counted and didn't has no other symptom. It read `not recorded` until the record was
+    kept, and the replacement is two characters narrower, so every figure below stands.
+    Measured at 390x844, it costs no height —
     the header stays 94px and the lanes 168px whether or not the note is drawn, because
     `.center-readout` is shorter than the team score blocks either side of it. It does
     cost width, and it is the *widest* thing in that column at 102.7px against the
@@ -266,8 +296,9 @@ Detail behind **Domain rules** in the root `CLAUDE.md`, which holds the rules th
     `IF IT ENDS NOW` it was first written as. Above that the caption sets the column's
     width and the difference comes straight out of the two names either side: measured
     at 390px, the longest header name that fits goes 12 characters to 11 as it stands,
-    and to 10 with the longer caption. Casual games already spend 87px on
-    `not recorded`, so they are unaffected either way.
+    and to 10 with the longer caption. Casual games already spend ~87px on
+    `not counted` (87px as the `not recorded` it was measured at, and that wording was
+    the wider of the two), so they are unaffected either way.
   - **It must not say "this round".** `Board.jsx`'s lane header already uses that phrase
     for a side's **raw** points (`7 pts this round`), where this is the cancelled net —
     two different numbers under one phrase, on one screen.

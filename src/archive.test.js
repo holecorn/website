@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { newGame, setBag, endRound } from './scoring.js';
+import { newGame, setBag, endRound, teamLabel } from './scoring.js';
 import { bracket, groupBySeries, nextEditions, validTournament } from './tournament.js';
 import { inactiveKeys } from './inactive.js';
 import {
@@ -61,6 +61,35 @@ describe('matchRecord', () => {
   it('stamps the tournament a tie belongs to', () => {
     const game = { ...wonGame(), tournament: 't1' };
     expect(matchRecord(game, 900).tournament).toBe('t1');
+  });
+
+  it('carries no casual key at all on an ordinary game', () => {
+    // Absent rather than false, the way `tournament` is: a record filed before guest
+    // games were kept keeps exactly the shape it had, and every reader takes a missing
+    // key as an ordinary match.
+    expect('casual' in matchRecord(wonGame(), 900)).toBe(false);
+  });
+
+  it('records a guest game, and records no names for it', () => {
+    // The slots still hold the last real lineup — `players` is left alone in play so the
+    // toggle stays reversible — and filing those would put a stranger's rounds under a
+    // name that never threw them. The rounds are kept, which is the point of filing it
+    // at all; the names are the only thing a guest game costs.
+    const record = matchRecord({ ...wonGame(), casual: true }, 900);
+    expect(record.casual).toBe(true);
+    expect(record.players).toEqual({ a: ['', ''], b: ['', ''] });
+    expect(record.rounds).toHaveLength(2);
+    expect(record.winner).toBe('a');
+    expect(validRecord(record)).toBe(true);
+  });
+
+  it('leaves a guest game readable by colour, which is the identity it had', () => {
+    // With no names on it the record would otherwise read as a match between two blanks
+    // in Recent matches. `casual` on the record is what sends `teamLabel` down the same
+    // branch the live game used, so the row says what the phone said while it was played.
+    const game = { ...wonGame(), casual: true };
+    const record = matchRecord(game, 900);
+    expect([teamLabel(record, 'a'), teamLabel(record, 'b')]).toEqual(['Blue', 'Red']);
   });
 
   it('copies rather than references, so later play cannot rewrite history', () => {

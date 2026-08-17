@@ -65,9 +65,13 @@ function participants(match, team) {
 // Whether a player took part, by the same rule playerStats credits them by: the
 // mode's roster only. A singles record still holds a second slot, and counting it
 // would list a match for somebody who never threw in it.
+//
+// A guest game is nobody's, which is what keeps it out of a player's own recent
+// list: it is kept and readable, but it belongs to two colours rather than to two
+// people. Its slots are blank anyway, so this is a statement rather than a guard.
 export function playedIn(match, name) {
   const key = nameKey(name);
-  if (!key) return false;
+  if (!key || match?.casual) return false;
   return TEAMS.some((team) => participants(match, team).some((p) => p.key === key));
 }
 
@@ -171,8 +175,22 @@ export function blankStats(name) {
   return derive(blank(name));
 }
 
-function chronological(matches) {
-  return [...matches].sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0));
+// The matches a number is folded over: everything played, in play order, minus the
+// guest games. A guest game is archived and readable round by round — that is the
+// point of keeping it — but nobody's name was taken in it, so there is no career, no
+// rivalry and no total for it to count towards. Chronological so streaks read in play
+// order and a display name settles on the most recent spelling.
+//
+// **The filter and the sort are one call**, the reason `offerableNames` is one call:
+// two steps composed at each site leaves the unfiltered half sitting there to be
+// copied, and a copy of it alone folds strangers into everybody's career with nothing
+// on any screen saying so. So every count in this file starts here, `summary`
+// included — its chips are archive-wide totals, and a guest game is not in that
+// archive as far as a number is concerned.
+function counted(matches) {
+  return [...(matches ?? [])]
+    .filter((m) => !m?.casual)
+    .sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0));
 }
 
 // The score a match ended on, or null if it can't be known.
@@ -203,7 +221,7 @@ export function playerStats(matches) {
   const acc = new Map();
   // Chronological so streaks read in play order and the display name settles on
   // the most recent spelling.
-  for (const match of chronological(matches)) {
+  for (const match of counted(matches)) {
     const at = (name) => {
       const key = nameKey(name);
       if (!key) return null;
@@ -258,7 +276,7 @@ export function playerStats(matches) {
 // name, a doubles pair becomes two rows with the same record and half the rounds each.
 export function sideStats(matches) {
   const acc = new Map();
-  for (const match of chronological(matches)) {
+  for (const match of counted(matches)) {
     // Which sides this match has already credited. Nothing can file a record where
     // both teams hold one side any more — the setup screen, the match-names editor,
     // the career rename and `validRecord` all refuse it — but a record filed before
@@ -370,7 +388,7 @@ export function sideRecord(matches, game) {
   if (here.a === NO_SIDE || here.b === NO_SIDE || here.a === here.b) return null;
 
   const won = { a: 0, b: 0 };
-  for (const match of matches) {
+  for (const match of counted(matches)) {
     if (!match.winner) continue;
     const was = { a: sideKey(match, 'a'), b: sideKey(match, 'b') };
     if (was.a === here.a && was.b === here.b) won[match.winner] += 1;
@@ -383,7 +401,7 @@ export function sideRecord(matches, game) {
 // partners, so this reads as "was on the winning side", not "out-threw them".
 export function headToHead(matches) {
   const pairs = new Map();
-  for (const match of chronological(matches)) {
+  for (const match of counted(matches)) {
     if (!match.winner) continue;
     for (const left of participants(match, 'a')) {
       for (const right of participants(match, 'b')) {
@@ -531,7 +549,8 @@ export function summary(matches) {
   let timed = 0;
   let detailed = 0;
 
-  for (const match of matches) {
+  const played = counted(matches);
+  for (const match of played) {
     rounds += match.rounds.length;
     if (hasRounds(match)) detailed += 1;
     for (const round of match.rounds) {
@@ -551,7 +570,7 @@ export function summary(matches) {
   }
 
   return {
-    matches: matches.length,
+    matches: played.length,
     rounds,
     washes,
     skunks,

@@ -72,8 +72,11 @@ answer** — five rather than three.
 - **`.setup-top` has 0px of slack on the deploy runner's font.** Nothing new goes in
   that row.
 - **The LED panel is 128x32.** A bracket does not fit.
-- **`casual` games are never archived**, so a guest game cannot be a tournament tie.
-  The two are mutually exclusive.
+- **A guest game cannot be a tournament tie**, and the gate is the `Guests` toggle being
+  disabled while a tie is loaded. It used to be that a `casual` game was never archived
+  at all; since 2026-08-17 one is filed (counting towards nothing), so if that toggle is
+  ever enabled on a tie the record would carry the tournament's id with blank sides —
+  `matchBetween` would never match it and the tie would stay playable for ever.
 
 Assumed rather than verified:
 
@@ -100,7 +103,9 @@ capturable at the time, so a year not recorded is lost rather than deferred.
 No new state at all: the tournament *is* the matches archived on that date. The
 stats screen gains a day view, with the champion as whoever won last. Retroactive,
 so every tournament already played would appear immediately, and guest games could
-not pollute it because `casual` is never archived.
+not pollute it because `casual` was never archived. (That last argument has since
+expired: a guest game *is* archived now, counting towards nothing, so a day view would
+have to exclude them itself.)
 
 *Eliminated because:* tournament-only figures need the app to **know** which ties
 were tournament ties. The date is a proxy that is silently wrong the moment one

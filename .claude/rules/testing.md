@@ -363,14 +363,20 @@ one of the two directions in `verify-tournament.mjs`.
   The dialog is read through a count now and the row is reopened rather than assumed open,
   so the mutation names the fault and the eleven checks below it still run.
 
-The same is true of the guest-game guard, and both ways round of getting it wrong
-are silent: either a stranger is folded into somebody's career, or every real match
-quietly stops being filed. So that block plays a casual game to a win and then
-**turns the toggle off and plays a real one**, which is what makes the guard the
-flag rather than a break in archiving. Verified by mutation: dropping the guard
-fails the first, and latching it in a ref — the plausible mistake, since the effect
-already keeps `archivedId` that way — fails only the second. Guarding
-unconditionally is caught by the checks at the top of the file instead.
+The same is true of the guest game, which is now two properties that have to hold of
+**one match**: it is filed, and it counts towards nothing. Neither side can see the
+other — `counted` in `stats.js` is unit tested over records handed to it, and the recent
+list draws from the archive it was never filtered out of — so a screen reading one
+through the other is invisible from both. That block plays a casual game to a win, reads
+the record out of storage, opens Stats and requires the row *and* a zero in the totals,
+then **turns the toggle off and plays a real one**, which is what keeps the difference
+the flag rather than a break in archiving. Verified by mutation: restoring the old
+`if (game.casual) return` in the archive effect fails the four filing assertions and
+nothing else, and dropping `counted`'s filter fails exactly the two counting ones.
+- **Both new text assertions lower-case before comparing**, because `text-transform`
+  means the rendered text is not the text in the component — a check written against the
+  source spelling can only ever fail. Caught on the first run; the same shape as this
+  file's standing "check what a mutation actually prints".
 
 The lineup-faults block spends most of its checks on the lineups that must
 *start*, not on the ones that must not: a rule that never lets go is the same bug

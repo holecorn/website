@@ -39,7 +39,15 @@ export function matchRecord(game, endedAt) {
     startedAt: game.startedAt,
     endedAt,
     mode: game.mode,
-    players: { a: game.players.a.slice(), b: game.players.b.slice() },
+    // A guest game takes no names, so it records none. The slots still hold the last
+    // real lineup — `players` is left alone in play, which is what makes the toggle
+    // reversible — and filing those would put a stranger's rounds under a name that
+    // never threw them, offer that name back from the datalist, and bring somebody
+    // marked inactive out of retirement. Blank is the shape a singles record's unused
+    // slot already has, and `participants` drops it, so no fold has to know about this.
+    players: game.casual
+      ? { a: ['', ''], b: ['', ''] }
+      : { a: game.players.a.slice(), b: game.players.b.slice() },
     colors: { ...game.colors },
     target: game.target,
     winner: game.winner,
@@ -49,6 +57,12 @@ export function matchRecord(game, endedAt) {
     // existed. The id is the only thing a tie carries — where it sat in the bracket
     // is derived from its two sides.
     ...(game.tournament ? { tournament: game.tournament } : {}),
+    // Absent on an ordinary game, the way `tournament` is: a record filed before guest
+    // games were kept has exactly the shape it had, and everything that reads a match
+    // back — `teamLabel`, `counted` in stats.js — takes a missing key as "not a guest
+    // game". It is the whole of what a guest record carries: the colour is the label
+    // because of it, and no fold counts the match because of it.
+    ...(game.casual ? { casual: true } : {}),
     rounds: game.rounds.map((r) => ({
       a: r.a.slice(),
       b: r.b.slice(),

@@ -335,10 +335,12 @@ export default function App() {
   // winning round is undone. Comparing against the id rather than a flag keeps
   // it to one write per outcome: a reload re-commits the same record instead of
   // a second copy, and starting a new game is simply a different id.
+  // A guest game is filed like any other. It used to return here, which lost the
+  // match the moment `New game` was pressed — and a good guest game is worth reading
+  // back, so what a guest game costs is a *career*, not a record. `matchRecord`
+  // records no names for one and `counted` in stats.js leaves it out of every fold,
+  // so nothing here has to know which kind it is.
   useEffect(() => {
-    // A casual game is never recorded: no names were taken, so filing it would
-    // fold every guest into one career under whatever the slots happen to hold.
-    if (game.casual) return;
     if (game.winner) {
       if (archivedId.current !== game.id) {
         // Set from what was just written rather than re-read, so the form panel
@@ -698,7 +700,7 @@ export default function App() {
             disabled={tie}
             onClick={() => dispatch({ type: 'setCasual', value: !game.casual })}
             aria-pressed={game.casual}
-            aria-label="Guests: take no names and record nothing"
+            aria-label="Guests: take no names and count for nobody"
           >
             Guests
           </button>
@@ -718,8 +720,12 @@ export default function App() {
         </div>
         {/* Only while it is on, so the ordinary case spends no height on it. The
             collapsed fields below say the colours are the teams; what they can't
-            say is that the match won't be filed. */}
-        {game.casual && <p className="casual-hint">This game won&rsquo;t be recorded.</p>}
+            say is what becomes of the match afterwards. It is kept — Recent matches
+            lists it round by round — and it counts towards nobody, which is the half
+            worth saying here, because the other half is what you would assume. */}
+        {game.casual && (
+          <p className="casual-hint">Kept, but it won&rsquo;t count towards anyone&rsquo;s stats.</p>
+        )}
         {hint.length > 0 && (
           <p className="lineup-hint" id="lineup-fault">
             {hint.join(' ')}
@@ -864,8 +870,10 @@ export default function App() {
           </div>
           {/* The header already reads "Blue" rather than a name, so this only has
               to confirm what that implies — but it does have to be said, because a
-              game you meant to record and didn't has no other symptom. */}
-          {game.casual && <span className="casual-note">not recorded</span>}
+              game you meant to have counted and didn't has no other symptom. Two
+              characters narrower than the `not recorded` it replaces, so the centre
+              column's width budget is untouched. */}
+          {game.casual && <span className="casual-note">not counted</span>}
         </div>
         <TeamScore
           players={teamPlayers('b')}

@@ -40,8 +40,18 @@ themselves, correcting the names on them, and marking a player inactive.
   already derivable — most are.
 - **Only a won match is archived**, and undoing the winning round takes it back
   out. Abandoning a game leaves nothing, because a three-round fragment would
-  drag every average around. A `casual` game is never archived however it ends —
-  see **Guest games** in `.claude/rules/scoring.md`.
+  drag every average around. A `casual` game is archived like any other and counts
+  towards nothing — it carries `casual: true` and blank name slots, and `counted`
+  below is what leaves it out of the folds. See **Guest games** in
+  `.claude/rules/scoring.md` for why that is two changes to one record rather than a
+  filter at each reader.
+- **Every number on this screen folds `counted(matches)`, not `matches`.** It drops the
+  guest games and sorts chronologically in one call, so there is no unfiltered half to
+  reach for — `offerableNames`'s shape, and for the same reason. `summary` goes through
+  it too: the chips are archive-wide totals, and a guest game is not in that archive as
+  far as a number is concerned. **The recent list deliberately does not**, because
+  listing the match is the point; `playedIn` is what keeps it out of a *player's* own
+  list, since it belongs to two colours rather than to two people.
 - **The archive is keyed by match id and upserted, not appended.** Win → undo →
   re-win is an ordinary sequence and must leave one record, and a reload of a
   won game re-commits the same one rather than a duplicate. The first `endedAt`

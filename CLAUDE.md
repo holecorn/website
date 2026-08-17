@@ -157,7 +157,7 @@ project dependency. It starts and stops its own preview server.
   and alternates which partner is "up" each round (`rounds.length % 2`). Colour
   stays per team. This group plays each end as its own 4-bag round — **do not add
   an 8-bags-per-round doubles mode.**
-- **`casual` is a guest game: one flag, and the feature is "don't record it".** The group
+- **`casual` is a guest game: one flag, and the feature is "don't *count* it".** The group
   invites passers-by in, and a won game with default names *is* archived — folding every
   stranger into one bogus career whose PPR and form drag the chips around.
   **`playerLabel` is the whole implementation**: in casual it returns the team's
@@ -165,7 +165,19 @@ project dependency. It starts and stops its own preview server.
   winner banner, `?display=1` and the LED panel all say "Blue" from one place.
   **Anything new that names a player must read `playerLabel`**, or it will be the one
   surface still showing `Player 1`. `players` keeps what was typed, so the toggle is
-  reversible. Sticky across `New game`, like `mode`. Never archived, however it ends.
+  reversible. Sticky across `New game`, like `mode`.
+  - **It is archived like any other match and counts towards nothing**, which is two
+    changes to one record and no filter anywhere else. `matchRecord` stamps `casual: true`
+    and files **blank name slots** — no names were taken, so none are recorded, and the
+    shape `participants` already drops is what keeps it out of `offerableNames`, the
+    inactive marks, a bracket seat and every rename sweep with nothing to remember. Then
+    `counted` in `stats.js` drops it from every fold, `summary` included. It used to
+    return early in `App.jsx`'s archive effect, which lost a good guest game at
+    `New game` — **so a guest game costs a career, not a record.**
+  - **A record's own screen reads it back by colour**, because `teamLabel` takes the same
+    branch off `casual` that the live game did. **Anything new that reads a record's
+    names has to expect none** — the Recent row, its round table and its delete dialog
+    all name two colours, and `Edit names` is not offered.
 - **Nobody can play themselves and nobody plays nameless, and `lineupFaults` is the whole
   rule.** It returns one entry per slot at fault, `twice` or `blank`, and `Start` is
   disabled while it returns anything. A name is the only identity the app has, so one
@@ -387,9 +399,14 @@ holds the detail** and loads with `src/archive.js`, `src/stats.js`, `src/Stats.j
 What constrains code outside those files:
 
 - **Only a won match is archived**, and undoing the winning round takes it back out. A
-  `casual` game is never archived however it ends. The effect lives in `App.jsx` and
-  compares against the archived id rather than holding a flag, which is what makes
-  win -> undo -> re-win idempotent.
+  `casual` game included — it is filed like any other and counts towards nothing, and
+  the effect knows nothing about which kind it is. It compares against the archived id
+  rather than holding a flag, which is what makes win -> undo -> re-win idempotent.
+- **A number folded over the archive comes through `counted` in `stats.js`**, which drops
+  the guest games. `summary` too: its chips are archive-wide totals, and a guest game is
+  not in that archive as far as a number is concerned. **A new fold asks for the list
+  there** rather than iterating `matches` — the filter and the sort are one call for the
+  reason `offerableNames` is one call.
 - **`stats` is only reachable from `setup`, and the archive depends on it.** If Stats
   ever becomes reachable from the play screen, deleting the live match would undo
   itself on the next reload.

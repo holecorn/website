@@ -1715,13 +1715,15 @@ check(
   await dup.close();
 }
 
-// A guest game: no names taken and nothing recorded. The labels and the cleared
-// lineup are pinned in the unit suites; what only a browser can see is whether the
-// archive effect in App.jsx skips the write — and both ways round of getting that
-// wrong are silent. Either a stranger is folded into somebody's career, or every
-// real match quietly stops being filed. So the toggle is turned back off at the end
-// and a real match played, which is what makes the guard the flag rather than a
-// break in archiving.
+// A guest game: no names taken, filed like any other match, and counting towards
+// nobody. The labels, the blank slots and every fold that leaves it out are pinned in
+// the unit suites; what only a browser can see is that the two halves are wired to the
+// same match — the archive effect in `App.jsx` files it, and the stats screen then has
+// to list it *and* leave it out of the numbers above it. Getting either half wrong is
+// silent: a guest game that is filed and counted folds strangers into a career, and one
+// that is counted-out but never filed is a good game gone at `New game`, which is what
+// this replaces. So the toggle is turned back off at the end and a real match played,
+// which is what makes the difference the flag rather than a break in archiving.
 {
   const guest = await browser.newContext({ viewport: { width: 430, height: 932 } });
   const gp = await guest.newPage();
@@ -1753,7 +1755,11 @@ check(
   await gp.waitForSelector('.setup');
   check('no hint until guests are turned on', (await gp.locator('.casual-hint').count()) === 0);
   await gp.getByRole('button', { name: 'Guests' }).click();
-  check('turning them on says the game is not recorded', await gp.locator('.casual-hint').isVisible());
+  check(
+    'turning them on says the game will not count',
+    (await gp.locator('.casual-hint').innerText()).includes('won’t count'),
+    await gp.locator('.casual-hint').innerText(),
+  );
 
   check('the name fields go', (await gp.locator('.team-name-input').count()) === 0);
   check(
@@ -1773,7 +1779,14 @@ check(
     'the play screen names the teams by colour',
     (await gp.locator('.team-name').allInnerTexts()).join(',') === 'Blue,Red',
   );
-  check('and says the game is not being recorded', await gp.locator('.casual-note').isVisible());
+  // Lower-cased before comparing, the way the chip below is: `text-transform` means the
+  // rendered text is not the text in the component, and a check that compares against
+  // the source spelling can only ever fail.
+  check(
+    'and says the game will not be counted',
+    (await gp.locator('.casual-note').innerText()).trim().toLowerCase() === 'not counted',
+    await gp.locator('.casual-note').innerText(),
+  );
 
   await play();
   await play();
@@ -1786,9 +1799,72 @@ check(
     (await gp.locator('.winner-banner').innerText()).trim() === 'Blue wins!',
     await gp.locator('.winner-banner').innerText(),
   );
-  check('a won guest game is not archived', (await stored()).length === 0, `${(await stored()).length} records`);
+  await filed(1);
+  const [kept] = await stored();
+  check(
+    'a won guest game is filed like any other',
+    (await stored()).length === 1,
+    `${(await stored()).length} records`,
+  );
+  check('with the flag every fold leaves it out on', kept?.casual === true, String(kept?.casual));
+  check(
+    'and no names on it, because none were taken',
+    JSON.stringify(kept?.players) === JSON.stringify({ a: ['', ''], b: ['', ''] }),
+    JSON.stringify(kept?.players),
+  );
+  check(
+    'but the rounds it was won on, which is the whole reason to keep it',
+    kept?.rounds?.length === 2,
+    `${kept?.rounds?.length} rounds`,
+  );
 
   await gp.getByRole('button', { name: 'New game' }).click();
+
+  // The other half, and it has to be the same match: filed *and* out of every number.
+  // Nothing below `App.jsx` can see the pair — `counted` in stats.js is unit tested over
+  // records handed to it, and the list is drawn from the archive it was never filtered
+  // out of, so a screen reading one of those through the other is invisible from both.
+  {
+    await gp.getByRole('button', { name: 'Stats' }).click();
+    await gp.waitForSelector('.recent');
+    check(
+      'the guest game is in Recent matches',
+      (await gp.locator('.recent li').count()) === 1,
+      `${await gp.locator('.recent li').count()} rows`,
+    );
+    check(
+      'named by the colours it was played under, since it has no names',
+      (await gp.locator('.recent-teams').innerText()).replace(/\s+/g, ' ').trim() === 'Blue v Red',
+      await gp.locator('.recent-teams').innerText(),
+    );
+    // The chips are archive-wide totals and this is the one row in the archive, so a
+    // zero here is the whole property: `summary` counting it would read 1.
+    const matchChip = gp.locator('.stat-chip').first();
+    check(
+      'and counts towards nothing: the totals still say no matches',
+      (await matchChip.innerText()).replace(/\s+/g, ' ').trim().toLowerCase() === '0 matches',
+      await matchChip.innerText(),
+    );
+    check(
+      'nobody has a career from it',
+      (await gp.locator('.stats-table tbody tr').count()) === 0,
+      `${await gp.locator('.stats-table tbody tr').count()} rows`,
+    );
+    await gp.locator('.recent-open').click();
+    check(
+      'opening it says why it is here and not in those numbers',
+      (await gp.locator('.match-rounds-foot').innerText()).includes('guest game, not counted'),
+      await gp.locator('.match-rounds-foot').innerText(),
+    );
+    check(
+      'and offers no name to edit, there being none',
+      (await gp.locator('.match-edit').count()) === 0,
+    );
+    check('while its rounds read back in full', (await gp.locator('.match-round').count()) === 2);
+    await gp.getByRole('button', { name: '‹ Back' }).click();
+    await gp.waitForSelector('.setup');
+  }
+
   // Sticky, because guests arrive in runs — and safe only because every New game
   // lands back here with the toggle in view.
   check(
@@ -1804,10 +1880,22 @@ check(
   await gp.getByRole('button', { name: 'Start', exact: true }).click();
   await play();
   await play();
-  await filed(1);
-  const [real] = await stored();
-  check('a real match is filed again', (await stored()).length === 1);
+  await filed(2);
+  const real = (await stored()).find((m) => !m.casual);
+  check('a real match is filed beside it', (await stored()).length === 2, `${(await stored()).length} records`);
   check('under the names typed for it', real?.players?.a?.[0] === 'Neil', real?.players?.a?.[0]);
+  // Which is what makes the difference the flag rather than a break in archiving — and
+  // the guest game must not have followed it into the numbers on the way past.
+  await gp.getByRole('button', { name: 'New game' }).click();
+  await gp.getByRole('button', { name: 'Stats' }).click();
+  await gp.waitForSelector('.recent');
+  const bothChip = () =>
+    gp.locator('.stat-chip').first().innerText().then((t) => t.replace(/\s+/g, ' ').trim().toLowerCase());
+  check(
+    'and both games are listed, with only the real one counted',
+    (await gp.locator('.recent li').count()) === 2 && (await bothChip()) === '1 match',
+    `${await gp.locator('.recent li').count()} rows · ${await bothChip()}`,
+  );
   await guest.close();
 }
 

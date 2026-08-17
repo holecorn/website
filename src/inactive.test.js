@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { matchRecord } from './archive.js';
+import { newGame } from './scoring.js';
 import {
   inactiveKeys,
   markActive,
@@ -183,6 +185,29 @@ describe('offerableNames', () => {
   it('reads every slot but offers no blanks', () => {
     const sparse = match({ a: ['Neil', ''], b: ['Phi', '  '] }, 2000);
     expect(offerableNames([sparse], {})).toEqual(['Neil', 'Phi']);
+  });
+
+  // A guest game is archived now, and the record it files is what keeps this feature
+  // out of its way: no names were taken, so there is nobody in it to offer and nobody
+  // to bring out of retirement. Filed through `matchRecord` rather than written by
+  // hand, because that is the half the property actually rests on — the slots at the
+  // time still held the last real lineup, Rho's included.
+  it('adds nobody from a guest game, and brings nobody back with one', () => {
+    const marks = markInactive({}, 'Rho', [RHO_V_TAU], 2000);
+    const guest = matchRecord(
+      {
+        ...newGame(21),
+        id: 'guest',
+        casual: true,
+        mode: 'singles',
+        players: { a: ['Rho', 'Player 3'], b: ['Tau', 'Player 4'] },
+      },
+      3000,
+    );
+    expect(offerableNames([RHO_V_TAU, guest], marks)).toEqual(
+      offerableNames([RHO_V_TAU], marks),
+    );
+    expect([...inactiveKeys(marks, [RHO_V_TAU, guest])]).toEqual(['rho']);
   });
 
   it('has nothing to offer from no history', () => {
