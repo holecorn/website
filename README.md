@@ -841,6 +841,11 @@ Hosted on GitHub Pages at `holecorn.com`. Pushing to `main` triggers
 domain is pinned by `public/CNAME`; because the site is served from the domain
 root, Vite's `base` stays `/` (so the PWA `scope`/`start_url` need no change).
 
+The footer shows the short commit the running build came from, so a phone can be
+checked against `git log` — the app is a PWA and will happily serve a cached
+bundle for as long as it cannot reach the site (see `docs/OFFLINE-SCOREBOARD.md`).
+A build made anywhere but the workflow says `dev`.
+
 ## Tech
 
 React 19 + Vite. Scoring rules live as pure functions in `src/scoring.js`

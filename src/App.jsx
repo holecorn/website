@@ -1250,14 +1250,16 @@ function TossForFirst({ game, dispatch }) {
 // Both game screens draw it, which is why the unsaved warning lives here rather
 // than being written twice. Always in the DOM as a live region: one inserted
 // along with its content is announced unreliably, the same reason `.toss-result`
-// is always mounted.
+// is always mounted. `__BUILD__` is the commit the bundle was built from — the one
+// thing on any screen that says which version is running, see `vite.config.js`.
 function Footer({ saveFailed = false }) {
   return (
     <footer className="footer">
       <span className="save-warning" role="status">
         {saveFailed && 'This phone won’t save — nothing new will survive a reload.'}
       </span>
-      Made with <span className="footer-heart">♥</span>
+      Made with <span className="footer-heart">♥</span>{' · '}
+      <span title="Build version">{__BUILD__}</span>
     </footer>
   );
 }

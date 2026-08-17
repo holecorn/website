@@ -86,11 +86,19 @@ it goes on serving the cache. Closing and reopening the app does not help; the
 update it would apply has never been downloaded.
 
 The symptom is the worst kind: the app looks completely normal and behaves like an
-older build, and **nothing on any screen says which version is running**. Hit on
-2026-08-17 — a deploy went out, the phone stayed on the board's network across
-several relaunches, and a feature that had just shipped simply did not appear. Both
-halves were then verified correct in isolation, which proved only that neither was
-what was running.
+older build. Hit on 2026-08-17 — a deploy went out, the phone stayed on the board's
+network across several relaunches, and a feature that had just shipped simply did
+not appear. Both halves were then verified correct in isolation, which proved only
+that neither was what was running, because **nothing on any screen said which
+version it was**.
+
+**The footer says it now**: the short commit the bundle was built from, beside
+"Made with ♥". It comes from `GITHUB_SHA` at build time — a `define` in
+`vite.config.js`, so the workflow has nothing to pass and a build from anywhere else
+reads `dev`. That is deliberately the *bundle's* answer rather than the server's: a
+hash that has not moved after a relaunch **is** the cached copy, which is the only
+form the question can take with no route to `holecorn.com` to ask. Compare it with
+`git log` when a deploy appears not to have landed, before suspecting either half.
 
 So **join a network with an uplink once after a deploy, open the app, and let the
 service worker take the update before going back to the board's**. The Beryl AX can

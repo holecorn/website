@@ -111,6 +111,15 @@ export default defineConfig({
       },
     }),
   ],
+  // **What the footer reads, and the reason it is worth a line of build config**: on the
+  // board's own network there is no route to `holecorn.com`, so the service worker has
+  // nothing to fetch and goes on serving a cached bundle that looks completely normal —
+  // an evening lost on 2026-08-17 to a shipped feature that never appeared. `GITHUB_SHA`
+  // is set by Actions, so the deploy needs nothing added to it and a local build says
+  // `dev` by having no value at all. See `docs/OFFLINE-SCOREBOARD.md`.
+  define: {
+    __BUILD__: JSON.stringify((process.env.GITHUB_SHA || 'dev').slice(0, 7)),
+  },
   build: {
     // **Lightning CSS rewrites `light-dark()` unless it is told not to, and the rewrite is
     // silently one-way.** Left at the default target it compiles every `light-dark(a, b)`

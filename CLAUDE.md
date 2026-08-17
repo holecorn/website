@@ -575,6 +575,18 @@ Push to `main` → `.github/workflows/deploy.yml` runs `npm ci → npm test →
 npm run build → deploy` to GitHub Pages. The custom domain is pinned by
 `public/CNAME`. No manual steps.
 
+**The footer carries the commit the bundle was built from, and it is the only thing on
+any screen that says which version is running.** A `define` in `vite.config.js` reads
+`GITHUB_SHA`, which Actions sets, so the workflow passes nothing and a build from
+anywhere else reads `dev` — the honest answer for one that was never pushed, and the
+reason it is not derived from `git` locally, where a dirty tree would name a commit that
+is not what is running. It exists because on the board's own network there is no route
+to `holecorn.com`, so the service worker serves its cache indefinitely and an older
+build looks completely normal; that cost an evening on 2026-08-17, and
+`docs/OFFLINE-SCOREBOARD.md` holds the whole trap. The price is that **the main chunk's
+hash now moves on every push**, since the commit is baked into it — so every deploy is a
+real update to fetch, including a docs-only one.
+
 **The two publishing steps carry `if: ${{ !env.ACT }}`, so a green `act` run means
 everything up to and including `test:browser` passed and nothing about the deploy.**
 They fail locally by their nature — `upload-pages-artifact` wants an artifact service
