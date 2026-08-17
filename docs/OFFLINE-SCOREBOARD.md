@@ -78,6 +78,28 @@ service worker cache with no network at all — verified in the built `sw.js`, w
 registers a `NavigationRoute` bound to the cached `index.html`, so `?display=1`
 and `?panel=1` resolve offline despite the query string.
 
+**Which is also why a phone on this network can never take a new version, and that
+is the trap to know about before it costs an evening.** `registerType` is
+`autoUpdate`, so the service worker fetches a new bundle by itself — but on the
+board's SSID there is no route to `holecorn.com`, so there is nothing to fetch and
+it goes on serving the cache. Closing and reopening the app does not help; the
+update it would apply has never been downloaded.
+
+The symptom is the worst kind: the app looks completely normal and behaves like an
+older build, and **nothing on any screen says which version is running**. Hit on
+2026-08-17 — a deploy went out, the phone stayed on the board's network across
+several relaunches, and a feature that had just shipped simply did not appear. Both
+halves were then verified correct in isolation, which proved only that neither was
+what was running.
+
+So **join a network with an uplink once after a deploy, open the app, and let the
+service worker take the update before going back to the board's**. The Beryl AX can
+carry a WAN uplink when there is one to give it, and everything works normally then;
+the whole offline shape is for when there is not. It is the same blind spot the
+board has from the other side — see **Nothing on the board says which firmware it is
+running** in `firmware/hub75/CLAUDE.md` — and on a night with no signal both ends are
+unlabelled at once.
+
 The display link points at `/board/` rather than `/`, which is the same page with
 the manifest link stripped so a tablet can keep it on its home screen — see
 `.claude/rules/scoreboard.md`. That page is precached too, and reaching it offline
