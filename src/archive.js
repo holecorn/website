@@ -63,6 +63,12 @@ export function matchRecord(game, endedAt) {
     // game". It is the whole of what a guest record carries: the colour is the label
     // because of it, and no fold counts the match because of it.
     ...(game.casual ? { casual: true } : {}),
+    // A tie awarded because somebody could not play. Absent on a game that was played,
+    // the same shape as the two above, so nothing filed before walkovers existed
+    // changed. It is the only thing separating one from an imported result — both are a
+    // winner with no rounds — and it is what `counted` in stats.js drops, since a
+    // walkover is a result in the bracket and nothing in anybody's record.
+    ...(game.forfeit ? { forfeit: true } : {}),
     rounds: game.rounds.map((r) => ({
       a: r.a.slice(),
       b: r.b.slice(),

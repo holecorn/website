@@ -604,6 +604,7 @@ button.tie {
 }
 
 .draw-cancel,
+.tournament-award,
 .tournament-drop {
   padding: 10px 18px;
   border: 1px solid var(--border);
@@ -654,6 +655,91 @@ button.tie {
   border-color: var(--warn);
   color: var(--warn);
   font-size: 13px;
+}
+
+/* The two administrative buttons on one line. `flex-start` rather than `center` so it
+   agrees with the `align-self` `.tournament-drop` already carries for the column it used
+   to sit in — in a row that property means the cross axis, and two buttons of one height
+   disagreeing about it is the kind of thing that only shows when one of them grows. */
+.tournament-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Not red: awarding a tie records a result rather than destroying one, and it is undone
+   by deleting that match. It sits *before* `Abandon` so the destructive button stays on
+   the end of the row, where it was when it was the only one. Compact like its neighbour,
+   sharing everything else with the group above. */
+.tournament-award {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* One block per round with a live tie, each holding its ties, each of those holding the
+   two sides stacked full width. Stacked rather than side by side because a doubles side is
+   two names joined — measured, the pair runs to 28 characters, which no phone holds twice
+   on one line.
+
+   **The three gaps step, and that is what says which two names are playing each other.**
+   A round can hold several live ties, so four buttons in one column under one caption are
+   ambiguous; 4px within a tie against 12px between them and 18px between rounds is what
+   groups them, with the caption confirming the outermost.
+
+   **The list scrolls, not the dialog, and that is measured rather than defensive.** Ties
+   are played opportunistically, so a whole round can be live at once: a 16-entrant field
+   has 8 and the 64-entrant one has 32. At 8 the content is 1232px against a dialog the UA
+   caps at 814px, and although `dialog` scrolls itself, `Cancel` then sat **400px below the
+   fold** behind the title and the body — a dialog you have to scroll to get out of.
+   Capping here keeps all three fixed. 55vh leaves room for them at 667px, the shortest
+   phone the app is measured on, where the chrome around it is ~180px. */
+.award-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 55vh;
+  overflow-y: auto;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.award-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.award-tie {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.award-round {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.award-side {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.award-failed {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
 }
 
 /* Tap to add. Chips rather than a list of checkboxes: the names are short and the

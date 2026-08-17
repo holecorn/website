@@ -1025,8 +1025,21 @@ function whenLine(tournament, view, matches) {
 // to, and everything else behind a tap. A finished bracket is the point of keeping them at
 // all, and an unfinished one is 63 ties on a 64-entrant field — neither wants to be
 // unrolled on arrival next to five others.
-function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie, onDrop }) {
+function TournamentRow({
+  tournament,
+  view,
+  matches,
+  isOpen,
+  onToggle,
+  onPlayTie,
+  onForfeit,
+  onDrop,
+}) {
   const [confirming, setConfirming] = useState(false);
+  // Awarding a tie is the row's other administrative action, and it lives here for the
+  // same reason `confirming` does: it changes the cup rather than playing it.
+  const [awarding, setAwarding] = useState(false);
+  const [awardFailed, setAwardFailed] = useState(false);
   const [tab, setTab] = useState(TABS[0][0]);
   // Which entrant's route is being traced, as a side key — the `selected` idiom the stats
   // screen uses for a player, and transient in the same way: a scope you set while
@@ -1039,6 +1052,8 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
     if (!isOpen) {
       setTab(TABS[0][0]);
       setSelected(null);
+      setAwarding(false);
+      setAwardFailed(false);
     }
   }, [isOpen]);
   const routeTies = useMemo(() => routeFor(view, selected), [view, selected]);
@@ -1213,13 +1228,115 @@ function TournamentRow({ tournament, view, matches, isOpen, onToggle, onPlayTie,
               </div>
             </>
           )}
-          <button
-            className="tournament-drop"
-            onClick={() => setConfirming(true)}
-            aria-label={`${verb} ${tournament.name}`}
-          >
-            {verb}
-          </button>
+          {/* The row's administrative actions, in one line rather than stacked: both
+              change the cup rather than playing it, and both are things you came here on
+              purpose to do. A walkover belongs beside `Abandon` and not on the setup
+              screen — from there you would have to *pick* the tie in order to give it
+              away, and the banner would carry a control for every tie you do play. */}
+          <div className="tournament-actions">
+            {/* `view.playable` is the whole gate. A finished bracket and a recorded
+                result both have none, so neither needs a condition of its own — and a
+                tie that is not playable has a side nobody knows yet, which there is no
+                way to award. */}
+            {view.playable.length > 0 && (
+              <button
+                className="tournament-award"
+                onClick={() => {
+                  setAwardFailed(false);
+                  setAwarding(true);
+                }}
+                aria-label={`Award a tie of ${tournament.name}`}
+              >
+                Award a tie
+              </button>
+            )}
+            <button
+              className="tournament-drop"
+              onClick={() => setConfirming(true)}
+              aria-label={`${verb} ${tournament.name}`}
+            >
+              {verb}
+            </button>
+          </div>
+          {/* The choice *is* the confirmation: you reached this from a button on a row
+              you opened, the body says what happens and how to undo it, and each option
+              names the side it is about. A second dialog over the top would be two asks
+              for one act — where `Abandon` needs its own because that button is the act. */}
+          {awarding && (
+            // Opening on `Cancel`, because this dialog's options come *above* the button
+            // row rather than in it — so the first focusable descendant is an option that
+            // settles a tie, and a stray Enter on opening would award one. Every other
+            // dialog in the app gets that for free by having Cancel first.
+            <Modal focus=".confirm-actions button" onClose={() => setAwarding(false)}>
+              <p className="modal-title">Award a tie</p>
+              <p className="modal-body">
+                Whoever can&rsquo;t play gives the tie to the other side. It goes in your
+                history as a walkover — it counts towards nobody&rsquo;s record, and
+                deleting the match from Stats puts the tie back on the bracket.
+              </p>
+              {/* Grouped by round, and read off `view.rounds` rather than `view.playable`
+                  for exactly that: `playable` comes out of the tree walk, so its ties are
+                  in bracket *position* order and the captions ran Preliminary,
+                  Preliminary, Quarter-final, Preliminary. `rounds` is already
+                  deepest-first, which is also how the drawn bracket reads. */}
+              <ul className="award-list">
+                {view.rounds
+                  .map((round) => ({ round, ties: round.ties.filter((t) => t.playable) }))
+                  .filter((r) => r.ties.length > 0)
+                  .map(({ round, ties }) => (
+                    <li key={round.level}>
+                      <p className="award-round">{round.name}</p>
+                      {ties.map((tie) => (
+                        // The two sides of one tie are a group of their own, because a
+                        // round can hold several and four buttons in a column say nothing
+                        // about which two are playing each other. The gaps are what carry
+                        // it — tighter within a tie than between them.
+                        <div className="award-tie" key={tie.id}>
+                          {[
+                            ['a', tie.a, tie.b],
+                            ['b', tie.b, tie.a],
+                          ].map(([team, out, through]) => (
+                            <button
+                              key={team}
+                              className="award-side"
+                              // The visible text says who is out and the name has to
+                              // contain it (WCAG Label in Name) while still saying what
+                              // pressing does — here, the *other* side going through.
+                              aria-label={`${sideNames(out)} can’t play, ${sideNames(
+                                through,
+                              )} go through`}
+                              onClick={() => {
+                                // The winner is the side that can still play, which is
+                                // the one this button is not named after.
+                                if (onForfeit(tournament, tie, team === 'a' ? 'b' : 'a')) {
+                                  setAwarding(false);
+                                } else {
+                                  setAwardFailed(true);
+                                }
+                              }}
+                            >
+                              {sideNames(out)} can&rsquo;t play
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </li>
+                  ))}
+              </ul>
+              {/* The dialog stays open on a refused write, the way the draw form does:
+                  the bracket behind it is unchanged, so closing would leave the tie
+                  looking exactly as it did with nothing having said why. */}
+              {awardFailed && (
+                <p className="award-failed" role="alert">
+                  There&rsquo;s no room on this phone to store the result. Export from
+                  Stats and delete some matches, then try again.
+                </p>
+              )}
+              <div className="confirm-actions">
+                <button onClick={() => setAwarding(false)}>Cancel</button>
+              </div>
+            </Modal>
+          )}
           {/* Confirmed rather than undone, and the stats screen's match delete follows this
               now rather than contradicting it: the button sits inside the open row, and
               there is something worth saying that an undo bar cannot carry — the ties are
@@ -1587,6 +1704,7 @@ export default function Tournament({
   onCreate,
   onDrop,
   onPlayTie,
+  onForfeit,
   onReveal,
 }) {
   const [drawing, setDrawing] = useState(false);
@@ -1645,6 +1763,7 @@ export default function Tournament({
               isOpen={openId === tournament.id}
               onToggle={() => toggle(tournament.id)}
               onPlayTie={onPlayTie}
+              onForfeit={onForfeit}
               onDrop={onDrop}
             />
           ))}

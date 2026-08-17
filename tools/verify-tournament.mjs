@@ -1412,6 +1412,184 @@ console.log('\nundoing the winning round un-archives the tie and the bracket rec
   await page.close();
 }
 
+console.log('\na tie nobody could play is awarded, and counts towards nothing');
+{
+  // The one thing a derived bracket structurally could not see: a tie that was never
+  // played. A walkover is a record with a winner and no rounds, so the bracket advances
+  // off the archive with nothing new stored — and every assertion here is about the
+  // wiring, because `forfeitGame` and `counted` are both pure and unit tested.
+  const page = await open();
+  check(
+    'an unfinished bracket offers it',
+    (await page.locator('.tournament-award').count()) === 1,
+    `${await page.locator('.tournament-award').count()} buttons`,
+  );
+  await page.locator('.tournament-award').click();
+  if (!(await settles(() => page.waitForSelector('.award-list', { timeout: 5000 })))) {
+    check('the dialog opens', false);
+  }
+  // Grouped by round, so the blocks are rounds and not ties: a fresh eleven-entrant draw
+  // has five live ties across two rounds — three preliminaries and the two byes that meet.
+  // Read off `view.playable` instead, the captions come out in bracket-position order and
+  // run Preliminary, Preliminary, Quarter-final, Preliminary.
+  const rounds = await page.locator('.award-list > li').count();
+  const ties = await page.locator('.award-tie').count();
+  check('grouped into a block per round', rounds === 2, `${rounds} blocks`);
+  check('holding every live tie', ties === 5, `${ties} ties`);
+  // Both sides of every tie, because either of them can be the one who cannot make it —
+  // a dialog offering only side a would look right on the bracket and be useless half
+  // the time.
+  check(
+    'and both sides of each, since either can be the one who is out',
+    (await page.locator('.award-side').count()) === 10,
+    `${await page.locator('.award-side').count()} options`,
+  );
+  // The captions in the order the bracket reads, deepest first — the property the
+  // grouping exists for, and the one a count cannot see. Lower-cased before comparing,
+  // because `text-transform` means the rendered text is not the text in the component:
+  // this file's standing lesson, met again on the first run.
+  const captions = await page.locator('.award-round').allInnerTexts();
+  check(
+    'with the rounds in bracket order and named once each',
+    JSON.stringify(captions.map((c) => c.trim().toLowerCase())) ===
+      '["preliminary","quarter-final"]',
+    JSON.stringify(captions),
+  );
+  // Ties are played opportunistically, so a whole round can be live at once — five here,
+  // 32 on a 64-entrant field. Measured at 16 entrants before the list was capped, the
+  // dialog's content ran to 1232px and `Cancel` sat 400px below the fold behind the title
+  // and the body: a dialog you have to scroll to get out of. The **guard comes first**,
+  // because with nothing to scroll the reachability assertion passes however the box is
+  // sized — this file's standing lesson.
+  const box = await page.evaluate(() => {
+    const list = document.querySelector('.award-list');
+    const cancel = [...document.querySelectorAll('.confirm-actions button')].pop();
+    return {
+      overflows: list.scrollHeight > list.clientHeight,
+      cancelBottom: Math.round(cancel.getBoundingClientRect().bottom),
+      viewport: innerHeight,
+    };
+  });
+  check('the ties are what scrolls, rather than the dialog', box.overflows);
+  check(
+    'so Cancel stays on screen however many are live',
+    box.cancelBottom <= box.viewport,
+    `Cancel at ${box.cancelBottom} of ${box.viewport}`,
+  );
+  const sides = page.locator('.award-tie').first().locator('.award-side');
+  const nameOf = async (n) =>
+    (await sides.nth(n).innerText()).replace(/can.t play/, '').trim();
+  const out = await nameOf(0);
+  const through = await nameOf(1);
+  // Read off the dialog rather than written down: which names land in the first tie is
+  // the draw's business, so a fixture that named them would be asserting the shuffle.
+  check('each option names a side of that tie', Boolean(out && through && out !== through), `${out} / ${through}`);
+  await sides.first().click();
+  await settles(() => page.waitForSelector('.award-list', { state: 'detached', timeout: 5000 }));
+
+  check(
+    'the bracket counts the tie',
+    (await progress(page)).trim() === '1 of 10 ties',
+    await progress(page),
+  );
+  check('with one fewer playable', (await playable(page)) === 4, `${await playable(page)}`);
+  // The half that separates it from a played tie, which draws two numbers here: nothing
+  // was thrown, so `finalScore` is null and the box has nothing to show.
+  check('and no score on it, because nobody threw', (await page.locator('.tie-points').count()) === 0);
+  const won = await page.locator('.tie.is-played .tie-side.is-winner').innerText();
+  check(
+    'the side that could still play goes through',
+    won.trim() === through,
+    `${won.trim()} through, ${out} was out`,
+  );
+  const [filed] = await archive(page);
+  check('filed as a walkover', filed?.forfeit === true, String(filed?.forfeit));
+  check('tagged with the tournament, which is what places it', filed?.tournament !== undefined);
+  check('and holding no rounds', filed?.rounds?.length === 0, `${filed?.rounds?.length} rounds`);
+
+  // The other half, and it has to be the same match: it settles a tie *and* counts
+  // towards nothing. Neither side can see the other — `counted` is unit tested over
+  // records handed to it, and the bracket reads the archive raw — so a screen reading
+  // one through the other is invisible from both. The guest-game block in
+  // verify-stats.mjs is the same pair, pointed the other way.
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  await page.getByRole('button', { name: 'Stats' }).click();
+  await page.waitForSelector('.recent');
+  check(
+    'it is in Recent matches, which is how it is undone',
+    (await page.locator('.recent li').count()) === 1,
+    `${await page.locator('.recent li').count()} rows`,
+  );
+  const chip = (await page.locator('.stat-chip').first().innerText()).replace(/\s+/g, ' ').trim();
+  check('and the totals still say no matches', chip.toLowerCase() === '0 matches', chip);
+  check(
+    'nobody has a career from it',
+    (await page.locator('.stats-table tbody tr').count()) === 0,
+    `${await page.locator('.stats-table tbody tr').count()} rows`,
+  );
+  await page.locator('.recent-open').click();
+  const facts = (await page.locator('.match-rounds-foot').innerText()).replace(/\s+/g, ' ');
+  check('opening it says why it is here and not in those numbers', facts.includes('walkover, not counted'), facts);
+  // "result only, no rounds recorded" is the imported result's line and would be the
+  // second thing on this row saying nobody threw.
+  check('and does not read as an imported result as well', !facts.includes('result only'), facts);
+
+  // The claim the dialog makes, checked rather than only made — the rule the tournament's
+  // own delete dialog already follows.
+  await page.locator('.recent li .match-drop').click();
+  await page.locator('.confirm-danger').click();
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  await backToBracket(page);
+  check(
+    'deleting the match puts the tie back on the bracket',
+    (await progress(page)).trim() === '0 of 10 ties',
+    await progress(page),
+  );
+  check('playable again', (await playable(page)) === 5, `${await playable(page)}`);
+  await page.close();
+}
+
+console.log('\nawarding a tie takes it off the setup screen, and a finished cup offers none');
+{
+  // Two ways of getting a tie you can no longer play, and only `App.jsx` joins them up:
+  // the repair effect is the one thing between awarding a tie on this screen and `Start`
+  // offering to play it a second time, which would file a second record for one tie.
+  const page = await open(['Rho', 'Tau']);
+  await playFirst(page);
+  await page.waitForSelector('.setup');
+  check('the tie is loaded', (await page.locator('.tie-banner').count()) === 1);
+  await backToBracket(page);
+  await page.locator('.tournament-award').click();
+  await page.waitForSelector('.award-list');
+  // **Asserted on this cup and not the eleven-entrant one**, which cannot fail: there the
+  // list scrolls, and Chrome makes a scroller focusable, so the `ul` takes focus whatever
+  // the dialog asks for. One live tie is the case where the first focusable descendant
+  // really is an option that settles a tie, and a stray Enter on opening would award it.
+  const landed = await page.evaluate(() => document.activeElement?.textContent ?? '');
+  check('the dialog opens on Cancel, not on an option', landed === 'Cancel', landed.slice(0, 30));
+  await page.locator('.award-side').first().click();
+  await settles(() => page.waitForSelector('.award-list', { state: 'detached', timeout: 5000 }));
+  // A two-entrant cup is one tie, so awarding it decides the cup — a champion on a
+  // walkover, which is the case worth playing out rather than assuming.
+  check(
+    'the cup is won',
+    (await page.locator('.champion-who').count()) === 1,
+    `${await page.locator('.champion-who').count()} winners named`,
+  );
+  check(
+    'and a finished bracket offers no more ties to award',
+    (await page.locator('.tournament-award').count()) === 0,
+  );
+  await page.getByRole('button', { name: '‹ Back' }).click();
+  await page.waitForSelector('.setup');
+  check('the settled tie is off the setup screen', (await page.locator('.tie-banner').count()) === 0);
+  check('its names are editable again', (await page.locator('.team-name-input').count()) === 2);
+  check('and nothing is left tagged', (await game(page)).tournament === null);
+  await page.close();
+}
+
 console.log('\na finished tournament keeps its bracket');
 {
   // A champions list on its own throws away the one thing the paper sheets were kept

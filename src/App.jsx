@@ -55,6 +55,7 @@ import {
 import {
   bracket,
   dropTournament,
+  forfeitGame,
   levelName,
   loadTournaments,
   saveTournament,
@@ -422,15 +423,23 @@ export default function App() {
         : null,
     [liveTournament, playingTie, liveView],
   );
-  // A tie of a tournament that is no longer there is not a tie. Abandoning a cup with one
-  // of its ties set up otherwise leaves the setup screen banner naming nothing, with the
-  // names, mode and target still locked by a draw that no longer exists, and the banner's own
-  // button the only way out of a state nobody chose. Written as a repair on the derivation rather
-  // than as a line in the drop handler so it also rescues a game *already* saved in that
-  // state, which the delete that stranded it cannot come back to fix.
+  // A tie you can no longer play is not a tie, and there are two ways to get one. The
+  // tournament may be gone: abandoning a cup with one of its ties set up otherwise leaves
+  // the setup screen banner naming nothing, with the names, mode and target still locked
+  // by a draw that no longer exists, and the banner's own button the only way out of a
+  // state nobody chose. Or the tie may have been *settled* while it sat here — awarded on
+  // the tournament screen, or imported from another phone — which would leave `Start`
+  // offering to play it a second time and file a second record for one tie, where
+  // `matchBetween` then answers with whichever it finds first.
+  //
+  // Written as a repair on the derivation rather than as a line in either handler so it
+  // also rescues a game *already* saved in that state, which neither of them can come
+  // back to fix. `clearTie` is gated on `gameStarted`, so a tie being played — and a tie
+  // just won, whose record is exactly what makes `playedTie` true — is left alone.
+  const playedTie = playingTie?.match ?? null;
   useEffect(() => {
-    if (game.tournament && !liveTournament) dispatch({ type: 'clearTie' });
-  }, [game.tournament, liveTournament]);
+    if (game.tournament && (!liveTournament || playedTie)) dispatch({ type: 'clearTie' });
+  }, [game.tournament, liveTournament, playedTie]);
 
   // The pull of the tournament draw currently on the board, or null. Held here rather
   // than inside the tournament screen because the publisher lives above it — the same
@@ -611,6 +620,18 @@ export default function App() {
           return write.saved;
         }}
         onReveal={setDrawReveal}
+        // A tie nobody could play, filed as a walkover. It goes through `archiveMatch`
+        // like any other result — `forfeitGame` builds the game and `identified` gives it
+        // an id, exactly as a played one gets — so the bracket advances off the archive
+        // with nothing new stored, and deleting the match puts the tie back. Reports
+        // whether the write got through for the reason `onCreate` does: a bracket that
+        // advanced on a write that failed is gone on the next load.
+        onForfeit={(t, tie, winner) => {
+          const write = archiveMatch(identified(forfeitGame(t, tie, winner)), Date.now());
+          setMatches(write.stored);
+          if (!write.saved) setSaveFailed(true);
+          return write.saved;
+        }}
         onPlayTie={(t, tie) => {
           dispatch({ type: 'playTie', setup: tieSetup(t, tie) });
           setScreen('setup');

@@ -564,6 +564,22 @@ Ties count in everyone's career exactly like any other game. On the stats screen
 a tournament tie carries a green mark in the recent matches list, and opening it
 names the tournament and the round.
 
+### When somebody can't play
+
+A cup runs over weeks and people drop out of them. **Award a tie**, at the foot of
+an open tournament beside **Abandon**, lists every tie that could be played now
+with both sides of each — tap whoever can't make it and the other side goes
+through.
+
+It goes in your history as a walkover: no score, because nobody threw a bag, and it
+counts towards nobody's record. Nobody gains a win they didn't play for, and the
+cup can be finished. Opening the match in Recent matches says so. It is undone by
+deleting that match, which puts the tie straight back on the bracket.
+
+Somebody who leaves before playing anything is a different job: there is no way to
+swap them out of a draw that has been made, so either award their ties as they come
+up, or abandon the cup and draw it again with the field you actually have.
+
 Finished tournaments move to **Completed** with their winner and the runner-up
 beneath, and the row still opens to the whole bracket — which is the thing the
 paper sheets were kept for.

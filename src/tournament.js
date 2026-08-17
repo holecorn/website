@@ -9,7 +9,7 @@
 // recomputes with nothing to un-advance, and a bracket can never disagree with the
 // results behind it. See docs/TOURNAMENT.md for the alternatives this rules out.
 
-import { NO_SIDE, nameKey, sideKeyOf, sideLabel } from './scoring.js';
+import { NO_SIDE, nameKey, newGame, sideKeyOf, sideLabel } from './scoring.js';
 import { blankStats, finalScore, rosterFor, sideStats } from './stats.js';
 import { jsonStore } from './store.js';
 
@@ -460,6 +460,37 @@ export function tieSetup(tournament, tie) {
     tournament: tournament.id,
     // A tie is a recorded game by definition, so it can never be a guest game.
     casual: false,
+  };
+}
+
+// A tie nobody turned up for: the side that cannot play gives it to the other, and
+// `winner` is the side that goes through.
+//
+// **A walkover is a match record rather than a concept of its own, and that is the
+// whole design.** The bracket resolves a tie by finding a tagged record between its two
+// sides, so a record with a winner and no rounds advances the winner with nothing new
+// stored — and deleting that record puts the tie back on the bracket, which is the
+// reversibility every other result here already has. The shape is not new either: an
+// imported result has no rounds, and `finalScore` already returns null rather than 0–0
+// for one, so the tie box draws no numbers of its own accord.
+//
+// It is a *game* rather than a record because `matchRecord` is the one definition of a
+// record and a walkover has no business being a second one. The caller adds the id, the
+// way it does for a game it played.
+//
+// **Only ever offered for a playable tie**, which is what makes the two sides known and
+// keeps a knockout's one-meeting rule true; there is no guard here for the same reason
+// `tieSetup` has none.
+export function forfeitGame(tournament, tie, winner) {
+  return {
+    ...newGame(tournament.target),
+    ...tieSetup(tournament, tie),
+    winner,
+    // Absent on a game that was played, the shape `tournament` and `casual` already
+    // take. It is what tells a walkover from an imported result, which is otherwise the
+    // same record: `counted` in stats.js drops it from every fold, and the expanded
+    // match says why the row has no score.
+    forfeit: true,
   };
 }
 

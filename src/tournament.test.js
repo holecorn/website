@@ -7,6 +7,7 @@ import {
   drawSteps,
   entrantFaults,
   entrantStats,
+  forfeitGame,
   lastPlayed,
   levelName,
   reachedBy,
@@ -645,6 +646,61 @@ describe('tieSetup', () => {
   it('never plays a tie as a guest game, which would not be recorded at all', () => {
     const t = tournamentOf(ELEVEN);
     expect(tieSetup(t, bracket(t).playable[0]).casual).toBe(false);
+  });
+});
+
+describe('forfeitGame', () => {
+  it('is the tie, with a winner and no rounds', () => {
+    const t = tournamentOf(ELEVEN);
+    const first = bracket(t).playable[0];
+    const game = forfeitGame(t, first, 'b');
+    expect(game.players).toEqual({ a: [first.a.names[0], ''], b: [first.b.names[0], ''] });
+    expect(game.tournament).toBe('t1');
+    expect(game.mode).toBe('singles');
+    expect(game.target).toBe(21);
+    expect(game.winner).toBe('b');
+    expect(game.forfeit).toBe(true);
+    expect(game.rounds).toEqual([]);
+  });
+
+  it('fills both slots in doubles, the way a played tie does', () => {
+    const t = tournamentOf([['Rho', 'Tau'], ['Sigma', 'Phi']], 'doubles');
+    const game = forfeitGame(t, bracket(t).playable[0], 'a');
+    expect(game.players).toEqual({ a: ['Rho', 'Tau'], b: ['Sigma', 'Phi'] });
+  });
+
+  // The whole point of the shape: nothing new is stored, so the bracket resolves an
+  // awarded tie exactly as it resolves a played one and the winner goes through.
+  it('advances the winner once it is archived', () => {
+    const t = tournamentOf(ELEVEN);
+    const first = bracket(t).playable[0];
+    const record = { ...forfeitGame(t, first, 'b'), id: 'w1', endedAt: 9 };
+    const view = bracket(t, [record]);
+    const same = view.ties.find((x) => x.id === first.id);
+    expect(same.winner.key).toBe(first.b.key);
+    expect(same.playable).toBe(false);
+    expect(view.played).toBe(1);
+  });
+
+  // `finalScore` is null for a record with neither rounds nor a `final`, which is what
+  // keeps a walkover from drawing an invented 0–0 in the tie box.
+  it('leaves the tie with no score', () => {
+    const t = tournamentOf(ELEVEN);
+    const first = bracket(t).playable[0];
+    const record = { ...forfeitGame(t, first, 'a'), id: 'w1', endedAt: 9 };
+    expect(bracket(t, [record]).ties.find((x) => x.id === first.id).score).toBeNull();
+  });
+
+  // Two entrants is the smallest cup there is, so its one tie is the final — and a cup
+  // can be won on a walkover, which is the case worth pinning rather than assuming.
+  it('can decide a champion', () => {
+    const t = tournamentOf(['Rho', 'Tau']);
+    const final = bracket(t).playable[0];
+    const record = { ...forfeitGame(t, final, 'a'), id: 'w1', endedAt: 9 };
+    const view = bracket(t, [record]);
+    expect(view.done).toBe(true);
+    expect(sideNames(view.champion)).toBe(final.a.names[0]);
+    expect(sideNames(view.runnerUp)).toBe(final.b.names[0]);
   });
 });
 

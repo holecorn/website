@@ -121,6 +121,62 @@ the alternatives that were rejected; this section holds what breaks when you cha
     `casual`. A tournament runs over weeks, so a tie-ness left on would file the next friendly
     as a tie — silently, into somebody else's bracket. Picking a tie off the bracket is the
     only thing that sets it.
+- **A tie nobody could play is awarded, and a walkover is a *record* rather than a concept
+  of its own.** `forfeitGame` builds the game — the tie's own lineup, mode and target, a
+  winner and no rounds — and `App.jsx` files it through `archiveMatch` like any played one.
+  So the bracket advances with **nothing new stored**, and deleting the match puts the tie
+  back, which is the same reversibility undoing a winning round already has.
+  `docs/TOURNAMENT.md` under **A tie nobody played** holds the decision and the lucky-loser
+  version that lost.
+  - **`forfeit: true` on the record does two jobs, and neither is optional.** It is the only
+    thing separating a walkover from an **imported result** — both are a winner with nothing
+    behind them — so dropping walkovers by "has no rounds" would take every legacy record
+    with them, and those must still count. And it is what `counted` in `stats.js` reads,
+    which is where the "counts towards nobody" half lives.
+  - **The cost is visible on the Stats tab and was chosen.** `entrantStats` folds `counted`
+    too, so an entrant who reached a final on a walkover reads as having played nothing on
+    the way while the bracket beside it lights their whole route. Don't "fix" that by
+    special-casing the fold: the decision is that a win nobody played for is not a win.
+  - **`view.playable` is the whole gate on the control.** A finished bracket and a recorded
+    result both have none, so neither needs a condition of its own — and a tie that is not
+    playable has a side nobody knows yet, which there is nothing to award.
+  - **It is on the tournament row and not the setup screen's tie banner**, which was the
+    cheaper candidate — the tie is already chosen there, so no picker is needed. It loses
+    because you would reach a forfeit *through* picking the tie you are avoiding, and the
+    banner would carry a control on every tie you do play.
+  - **The choice inside the dialog *is* the confirmation.** You reached it from a button on
+    a row you opened, the body says what happens and how to undo it, and each option names
+    the side it is about — where `Abandon` needs its own dialog because that button is the
+    act. Both sides of every tie are offered, since either can be the one who is out.
+  - **The dialog groups by round off `view.rounds`, not `view.playable`.** `playable` comes
+    out of the tree walk, so its ties are in bracket *position* order and the captions ran
+    `Preliminary, Preliminary, Quarter-final, Preliminary`. `rounds` is already deepest
+    first, which is how the drawn bracket reads. Within a round the two sides of one tie are
+    their own group — a round can hold several, and four buttons in a column say nothing
+    about which two are playing each other, so the **gaps step** 4/12/18px and only the
+    outermost has a caption.
+  - **The tie list scrolls, not the dialog, and that is measured.** A whole round can be
+    live at once — five on the eleven-entrant field, 32 on the 64-entrant one. At 16
+    entrants the content ran to **1232px against the UA's 814px dialog cap**, and although
+    a `dialog` scrolls itself, `Cancel` then sat 400px below the fold behind the title and
+    the body: a dialog you have to scroll to get out of. `max-height: 55vh` on
+    `.award-list` keeps all three fixed, sized against 667px, the shortest phone the app is
+    measured on. The browser check needs its **guard first** — with the cap removed, five
+    ties on a tall phone still fit, so the reachability assertion passes and only "the ties
+    are what scrolls" fails.
+  - **`verify-tournament.mjs` is the only thing that can see any of it**: `forfeitGame` and
+    `counted` are both pure and unit tested, so a screen reading one through the other is
+    invisible from both. Four mutations, each killed by the assertions aimed at it and no
+    others — the winner set to the side that is out, the flag dropped from the record (which
+    fails the *counting* assertions too, the totals then reading `1 MATCH`), the
+    `view.playable` gate removed, and the repair effect below narrowed back.
+- **A tie *settled* while it sat on the setup screen is cleared there too**, and that is the
+  second arm of the same repair effect in `App.jsx` — the first being a tie whose tournament
+  is gone. Without it `Start` offers to play a settled tie a second time and files a second
+  record for one tie, which `matchBetween` then answers with whichever it finds first.
+  Awarding it is one way in and an import is the other. Safe because `clearTie` is gated on
+  `gameStarted`: a tie being played is left alone, and so is a tie just *won*, whose own
+  record is exactly what makes the condition true.
 - **The roster's chips and `Select all` share one placement rule, `place` in `Draw`.** The
   array order *is* the seating (see `seatSides`), so two spellings of "where does this name
   land" would let one press seat a field the eleven taps would not have — and in doubles

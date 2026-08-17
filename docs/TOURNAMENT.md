@@ -436,12 +436,79 @@ with:
 
 - **No bracket on `?display=1` or the LED panel.** Ranked third of three, and 128x32
   cannot hold one.
-- **No walkovers, retirements, best-of-three, third-place playoffs or re-draws**
-  between rounds.
-- **No mid-tournament change to the field.**
+- **~~No walkovers~~, retirements, best-of-three, third-place playoffs or re-draws**
+  between rounds — walkovers are built, see **A tie nobody played**. The rest stand.
+- **No mid-tournament change to the field.** A walkover does not change it: it settles
+  a tie between the two sides the draw already seated.
 - **No bracket state machine**, and nothing about a tie's position stored on its
   record beyond the tournament id.
 - **No second route into a live game** — ties are played through `setup`.
+
+## A tie nobody played
+
+The revisit the open questions below predicted, built on 2026-08-17. Somebody drops
+out of a cup that runs for weeks, and before this there was **no way to finish the
+tournament at all**: the tie stayed playable for ever, the bracket never resolved, the
+row sat under In progress and `nextEditions` would not offer next year's name. The only
+routes were to fabricate a game — three rounds of tapping four baggers, which puts
+invented hole and board counts into a real player's career rates — or to abandon the
+cup.
+
+**A walkover is a match record with a winner and no rounds, and that is the whole
+change.** The shape is not new: an imported result is a winner with nothing behind it,
+and `finalScore` already returns null rather than 0–0 for one, so the tie box draws no
+numbers of its own accord. `bracket()` resolves a tie by finding a tagged record between
+its two sides, so an awarded tie advances its winner with **nothing new stored** — and
+deleting that record puts the tie back, which is the reversibility a played tie already
+has. `forfeit: true` on the record is the only addition, and it does two jobs: it tells a
+walkover from an imported result, and `counted` in `stats.js` drops it from every fold.
+
+**It counts towards nobody**, which was a choice rather than a consequence. A walkover
+*is* a result in a knockout and counting the W–L would have been defensible — the
+argument that won is that nobody should gain a win they did not play for, and that the
+alternative is indistinguishable from a legacy import in every table. The visible cost is
+accepted and is worth knowing: the tournament's own entrant table folds `counted` too, so
+somebody who reached a final on a walkover reads as having played nothing on the way,
+while the bracket beside it lights their whole route.
+
+**It is on the tournament row, beside `Abandon`.** The setup screen's tie banner was the
+other candidate and is cheaper — the tie is already chosen there, so no picker is needed —
+and it loses on three counts: you would reach a forfeit *through* picking the tie you are
+avoiding, the banner would carry a control on every tie you do play, and it leaves
+`game.tournament` pointing at a tie that is now settled. That last one needed answering
+anyway: `App.jsx`'s repair effect now clears a tie that has been settled while it sat on
+the setup screen, or `Start` would offer to play it a second time and file a second record
+for one tie, which `matchBetween` then answers with whichever it finds first.
+
+### Rejected: the beaten opponent takes their place
+
+The other half of the original ask — a lucky loser, where the withdrawing side is replaced
+by the last opponent they beat, so the tie gets *played* rather than awarded. Wanted
+because a social cup would rather have a game than a walkover.
+
+*Eliminated because:* `entrants` is a **seating** — its order *is* the pairings — so the
+name cannot simply be swapped. The withdrawing side also sits in the ties they have
+already won, and replacing Rho with Tau makes the quarter-final read Tau v Tau, whose
+record then matches nothing; `renameEntrant` already carries a note about exactly that
+collapse. So a substitution has to be stored per tie, which is the **full bracket state
+machine** eliminated above, and it is a fourth place a name lives — a rename today has to
+reach exactly three (match records, the draw, the inactive mark) and would have to reach
+this too.
+
+*The no-new-state version was found and is worse.* The substitute is by definition
+somebody the withdrawing side beat, so a tie could resolve against anyone seated in the
+losing side's own subtree — genuinely derivable, no new state, and it costs the exactness
+of the one rule the whole derivation rests on. A record tagged with the tournament and
+naming the wrong two people would then resolve a tie it is not, which is the "a bracket
+that disagrees with the archive has no symptom" fear aimed at the place it hurts most.
+`resolve` would also have to return a winner that is neither seat of the tie it came out
+of.
+
+**What to do instead:** somebody who leaves before playing anything is either awarded
+their ties as they come up, or the cup is abandoned and drawn again with the field that is
+actually there. Replacing them in the draw *is* free where they have played nothing — it
+is a seat rename, which `renameEntrant` already does — but only for a name not already in
+the field, and it is not worth a control until somebody asks for it twice.
 
 ## A tournament runs over days, not an evening
 
@@ -501,9 +568,10 @@ actually decided.
 
 ## Open questions and risks
 
-- **Somebody leaving mid-tournament** is out of scope by decision, and it is the most
-  likely thing to force a revisit. A walkover produces no match, so the derivation
-  cannot see it at all; it would need either a real record or its own concept.
+- **~~Somebody leaving mid-tournament~~** — answered, and the prediction held on both
+  counts: it was the thing that forced a revisit, and it came down to "a real record or
+  its own concept". A record won. See **A tie nobody played**; the substitute who takes
+  their place is the half that would have needed the concept, and is not built.
 - **A tie abandoned rather than won leaves nothing archived**, so the bracket shows it
   as still to play. That is correct, but it means "we started that one and gave up" is
   invisible.

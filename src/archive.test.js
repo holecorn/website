@@ -83,6 +83,23 @@ describe('matchRecord', () => {
     expect(validRecord(record)).toBe(true);
   });
 
+  it('carries no forfeit key at all on a game that was played', () => {
+    expect('forfeit' in matchRecord(wonGame(), 900)).toBe(false);
+  });
+
+  it('records a walkover, which is a winner and no rounds', () => {
+    // The flag is the only thing separating this from an imported result — both are a
+    // winner with nothing behind it — and it is what keeps a tie nobody played out of
+    // every career while still letting the bracket advance off it.
+    const game = { ...wonGame(), rounds: [], forfeit: true, tournament: 't1' };
+    const record = matchRecord(game, 900);
+    expect(record.forfeit).toBe(true);
+    expect(record.rounds).toEqual([]);
+    expect(record.winner).toBe('a');
+    expect(record.players.a[0]).toBe('Neil');
+    expect(validRecord(record)).toBe(true);
+  });
+
   it('leaves a guest game readable by colour, which is the identity it had', () => {
     // With no names on it the record would otherwise read as a match between two blanks
     // in Recent matches. `casual` on the record is what sends `teamLabel` down the same

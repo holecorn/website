@@ -92,6 +92,12 @@ project dependency. It starts and stops its own preview server.
   `plural` exists for, so two screens quoted the same percentage through different code.
 - `src/Modal.jsx` — a dialog that opens by being mounted, shared by the stats and
   tournament screens. Styled by `.modal` in `App.css`, deliberately not redeclared.
+  **`autoFocus` on a child of it is a no-op**, measured: `showModal` runs the platform's
+  own focusing algorithm, which looks for the `autofocus` *attribute*, and React renders
+  none — it calls `.focus()` during commit, which `showModal` then overrides. So a dialog
+  whose first focusable descendant is not the one to land on passes a `focus` selector,
+  and the default lands wherever the DOM order says (`Award a tie` opens on `Cancel` for
+  exactly this reason — its options sit above the button row).
 - `src/Confetti.jsx` / `src/Confetti.css` — the winner's confetti, dropped by the phone's
   callout and by `?display=1`. Private to `App.jsx` until the board wanted it, the `Chip`
   precedent. **Every size is a multiple of `--piece`**, and `--fall` scales the drop, so
@@ -403,10 +409,11 @@ What constrains code outside those files:
   the effect knows nothing about which kind it is. It compares against the archived id
   rather than holding a flag, which is what makes win -> undo -> re-win idempotent.
 - **A number folded over the archive comes through `counted` in `stats.js`**, which drops
-  the guest games. `summary` too: its chips are archive-wide totals, and a guest game is
-  not in that archive as far as a number is concerned. **A new fold asks for the list
-  there** rather than iterating `matches` — the filter and the sort are one call for the
-  reason `offerableNames` is one call.
+  the guest games and the walkovers — a real game with no names, and two real names with
+  no game. `summary` too: its chips are archive-wide totals, and neither is in that
+  archive as far as a number is concerned. **A new fold asks for the list there** rather
+  than iterating `matches` — the filter and the sort are one call for the reason
+  `offerableNames` is one call.
 - **`stats` is only reachable from `setup`, and the archive depends on it.** If Stats
   ever becomes reachable from the play screen, deleting the live match would undo
   itself on the next reload.
@@ -450,6 +457,14 @@ What constrains code outside those files:
   which round a tie belongs to, who won. So undoing a winning round un-archives the tie
   and the bracket recomputes, with nothing to un-advance. **Don't add a round or a
   position to a match record**; the two sides identify the tie.
+- **A tie nobody could play is *awarded*, and a walkover is a record rather than a concept
+  of its own.** `forfeitGame` builds a game with the tie's lineup, a winner and no rounds;
+  `App.jsx` files it through `archiveMatch` like any played one, so the bracket advances
+  with nothing new stored and deleting the match puts the tie back. `forfeit: true` is what
+  tells it from an **imported result** — the same shape — and what `counted` drops it on.
+  **A substitute taking the withdrawing side's place is deliberately not built**: `entrants`
+  is a seating, so the name cannot be swapped without un-resolving the ties they already
+  won. See `docs/TOURNAMENT.md` under **A tie nobody played**.
 - **`sideKeyOf` in `scoring.js` is the competitor identity** — an unordered, deduped set
   of name keys, which is what makes singles and fixed doubles pairs one concept.
 - **`game.tournament` is deliberately not sticky across `New game`**, unlike `mode` and

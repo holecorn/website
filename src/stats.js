@@ -175,21 +175,31 @@ export function blankStats(name) {
   return derive(blank(name));
 }
 
-// The matches a number is folded over: everything played, in play order, minus the
-// guest games. A guest game is archived and readable round by round — that is the
-// point of keeping it — but nobody's name was taken in it, so there is no career, no
-// rivalry and no total for it to count towards. Chronological so streaks read in play
-// order and a display name settles on the most recent spelling.
+// The matches a number is folded over: everything played, in play order, minus the two
+// kinds that were not. Chronological so streaks read in play order and a display name
+// settles on the most recent spelling.
+//
+// A **guest game** is archived and readable round by round — that is the point of
+// keeping it — but nobody's name was taken in it, so there is no career, no rivalry and
+// no total for it to count towards.
+//
+// A **walkover** is the other way round: it names two real people and nobody played it.
+// It is a result in its bracket and nothing in anybody's record, which is why the flag
+// is dropped here rather than at each reader — `bracket()` reads the archive raw, so a
+// tie awarded still advances its winner while contributing no match, no round and no
+// W–L anywhere. **The cost is visible and was chosen**: the tournament's own entrant
+// table folds `counted` too, so somebody who reached a final on a walkover reads as
+// having played nothing on the way, while the bracket beside it lights their route.
 //
 // **The filter and the sort are one call**, the reason `offerableNames` is one call:
 // two steps composed at each site leaves the unfiltered half sitting there to be
 // copied, and a copy of it alone folds strangers into everybody's career with nothing
 // on any screen saying so. So every count in this file starts here, `summary`
-// included — its chips are archive-wide totals, and a guest game is not in that
-// archive as far as a number is concerned.
+// included — its chips are archive-wide totals, and neither kind is in that archive as
+// far as a number is concerned.
 function counted(matches) {
   return [...(matches ?? [])]
-    .filter((m) => !m?.casual)
+    .filter((m) => !m?.casual && !m?.forfeit)
     .sort((x, y) => (x.endedAt ?? 0) - (y.endedAt ?? 0));
 }
 

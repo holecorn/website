@@ -948,9 +948,17 @@ function MatchRounds({ id, match, tie, onEdit, onDelete }) {
     // people, and it is the only thing on the screen saying why the match is here and not
     // in any of the numbers above it. A match is never both this and a tie.
     ...(match.casual ? ['guest game, not counted'] : []),
-    detailed
-      ? `${rounds.length} round${rounds.length === 1 ? '' : 's'}${span ? ` in ${minutes(span)}` : ''}`
-      : 'result only, no rounds recorded',
+    // A walkover is the other match with no score on its row, and this line is the only
+    // thing telling it from an imported result. It *replaces* the round count rather than
+    // sitting beside it: "walkover" already says nobody threw a bag, where "result only"
+    // implies a result somebody played for.
+    ...(match.forfeit
+      ? ['walkover, not counted']
+      : [
+          detailed
+            ? `${rounds.length} round${rounds.length === 1 ? '' : 's'}${span ? ` in ${minutes(span)}` : ''}`
+            : 'result only, no rounds recorded',
+        ]),
     `played to ${match.target}`,
     ...(doubles ? ['doubles'] : []),
   ];

@@ -833,6 +833,57 @@ describe('guest games count for nobody', () => {
   });
 });
 
+// A tie nobody played, awarded because one side could not turn up. It is the guest
+// game's mirror image: real names and no game, where that is a real game and no names.
+// So it advances its bracket — which reads the archive raw — and contributes nothing to
+// any career, rivalry or total.
+//
+// **The flag is the whole rule**, which is why the fixture is otherwise an ordinary
+// record: dropping walkovers by "has no rounds" would take every imported result with
+// them, and those are exactly the matches that must still count.
+describe('walkovers count for nobody', () => {
+  const swept = [[[H, H, H, H], [F, F, F, F]], [[H, H, H, H], [F, F, F, F]]];
+  const real = singles('Neil', 'Sigma', swept, { id: 'real', endedAt: 1000 });
+  const walkover = {
+    ...singles('Neil', 'Sigma', [], { id: 'wo', endedAt: 2000 }),
+    winner: 'a',
+    forfeit: true,
+  };
+  const lineup = {
+    ...newGame(21),
+    players: { a: ['Neil', 'Player 3'], b: ['Sigma', 'Player 4'] },
+  };
+
+  it('leaves every career exactly where it was', () => {
+    expect(playerStats([real, walkover])).toEqual(playerStats([real]));
+  });
+
+  it('is not in the totals', () => {
+    expect(summary([real, walkover]).matches).toBe(1);
+  });
+
+  it('settles no rivalry', () => {
+    expect(headToHead([real, walkover])).toEqual(headToHead([real]));
+    expect(opponentRecords([real, walkover], 'Neil')).toEqual(opponentRecords([real], 'Neil'));
+  });
+
+  it('is not a previous meeting, so a cup’s own table counts it as nothing', () => {
+    expect(sideRecord([real, walkover], lineup)).toEqual({ a: 1, b: 0 });
+    expect(sideStats([real, walkover])).toEqual(sideStats([real]));
+  });
+
+  it('does not move the form panel the next lineup is read against', () => {
+    expect(lineupStats([real, walkover], lineup)).toEqual(lineupStats([real], lineup));
+  });
+
+  // The half that separates it from a guest game: it has to stay findable as a match,
+  // because deleting it is the only way to put the tie back on the bracket.
+  it('is still a match of the two people it names', () => {
+    expect(playedIn(walkover, 'Neil')).toBe(true);
+    expect(finalScore(walkover)).toBeNull();
+  });
+});
+
 // Matches imported from a written-down result: a date, the people, the score,
 // and nothing else. Everything that needs only the outcome has to fold them in;
 // everything that needs thrown bags has to leave them out rather than read their
