@@ -225,11 +225,15 @@ build. It compiled for the first time on 2026-08-03 (47% flash, 24% RAM, clean a
   untouched.
   - **The range is 40 to 255 and neither end is arbitrary.** The floor is where every
     faint thing was judged: `COVERAGE_FLOOR` drops splash pixels under ~40% *because*
-    at brightness 40 they read as off, and a loss pip is one pixel. Neither has been
-    seen on hardware, so **a darker step waits until the pip has been eyeballed at
-    dusk**, and nothing about power argues against one: measured, the board's draw only
-    doubles between 40 and 255, because ~1.95 W of it is a constant brightness cannot
-    touch. The ceiling is the power budget — 1.33 A worst case against a 3 A fold-back.
+    at brightness 40 they read as off, and a loss pip is one pixel. The ceiling is the
+    power budget — 1.33 A worst case against a 3 A fold-back.
+    - **A darker step is not wanted, and that is answered rather than merely deferred.**
+      This used to say one waits until the pip has been eyeballed at dusk. Dusk has
+      happened: 2026-08-16 on the beach, the whole evening on the lowest step, and 40 was
+      comfortable — so there is nothing a lower floor would buy, and the pip was only ever
+      the gate on *lowering* it. Power never argued against one either way (the draw only
+      doubles between 40 and 255, ~1.95 W of it constant). **The pip's own legibility at 40
+      is still unobserved** — a separate question about whether the form screen reads.
   - **It clamps rather than wrapping**, which is the only reason the step is a tested
     function instead of arithmetic: wrapping puts one press between darkest and 255.
     Not persisted across a reboot — brightness tracks the light on the day, and 40 is

@@ -48,8 +48,9 @@ each other; see `Things that will bite`.
 
 **Power was measured on 2026-08-10** against the port readout of the SOLIX C300X the
 board now runs from, which found the derived model missing a ~1.95 W constant term —
-see `Power`. **Still untested:** whether brightness 40 is dark enough to play under at
-dusk, which only dusk can answer. The board has been run indoors only.
+see `Power`. **Brightness 40 was played under at dusk on 2026-08-16 and was fine** —
+the first real outing, on the beach, with the board on its lowest step all evening. So
+the range stands as it is and **a darker step is not wanted**; see `Brightness`.
 
 ## Why this size
 
@@ -1034,17 +1035,24 @@ the panel shows is published state, and a local override would fight the app.
 - **The floor is 40 because that is the only value anything faint was judged
   against.** `COVERAGE_FLOOR` drops splash pixels below ~40% of full precisely
   because at brightness 40 they are indistinguishable from off, and the form
-  screen's loss pip is a single pixel. Both get dimmer with the global setting and
-  neither has been looked at on hardware. A darker step is a one-entry change to
-  the table **after** the pip has been eyeballed at dusk — not before.
+  screen's loss pip is a single pixel. Both get dimmer with the global setting.
+  - **A darker step was the open question and it is now closed: there will not be
+    one.** 40 was played under at dusk on 2026-08-16 — the whole evening on the
+    lowest step, on the beach — and it was comfortable, so the thing a darker step
+    would have bought is not needed. That also retires the gate on it: the pip only
+    had to be eyeballed first *because* a fainter floor might have taken it below
+    visible, and with the floor staying at 40 nothing moves. **The pip itself is
+    still unobserved on hardware**, which is a different question and stays open —
+    it is about whether the form screen reads at all, not about the range.
 - **The ceiling is 255 because the power budget allows it**: the worst-case scene
   measures **1.33 A** against a port that folds back at 3 A. So the full-brightness rows
   in the tables below are no longer hypothetical — they are four presses away, and
   the ~26 h runtime with them.
   - **Measuring the model made the *steps* look worse, not the ceiling.** Between 40 and
     255 the board's draw only doubles (~2.3 W to ~4.0 W), because ~1.95 W of it is a
-    constant that brightness cannot touch — so nothing about power argues against a
-    darker step, and the case for one rests entirely on the pip at dusk.
+    constant that brightness cannot touch — so nothing about power ever argued against a
+    darker step. What settled it was dusk itself: 40 turned out to be comfortable to
+    play under, so there is nothing for a lower step to buy.
 - **Nothing is remembered across a reboot.** Brightness tracks the light on the
   day, so 40 is as likely to be right as whatever was set last session, and it is
   the step that cannot dazzle. `Preferences` would be the change if that turns out
